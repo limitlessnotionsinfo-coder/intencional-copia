@@ -30,7 +30,6 @@ async function pintarRuta() {
   var pagina = PAGINAS[r.id] || PAGINAS.inicio;
   rutaActual = pagina.id;
 
-  document.body.classList.remove('menu-abierto');
   marcarMenu(pagina.id);
 
   var cont = porId('contenido');

@@ -78,7 +78,6 @@ async function salir() {
 /* ── Armazón ─────────────────────────────────────────────── */
 function arrancarApp() {
   porId('app').innerHTML =
-    '<div class="velo" onclick="document.body.classList.remove(\'menu-abierto\')"></div>' +
     '<div class="shell">' +
       '<aside class="barra-lateral">' +
         '<div class="marca" id="marca-lateral"></div>' +
@@ -89,9 +88,10 @@ function arrancarApp() {
       '</aside>' +
       '<main class="contenido">' +
         '<div class="topbar">' +
-          '<button class="btn btn-fantasma" style="padding:6px" aria-label="Abrir menú" ' +
-                  'onclick="document.body.classList.toggle(\'menu-abierto\')">' + ic('menu', 20) + '</button>' +
+          '<img src="' + LOGO_INTENCIONAL + '" style="width:26px;height:26px;object-fit:contain" alt=""/>' +
           '<div class="marca-nombre">Intencional</div>' +
+          '<button class="btn btn-fantasma" style="padding:6px;margin-left:auto" aria-label="Configuraciones" ' +
+                  'onclick="irA(\'configuraciones\')">' + ic('settings', 19) + '</button>' +
         '</div>' +
         '<div id="contenido"></div>' +
       '</main>' +

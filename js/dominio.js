@@ -308,3 +308,87 @@ function textoPagoPendiente(alias) {
     ' (no distingue entre mayúsculas y minúsculas) y enviá el comprobante al ' + tel +
     '. Si el comprobante se envía desde un número o una cuenta distintos, aclarar el nombre del local.';
 }
+
+/* ═══════════════════════════════════════════════════════════
+   HOJAS DE RUTA
+   Qué ruta se recorre cada día de la semana. Se configura desde
+   Configuraciones: es la base de los avisos del inicio.
+   ═══════════════════════════════════════════════════════════ */
+
+var RUBROS = ['Perfumería', 'Farmacia', 'Supermercado', 'Almacén', 'Kiosco', 'Química', 'Otro'];
+
+/* { "1": "14", "2": "12", … } — 0 es domingo */
+function planRutas() {
+  try {
+    var p = JSON.parse(leerConfig('plan_rutas', '{}'));
+    return (p && typeof p === 'object') ? p : {};
+  } catch (e) { return {}; }
+}
+
+function rutaDelDia(fecha) {
+  var d = fecha || new Date();
+  return planRutas()[String(d.getDay())] || '';
+}
+
+function rutaDeManana() {
+  var m = new Date();
+  m.setDate(m.getDate() + 1);
+  return { ruta: rutaDelDia(m), fecha: m };
+}
+
+function clientesDeRuta(clientes, ruta) {
+  if (!ruta) return [];
+  return (clientes || []).filter(function (c) {
+    return clienteActivo(c) && String(rutaDe(c)) === String(ruta);
+  });
+}
+
+/* Las zonas que toca una ruta, para cruzarlas con los pedidos */
+function zonasDeRuta(clientes, ruta) {
+  var z = {};
+  clientesDeRuta(clientes, ruta).forEach(function (c) {
+    if (c.loc) z[normalizar(c.loc)] = c.loc;
+  });
+  return z;
+}
+
+/* Exhibidores que hay que llevar para una ruta */
+function exhibidoresDeRuta(clientes, ruta) {
+  return clientesDeRuta(clientes, ruta)
+    .reduce(function (s, c) { return s + (+c.exhibidores || 0); }, 0);
+}
+
+/* Clientes de esa ruta que piden aviso previo, y si ya hay que llamarlos */
+function avisosAnticipados(clientes, ruta, diasFalta) {
+  return clientesDeRuta(clientes, ruta).filter(function (c) {
+    var dias = +c.avisar_antes || 0;
+    return dias > 0 && diasFalta <= dias;
+  });
+}
+
+/* Pedidos abiertos, con el cliente resuelto por nombre */
+function pedidosAbiertos(pedidos, clientes) {
+  var porNombre = {};
+  (clientes || []).forEach(function (c) { porNombre[normalizar(c.local)] = c; });
+  return (pedidos || [])
+    .filter(function (p) { return (p.estado || 'pendiente') !== 'entregado'; })
+    .map(function (p) {
+      var c = porNombre[normalizar(p.cliente_nombre)];
+      return {
+        pedido: p,
+        cliente: c || null,
+        ruta: c ? rutaDe(c) : '',
+        loc: (c && c.loc) || p.cliente_loc || ''
+      };
+    });
+}
+
+/* Cruce: pedidos que caen en la ruta de mañana, o al menos en su zona */
+function pedidosParaRuta(pedidos, clientes, ruta) {
+  var zonas = zonasDeRuta(clientes, ruta);
+  return pedidosAbiertos(pedidos, clientes).map(function (x) {
+    var enRuta = ruta && String(x.ruta) === String(ruta);
+    var enZona = !enRuta && x.loc && zonas[normalizar(x.loc)];
+    return Object.assign({}, x, { enRuta: !!enRuta, enZona: !!enZona });
+  }).filter(function (x) { return x.enRuta || x.enZona; });
+}

@@ -1,13 +1,13 @@
 /* Service worker: red primero, caché como respaldo si no hay señal. */
-const CACHE = 'intencional-v4';
+const CACHE = 'intencional-v5';
 
 const LOCALES = [
   './', './index.html', './css/estilo.css',
   './js/config.js', './js/logo.js', './js/iconos.js', './js/ui.js',
   './js/api.js', './js/dominio.js', './js/router.js', './js/app.js',
-  './js/paginas/inicio.js', './js/paginas/remito.js', './js/paginas/hechos.js',
-  './js/paginas/clientes.js', './js/paginas/compras.js', './js/paginas/gastos.js',
-  './js/paginas/metricas.js', './js/paginas/configuraciones.js'
+  './js/pag-inicio.js', './js/pag-remito.js', './js/pag-hechos.js',
+  './js/pag-clientes.js', './js/pag-compras.js', './js/pag-gastos.js',
+  './js/pag-metricas.js', './js/pag-configuraciones.js'
 ];
 
 const EXTERNOS = [
