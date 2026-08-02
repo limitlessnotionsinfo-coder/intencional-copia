@@ -95,10 +95,12 @@ function arrancarApp() {
         '</div>' +
         '<div id="contenido"></div>' +
       '</main>' +
+      '<nav class="barra-inferior" id="barra-inferior"></nav>' +
     '</div>';
 
   pintarMarca(porId('marca-lateral'));
   construirMenu();
+  construirBarraInferior();
   cargarConfig().catch(function () { /* si no hay red, se usa lo local */ });
   pintarRuta();
 }

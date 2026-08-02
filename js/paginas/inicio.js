@@ -33,7 +33,7 @@ registrarPagina({
     cont.innerHTML =
       bloquePendientes() +
 
-      '<div class="eyebrow" style="margin-top:22px">' + ic('calendar', 13) + ' Métricas de hoy</div>' +
+      '<div class="eyebrow" style="margin-top:18px">' + ic('calendar', 13) + ' Métricas de hoy</div>' +
       '<div class="grilla-stats">' +
         stat('users', 'Clientes de hoy', String(visitas.length),
              plural(res.unidades, 'unidad', 'unidades') + (cerrados.length ? ' · ' + cerrados.length + ' cerrados' : ''),
@@ -45,7 +45,7 @@ registrarPagina({
         stat('clock', 'Deuda', plata(res.deuda), '', 'var(--warn)') +
       '</div>' +
 
-      '<div class="eyebrow" style="margin-top:22px">' + ic('zap', 13) + ' Accesos rápidos</div>' +
+      '<div class="eyebrow" style="margin-top:18px">' + ic('zap', 13) + ' Accesos rápidos</div>' +
       '<div class="atajos">' +
         atajo('receipt', 'Crear remito', "irA('remito')", 'grad') +
         atajo('clipboard', 'Remitos hechos', "irA('hechos')", 'violeta') +
@@ -61,7 +61,7 @@ registrarPagina({
 /* ── Atajos ──────────────────────────────────────────────── */
 function atajo(icono, texto, accion, estilo) {
   return '<button class="atajo atajo-' + estilo + '" onclick="' + accion + '">' +
-    ic(icono, 20) + '<span>' + esc(texto) + '</span></button>';
+    ic(icono, 17) + '<span>' + esc(texto) + '</span></button>';
 }
 
 /* ── Pendientes ──────────────────────────────────────────── */

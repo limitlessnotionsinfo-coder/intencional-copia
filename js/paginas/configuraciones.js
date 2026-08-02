@@ -16,8 +16,8 @@ registrarPagina({
     var stock = await traerCacheado('stock');
 
     cont.innerHTML =
-      '<div class="tarjeta">' +
-        '<div class="tarjeta-cab">' + ic('megaphone', 16) + ' Aviso de aumento</div>' +
+      '<details class="tarjeta">' +
+        '<summary class="tarjeta-cab" style="cursor:pointer">' + ic('megaphone', 16) + ' Aviso de aumento</summary>' +
         '<div class="tarjeta-cuerpo">' +
           '<div class="campo-ayuda" style="margin-bottom:14px">' +
             'El aviso sale dentro del remito solo para los clientes que todavía no fueron notificados. ' +
@@ -50,12 +50,10 @@ registrarPagina({
           '<div id="preview-aviso"></div>' +
           '<button class="btn btn-primario btn-bloque" style="margin-top:14px" onclick="guardarAumento()">Guardar</button>' +
         '</div>' +
-      '</div>' +
+      '</details>' +
 
-      '<div class="tarjeta">' +
-        '<div class="tarjeta-cab">' + ic('users', 16) + ' Clientes ya notificados</div>' +
-        '<div class="tarjeta-cuerpo" id="cont-avisados">' + cargando() + '</div>' +
-      '</div>' +
+      tarjetaAlias() +
+      tarjetaMensaje() +
 
       tarjetaConexion() +
 
@@ -73,7 +71,11 @@ registrarPagina({
       '</div>';
 
     previewAviso();
-    pintarAvisados();
+    previewMensaje();
+    previewDeuda();
+    ['cfg-alias', 'cfg-tel', 'cfg-horas'].forEach(function (id) {
+      var el = porId(id); if (el) el.oninput = previewDeuda;
+    });
   }
 });
 
@@ -103,38 +105,13 @@ async function guardarAumento() {
   } catch (e) { toast(e.message, 'error'); }
 }
 
-async function pintarAvisados() {
-  var cont = porId('cont-avisados');
-  if (!cont) return;
-  try {
-    var clientes = await traerCacheado('clientes');
-    var avisados = clientes.filter(clienteAvisado);
-    cont.innerHTML = avisados.length
-      ? '<div class="campo-ayuda" style="margin-bottom:10px">' +
-          plural(avisados.length, 'cliente') + ' de ' + clientes.length + ' ya sabe del aumento.</div>' +
-        '<div class="lista">' + avisados.slice(0, 30).map(function (c) {
-          return '<div class="fila" style="cursor:default">' +
-            '<span class="num-cliente">' + esc(c.num_str || c.num) + '</span>' +
-            '<div class="fila-principal"><div class="fila-titulo">' + esc(c.local) + '</div>' +
-              '<div class="fila-sub">' + esc(c.loc || '') + '</div></div>' +
-            '<span class="pin pin-ok">' + esc(fechaCorta(c.aviso_aumento_fecha) || 'sin fecha') + '</span>' +
-          '</div>';
-        }).join('') + '</div>' +
-        (avisados.length > 30 ? '<div class="campo-ayuda" style="margin-top:10px">y ' + (avisados.length - 30) + ' más.</div>' : '')
-      : '<div class="campo-ayuda">Todavía no se le avisó a nadie. Se van marcando solos al confirmar cada remito.</div>';
-  } catch (e) {
-    cont.innerHTML = '<div class="campo-ayuda">No se pudo leer la lista.</div>';
-  }
-}
-
-
 /* ── Conexión: a qué base apunta la app ──────────────────── */
 function tarjetaConexion() {
   var propia = SB_URL !== SB_BASE.url;
-  return '<div class="tarjeta">' +
-    '<div class="tarjeta-cab">' + ic('signal', 16) + ' Base de datos' +
+  return '<details class="tarjeta">' +
+    '<summary class="tarjeta-cab" style="cursor:pointer">' + ic('signal', 16) + ' Base de datos' +
       '<span style="margin-left:auto"><span class="pin pin-ok">' + esc(CONEXION.nombre) + '</span></span>' +
-    '</div>' +
+    '</summary>' +
     '<div class="tarjeta-cuerpo">' +
       '<div class="campo-ayuda" style="margin-bottom:14px">' +
         'Proyecto actual: <strong>' + esc(refProyecto(SB_URL)) + '</strong>. ' +
@@ -156,7 +133,7 @@ function tarjetaConexion() {
       '</div>' +
       '<div id="cx-estado" style="margin-top:12px"></div>' +
     '</div>' +
-  '</div>';
+  '</details>';
 }
 
 async function conectarOtraBase() {
@@ -198,4 +175,94 @@ async function conectarOtraBase() {
 function restaurarBase() {
   restaurarConexion();
   location.reload();
+}
+
+
+/* ── Alias de transferencia ──────────────────────────────── */
+function tarjetaAlias() {
+  return '<details class="tarjeta">' +
+    '<summary class="tarjeta-cab" style="cursor:pointer">' + ic('card', 16) + ' Alias de transferencia' +
+      '<span style="margin-left:auto"><span class="pin pin-neutro">' +
+        plural(aliasConfigurados().length, 'alias', 'alias') + '</span></span>' +
+    '</summary>' +
+    '<div class="tarjeta-cuerpo">' +
+      '<div class="campo-ayuda" style="margin-bottom:12px">' +
+        'Uno por línea. Al elegir transferencia, la app sugiere el que viene recibiendo menos ' +
+        'para que los dos queden parejos.' +
+      '</div>' +
+      '<div class="campo"><div class="campo-etiq">Alias</div>' +
+        '<textarea class="campo-input" id="cfg-alias" rows="3" style="resize:vertical">' +
+          esc(aliasConfigurados().join('\n')) + '</textarea></div>' +
+      '<div class="campo"><div class="campo-etiq">Teléfono para comprobantes</div>' +
+        '<input class="campo-input" id="cfg-tel" value="' + esc(leerConfig('tel_comprobantes', '11-7904-7745')) + '"/></div>' +
+      '<div class="campo" style="margin:0"><div class="campo-etiq">Plazo de pago (horas)</div>' +
+        '<input class="campo-input" id="cfg-horas" type="number" min="1" value="' + esc(leerConfig('horas_pago', '72')) + '"/></div>' +
+      '<div class="campo-ayuda" style="margin-top:10px">Así queda el aviso en el remito con deuda:</div>' +
+      '<div class="aviso aviso-warn" id="preview-deuda" style="margin-top:6px"></div>' +
+      '<button class="btn btn-primario btn-bloque" onclick="guardarAlias()">Guardar</button>' +
+    '</div>' +
+  '</details>';
+}
+
+function previewDeuda() {
+  var el = porId('preview-deuda');
+  if (!el) return;
+  var primero = (porId('cfg-alias').value || '').split('\n').map(function (a) { return a.trim(); }).filter(Boolean)[0];
+  var tel = porId('cfg-tel').value;
+  var horas = porId('cfg-horas').value;
+  var dias = Math.round(+horas / 24) || 3;
+  el.innerHTML = ic('alert', 15) + '<div><strong>Pago pendiente</strong> — Por favor, realizá la transferencia dentro de las ' +
+    esc(horas) + ' horas (' + dias + ' días) al alias ' + esc(primero || '[alias no seleccionado]') +
+    ' (no distingue entre mayúsculas y minúsculas) y enviá el comprobante al ' + esc(tel) +
+    '. Si el comprobante se envía desde un número o una cuenta distintos, aclarar el nombre del local.</div>';
+}
+
+async function guardarAlias() {
+  var alias = (porId('cfg-alias').value || '').split('\n')
+    .map(function (a) { return a.trim(); }).filter(Boolean);
+  if (!alias.length) { toast('Cargá al menos un alias', 'error'); return; }
+  try {
+    await guardarConfig('alias_transferencia', alias.join(', '));
+    await guardarConfig('tel_comprobantes', (porId('cfg-tel').value || '').trim());
+    await guardarConfig('horas_pago', (porId('cfg-horas').value || '72').trim());
+    toast('Alias guardados');
+  } catch (e) { toast(e.message, 'error'); }
+}
+
+/* ── Mensaje que acompaña al remito ──────────────────────── */
+function tarjetaMensaje() {
+  return '<details class="tarjeta">' +
+    '<summary class="tarjeta-cab" style="cursor:pointer">' + ic('message', 16) + ' Mensaje al compartir</summary>' +
+    '<div class="tarjeta-cuerpo">' +
+      '<div class="campo-ayuda" style="margin-bottom:12px">' +
+        'Es el texto que acompaña a la imagen del remito. Podés usar ' +
+        '<code>{cliente}</code>, <code>{total}</code>, <code>{fecha}</code> y <code>{unidades}</code>.' +
+      '</div>' +
+      '<div class="campo"><div class="campo-etiq">Mensaje</div>' +
+        '<textarea class="campo-input" id="cfg-mensaje" rows="3" style="resize:vertical" oninput="previewMensaje()">' +
+          esc(leerConfig('mensaje_compartir', '¡Hola! Te dejo el remito de la reposición de hoy por {total}. ¡Gracias por elegirnos!')) +
+        '</textarea></div>' +
+      '<div class="campo-ayuda">Vista previa:</div>' +
+      '<div id="preview-mensaje" style="background:var(--subtle);border-radius:var(--radius);padding:10px 12px;font-size:13px;margin:6px 0 12px"></div>' +
+      '<button class="btn btn-primario btn-bloque" onclick="guardarMensaje()">Guardar</button>' +
+    '</div>' +
+  '</details>';
+}
+
+function previewMensaje() {
+  var el = porId('preview-mensaje');
+  if (!el) return;
+  var texto = porId('cfg-mensaje').value || '';
+  el.textContent = texto
+    .replace(/\{cliente\}/g, 'Farmacia Posik')
+    .replace(/\{total\}/g, plata(24000))
+    .replace(/\{fecha\}/g, hoyTexto())
+    .replace(/\{unidades\}/g, '10');
+}
+
+async function guardarMensaje() {
+  try {
+    await guardarConfig('mensaje_compartir', (porId('cfg-mensaje').value || '').trim());
+    toast('Mensaje guardado');
+  } catch (e) { toast(e.message, 'error'); }
 }

@@ -34,6 +34,10 @@ registrarPagina({
     _stock = await traerCacheado('stock');
     _clientesRemito = await traerCacheado('clientes');
     await cargarConfig().catch(function () {});
+    try {
+      _remitosAlias = await traerCacheado('remitos');
+      _pagosAlias = await traerCacheado('pagos');
+    } catch (e) { _remitosAlias = []; _pagosAlias = []; }
 
     var num = params.get('cliente');
     cont.innerHTML = '<div id="zona-cliente"></div><div id="zona-remito"></div>';
@@ -50,6 +54,8 @@ registrarPagina({
 
 var _stock = [];
 var _clientesRemito = [];
+var _remitosAlias = [];
+var _pagosAlias = [];
 var _resultados = [];
 
 /* ── Cliente ─────────────────────────────────────────────── */
@@ -212,10 +218,11 @@ async function guardarEditarCliente() {
 
 /* ── Cliente cerrado: queda registrado como un remito más ── */
 function marcarCerrado() {
-  var c = R.cliente; if (!c) return;
+  var nombre = (R.cliente && R.cliente.local) || R.nombre.trim();
+  if (!nombre) { toast('Elegí el cliente o escribí su nombre', 'error'); return; }
   abrirModal('Marcar como cerrado',
     '<p style="font-size:13px;color:var(--text2);line-height:1.6">Se guarda un remito de ' + plata(0) +
-    ' para <strong>' + esc(c.local) + '</strong> con fecha de hoy. Queda en el historial como visita, ' +
+    ' para <strong>' + esc(nombre) + '</strong> con fecha de hoy. Queda en el historial como visita, ' +
     'pero no suma a lo facturado.</p>' +
     '<div class="campo" style="margin-top:12px"><div class="campo-etiq">Nota (opcional)</div>' +
     '<input class="campo-input" id="cerrado-nota" placeholder="Ej: cerrado por vacaciones"/></div>',
@@ -223,12 +230,17 @@ function marcarCerrado() {
 }
 
 async function confirmarCerrado() {
-  var c = R.cliente; if (!c) return;
+  var c = R.cliente;
+  var nombre = (c && c.local) || R.nombre.trim();
+  if (!nombre) return;
   var nota = (porId('cerrado-nota').value || '').trim();
   try {
     await crear('remitos', {
       fecha: hoyTexto(),
-      cliente_nombre: c.local, cliente_dir: c.dir, cliente_loc: c.loc, cliente_tel: c.tel,
+      cliente_nombre: nombre,
+      cliente_dir: (c && c.dir) || R.dir || null,
+      cliente_loc: (c && c.loc) || R.loc || null,
+      cliente_tel: (c && c.tel) || R.tel || null,
       total: 0, unidades: 0, pago: 'sin_definir',
       productos: '[]', pagos_detalle: JSON.stringify([{ tipo: 'sin_definir', monto: 0 }]),
       motivo: 'cerrado', notas: nota || null,
@@ -301,6 +313,28 @@ function pintarRemito() {
         '<div id="filas-remito">' + R.filas.map(filaProducto).join('') + '</div>' +
         '<button class="btn btn-secundario" style="margin-top:8px" onclick="agregarFila()">' + ic('plus', 15) + ' Agregar producto</button>' +
 
+        /* Cómo se paga: arriba de las notas y adentro del remito,
+           así entra en la imagen que se comparte */
+        '<div class="eyebrow" style="margin-top:20px">Cómo se paga</div>' +
+        botonesPago(1) +
+        selectorAlias(1) +
+        '<details class="segundo-pago"' + (R.pago2 ? ' open' : '') + ' style="margin-top:14px">' +
+          '<summary style="cursor:pointer;font-size:12px;color:var(--rose);font-weight:600;padding:4px 0">' +
+            'Dividir en dos medios de pago' +
+          '</summary>' +
+          '<div style="margin-top:10px">' +
+            botonesPago(2) +
+            (R.pago2
+              ? '<div class="campo" style="margin-top:10px"><div class="campo-etiq">Monto del segundo pago</div>' +
+                '<input class="campo-input" type="number" inputmode="decimal" min="0" id="r-monto2" ' +
+                       'value="' + (R.monto2 || '') + '" oninput="R.monto2=+this.value||0;pintarDesglose()"/>' +
+                '<div class="campo-ayuda" id="resto-pago"></div></div>' +
+                selectorAlias(2)
+              : '') +
+          '</div>' +
+        '</details>' +
+        '<div id="desglose"></div>' +
+
         '<div class="campo" style="margin-top:18px">' +
           '<div class="campo-etiq">Notas u observaciones</div>' +
           '<input class="campo-input" id="r-notas" value="' + esc(R.notas) + '" ' +
@@ -315,25 +349,11 @@ function pintarRemito() {
           '<div class="stat-val" id="total-remito" style="font-size:26px;color:var(--rose)">' + plata(total) + '</div>' +
         '</div>' +
 
-        /* Cómo se paga: adentro del remito, así sale en la imagen */
-        '<div style="margin-top:16px;padding-top:16px;border-top:1px solid var(--border)">' +
-          botonesPago(1) +
-          '<details class="segundo-pago"' + (R.pago2 ? ' open' : '') + ' style="margin-top:14px">' +
-            '<summary style="cursor:pointer;font-size:12px;color:var(--rose);font-weight:600;padding:4px 0">' +
-              'Dividir en dos medios de pago' +
-            '</summary>' +
-            '<div style="margin-top:10px">' +
-              botonesPago(2) +
-              (R.pago2
-                ? '<div class="campo" style="margin-top:10px"><div class="campo-etiq">Monto del segundo pago</div>' +
-                  '<input class="campo-input" type="number" inputmode="decimal" min="0" id="r-monto2" ' +
-                         'value="' + (R.monto2 || '') + '" oninput="R.monto2=+this.value||0;pintarDesglose()"/>' +
-                  '<div class="campo-ayuda" id="resto-pago"></div></div>'
-                : '') +
-            '</div>' +
-          '</details>' +
-          '<div id="desglose"></div>' +
-        '</div>' +
+        (hayDeuda()
+          ? '<div class="aviso aviso-warn" style="margin-top:16px">' + ic('alert', 15) +
+            '<div><strong>Pago pendiente</strong> — ' +
+            esc(textoPagoPendiente(aliasDeDeuda()).replace('Pago pendiente — ', '')) + '</div></div>'
+          : '') +
 
         (mostrarAviso
           ? '<div class="aviso aviso-warn" id="bloque-aviso" style="margin-top:16px">' + ic('megaphone', 15) +
@@ -342,9 +362,12 @@ function pintarRemito() {
       '</div>' +
     '</div>' +
 
-    '<button class="btn btn-primario btn-bloque" id="btn-confirmar" onclick="confirmarRemito()">' +
-      ic('check', 16) + ' Confirmar y compartir' +
-    '</button>';
+    '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:4px">' +
+      '<button class="btn btn-primario" style="flex:1;min-width:200px" id="btn-confirmar" onclick="confirmarRemito()">' +
+        ic('check', 16) + ' Confirmar y compartir' +
+      '</button>' +
+      '<button class="btn btn-secundario" onclick="marcarCerrado()">' + ic('ban', 15) + ' Estaba cerrado</button>' +
+    '</div>';
 
   pintarDesglose();
 }
@@ -434,12 +457,64 @@ function botonesPago(cual) {
     '</div>';
 }
 
+/* Los alias solo aparecen cuando el medio elegido es transferencia */
+function selectorAlias(cual) {
+  var tipo = cual === 1 ? R.pago1 : R.pago2;
+  if (tipo !== 'transferencia') return '';
+
+  var lista = aliasConfigurados();
+  if (!lista.length) {
+    return '<div class="campo-ayuda" style="margin-top:10px">' +
+      'No hay alias cargados. Se agregan en <a href="#/configuraciones">Configuraciones</a>.</div>';
+  }
+
+  var sugerido = aliasSugerido(_remitosAlias, _pagosAlias);
+  var elegido = cual === 1 ? R.alias1 : R.alias2;
+  var totales = totalesPorAlias(_remitosAlias, _pagosAlias);
+
+  return '<div style="margin-top:12px">' +
+    '<div class="campo-etiq">Alias para la transferencia</div>' +
+    '<div style="display:flex;gap:8px;flex-wrap:wrap">' +
+      lista.map(function (a) {
+        var activo = mismoAlias(a, elegido);
+        return '<button class="btn ' + (activo ? 'btn-primario' : 'btn-secundario') + '" ' +
+          'onclick="setAlias(' + cual + ',\'' + esc(a).replace(/'/g, "\\'") + '\')">' +
+          ic('card', 15) + ' ' + esc(a) +
+          (mismoAlias(a, sugerido) && !activo ? ' <span class="pin pin-ok" style="margin-left:4px">sugerido</span>' : '') +
+        '</button>';
+      }).join('') +
+    '</div>' +
+    '<div class="campo-ayuda" style="margin-top:6px">' +
+      lista.map(function (a) { return esc(a) + ': ' + plata(totales[a] || 0); }).join(' · ') +
+      (sugerido ? ' — conviene ' + esc(sugerido) + ', que viene recibiendo menos' : '') +
+    '</div>' +
+  '</div>';
+}
+
+function setAlias(cual, alias) {
+  if (cual === 1) R.alias1 = alias; else R.alias2 = alias;
+  pintarRemito();
+}
+
+/* ¿Alguna parte del pago queda en deuda? */
+function hayDeuda() {
+  return partesDelFormulario().some(function (p) { return p.tipo === 'deuda' && p.monto > 0; });
+}
+
+/* El alias al que tiene que transferir quien quedó debiendo */
+function aliasDeDeuda() {
+  return R.alias1 || R.alias2 || aliasSugerido(_remitosAlias, _pagosAlias) || '';
+}
+
 function setPago(cual, tipo) {
   if (cual === 1) {
     R.pago1 = tipo;                       // elegir el primero no toca el segundo
+    if (tipo === 'transferencia' && !R.alias1) R.alias1 = aliasSugerido(_remitosAlias, _pagosAlias) || '';
+    if (tipo !== 'transferencia') R.alias1 = '';
   } else {
     R.pago2 = (R.pago2 === tipo) ? '' : tipo;   // volver a tocarlo lo saca
-    if (!R.pago2) R.monto2 = 0;
+    if (!R.pago2) { R.monto2 = 0; R.alias2 = ''; }
+    if (R.pago2 === 'transferencia' && !R.alias2) R.alias2 = aliasSugerido(_remitosAlias, _pagosAlias) || '';
   }
   pintarRemito();
 }
@@ -557,7 +632,7 @@ async function compartirRemito(remito) {
       await navigator.share({
         files: [archivo],
         title: 'Remito de ' + remito.cliente_nombre,
-        text: 'Remito de Intencional por ' + plata(remito.total)
+        text: mensajeCompartir(remito)
       });
     } else {
       var a = document.createElement('a');
@@ -642,6 +717,12 @@ function remitoParaImagen(r) {
             '<strong>' + plata(p.monto) + '</strong></div>';
         }).join('') +
       '</div>'
+      : '') +
+
+    (visibles.some(function (p) { return p.tipo === 'deuda'; })
+      ? '<div style="margin-top:12px;border:1px solid #fed7aa;background:#fff7ed;border-radius:10px;padding:10px 13px;font-size:12.5px;color:#9a3412;line-height:1.5">' +
+        '⚠️ <strong>Pago pendiente</strong> — ' +
+        esc(textoPagoPendiente(r.alias || r.pago2_alias).replace('Pago pendiente — ', '')) + '</div>'
       : '') +
 
     (aumentoConfig().activo && !clienteAvisado(R.cliente)

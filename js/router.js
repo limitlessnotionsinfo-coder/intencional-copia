@@ -57,10 +57,25 @@ async function pintarRuta() {
 }
 
 function marcarMenu(id) {
-  $$('.nav-item').forEach(function (b) {
+  $$('.nav-item, .tab-inferior').forEach(function (b) {
     if (b.dataset.pagina === id) b.setAttribute('aria-current', 'page');
     else b.removeAttribute('aria-current');
   });
+}
+
+/* En el celular, las cinco pantallas de todos los días quedan
+   siempre a un toque, sin abrir el menú lateral. */
+var TABS_INFERIORES = ['inicio', 'remito', 'hechos', 'clientes', 'metricas'];
+
+function construirBarraInferior() {
+  var cont = porId('barra-inferior');
+  if (!cont) return;
+  cont.innerHTML = TABS_INFERIORES.map(function (id) {
+    var p = PAGINAS[id];
+    if (!p) return '';
+    return '<button class="tab-inferior" data-pagina="' + id + '" onclick="irA(\'' + id + '\')">' +
+      ic(p.icono, 20) + '<span>' + esc(p.menu) + '</span></button>';
+  }).join('');
 }
 
 function construirMenu() {

@@ -201,3 +201,110 @@ var TIPOS_PENDIENTE = {
   otro:    { etiqueta: 'Otro',          clase: 'pin-neutro', icono: 'clipboard', color: 'var(--muted)' }
 };
 function tipoPendiente(t) { return TIPOS_PENDIENTE[(t && t.tipo) || 'otro'] || TIPOS_PENDIENTE.otro; }
+
+/* ═══════════════════════════════════════════════════════════
+   ALIAS DE TRANSFERENCIA
+   Se configuran desde Configuraciones. La app sugiere el que
+   viene recibiendo menos, para que los dos queden parejos.
+   ═══════════════════════════════════════════════════════════ */
+
+function aliasConfigurados() {
+  var crudo = leerConfig('alias_transferencia', 'intencional.f, intencional.a');
+  return String(crudo).split(',')
+    .map(function (a) { return a.trim(); })
+    .filter(Boolean);
+}
+
+/* Los alias se comparan sin distinguir mayúsculas */
+function mismoAlias(a, b) { return normalizar(a) === normalizar(b); }
+
+/* Cuánto entró por cada alias, mirando remitos y cobros de deuda */
+function totalesPorAlias(remitos, pagos) {
+  var t = {};
+  aliasConfigurados().forEach(function (a) { t[a] = 0; });
+
+  function sumar(alias, monto) {
+    if (!alias || !monto) return;
+    var conocido = aliasConfigurados().find(function (a) { return mismoAlias(a, alias); });
+    var clave = conocido || alias;
+    t[clave] = (t[clave] || 0) + monto;
+  }
+
+  (remitos || []).forEach(function (r) {
+    partesPago(r).forEach(function (p) {
+      if (p.tipo === 'transferencia') sumar(p.alias, p.monto);
+    });
+  });
+  (pagos || []).forEach(function (p) {
+    if (p.medio === 'transferencia') sumar(p.alias, +p.monto || 0);
+  });
+  return t;
+}
+
+/* El alias que menos recibió: es el que conviene usar ahora */
+function aliasSugerido(remitos, pagos) {
+  var lista = aliasConfigurados();
+  if (!lista.length) return null;
+  var t = totalesPorAlias(remitos, pagos);
+  return lista.slice().sort(function (a, b) { return (t[a] || 0) - (t[b] || 0); })[0];
+}
+
+/* ═══════════════════════════════════════════════════════════
+   COBRO DE DEUDAS
+   Cobrar no borra la deuda: la convierte. La parte que estaba
+   en deuda pasa al medio con el que se cobró, marcada con
+   era_deuda y la fecha, así queda registrado cuánto tardó.
+   ═══════════════════════════════════════════════════════════ */
+
+function remitoCobrado(r, medio, alias, fechaISO) {
+  var partes = partesPago(r).map(function (p) {
+    if (p.tipo !== 'deuda' || p.deudaVieja) {
+      return { tipo: p.tipo, monto: p.monto, alias: p.alias, era_deuda: p.eraDeuda, saldado_fecha: p.saldadoFecha };
+    }
+    return { tipo: medio, monto: p.monto, alias: alias || null, era_deuda: true, saldado_fecha: fechaISO };
+  });
+  return {
+    pagos_detalle: JSON.stringify(partes),
+    saldado: true,
+    saldado_fecha: fechaISO
+  };
+}
+
+/* Días que tardó en pagar, si se puede saber */
+function demoraDePago(r) {
+  if (!r || !r.saldado || !r.saldado_fecha) return null;
+  return diasEntre(r.fecha || r.created_at, r.saldado_fecha);
+}
+
+/* Promedio de demora de un cliente, para saber si es de los que estiran */
+function demoraPromedio(remitosDelCliente) {
+  var demoras = (remitosDelCliente || []).map(demoraDePago).filter(function (d) { return d !== null && d >= 0; });
+  if (!demoras.length) return null;
+  return {
+    promedio: Math.round(demoras.reduce(function (s, d) { return s + d; }, 0) / demoras.length),
+    peor: Math.max.apply(null, demoras),
+    veces: demoras.length
+  };
+}
+
+/* ── Mensaje que acompaña al remito al compartirlo ────────── */
+function mensajeCompartir(remito) {
+  var plantilla = leerConfig('mensaje_compartir',
+    '¡Hola! Te dejo el remito de la reposición de hoy por {total}. ¡Gracias por elegirnos!');
+  return String(plantilla)
+    .replace(/\{cliente\}/g, remito.cliente_nombre || '')
+    .replace(/\{total\}/g, plata(remito.total))
+    .replace(/\{fecha\}/g, remito.fecha || '')
+    .replace(/\{unidades\}/g, String(remito.unidades || 0));
+}
+
+/* ── Aviso de pago pendiente que va al pie del remito ─────── */
+function textoPagoPendiente(alias) {
+  var tel = leerConfig('tel_comprobantes', '11-7904-7745');
+  var horas = leerConfig('horas_pago', '72');
+  var dias = Math.round(+horas / 24) || 3;
+  return 'Pago pendiente — Por favor, realizá la transferencia dentro de las ' + horas +
+    ' horas (' + dias + ' días) al alias ' + (alias || '[alias no seleccionado]') +
+    ' (no distingue entre mayúsculas y minúsculas) y enviá el comprobante al ' + tel +
+    '. Si el comprobante se envía desde un número o una cuenta distintos, aclarar el nombre del local.';
+}
