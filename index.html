@@ -1,0 +1,2889 @@
+<!DOCTYPE html>
+<html lang="es-AR">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/>
+<meta name="theme-color" content="#c84b8c"/>
+<title>Intencional</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600&family=Inter:wght@400;500;600;700&family=Montserrat:wght@600;700;800&display=swap" rel="stylesheet"/>
+<style>
+/* ═══════════════════════════════════════════════════════════
+   INTENCIONAL — sistema visual
+   Los tokens son los mismos de la app anterior: rosa #c84b8c,
+   violeta #9b6bb5, Playfair para los títulos, Inter para el
+   cuerpo, Montserrat para lo que tiene que gritar un poco.
+   ═══════════════════════════════════════════════════════════ */
+
+:root{
+  /* Marca */
+  --rose:#c84b8c;
+  --rose-light:#fbf2f7;
+  --rose-border:rgba(200,75,140,.2);
+  --rose-30:rgba(200,75,140,.3);
+  --violet:#9b6bb5;
+  --grad:linear-gradient(135deg,#9b6bb5,#c84b8c);
+  --grad-h:linear-gradient(90deg,#9b6bb5,#c84b8c);
+
+  /* Superficies */
+  --bg:#fff;
+  --surface:#fafaf8;
+  --subtle:#fbf2f7;
+  --border:#ede8e8;
+
+  /* Texto */
+  --text:#1e1a1a;
+  --text2:#5a4e4c;
+  --muted:#9c8b88;
+
+  /* Estados */
+  --ok:#059669;      --ok-bg:#f0fdf4;      --ok-border:#bbf7d0;
+  --info:#2563eb;    --info-bg:#eff6ff;    --info-border:#bfdbfe;
+  --warn:#d97706;    --warn-bg:#fff7ed;    --warn-border:#fed7aa;
+  --danger:#dc2626;  --danger-bg:#fef2f2;  --danger-border:#fecaca;
+
+  /* Estructura */
+  --sidebar-w:220px;
+  --radius:12px;
+  --radius-lg:16px;
+  --radius-sm:8px;
+  --sombra:0 1px 2px rgba(30,26,26,.04);
+  --sombra-alta:0 8px 24px rgba(180,80,140,.12);
+
+  /* Tipografía */
+  --display:'Playfair Display',Georgia,serif;
+  --cuerpo:Inter,system-ui,-apple-system,sans-serif;
+  --acento:Montserrat,Inter,sans-serif;
+}
+
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{
+  margin:0;background:var(--bg);color:var(--text);
+  font-family:var(--cuerpo);font-size:14px;line-height:1.5;
+  -webkit-font-smoothing:antialiased;
+}
+a{color:var(--rose)}
+button,input,select,textarea{font-family:inherit;font-size:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--rose);outline-offset:2px;border-radius:4px}
+@media (prefers-reduced-motion:reduce){
+  *{animation-duration:.01ms !important;transition-duration:.01ms !important}
+}
+
+/* ── Estructura ──────────────────────────────────────────── */
+.shell{display:flex;min-height:100vh}
+
+.barra-lateral{
+  width:var(--sidebar-w);flex-shrink:0;background:var(--surface);
+  border-right:1px solid var(--border);display:flex;flex-direction:column;
+  position:fixed;inset:0 auto 0 0;z-index:60;
+}
+.marca{padding:20px 18px 16px;display:flex;align-items:center;gap:11px;border-bottom:1px solid var(--border)}
+.marca img{width:38px;height:38px;object-fit:contain;flex-shrink:0}
+.marca-nombre{font-family:var(--display);font-size:19px;font-weight:600;letter-spacing:.2px;line-height:1.1}
+.marca-sub{font-size:9px;text-transform:uppercase;letter-spacing:1.6px;color:var(--muted);margin-top:3px;font-weight:600}
+
+.nav{flex:1;overflow-y:auto;padding:14px 10px}
+.nav-grupo{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:1.6px;color:var(--muted);padding:14px 10px 6px}
+.nav-item{
+  display:flex;align-items:center;gap:10px;width:100%;
+  padding:9px 10px;margin-bottom:2px;border:none;background:none;
+  border-radius:var(--radius-sm);color:var(--text2);font-size:13.5px;font-weight:500;
+  cursor:pointer;text-align:left;transition:background .12s,color .12s;
+  -webkit-tap-highlight-color:transparent;
+}
+.nav-item:hover{background:var(--subtle);color:var(--rose)}
+.nav-item[aria-current="page"]{background:var(--subtle);color:var(--rose);font-weight:600}
+.nav-item[aria-current="page"] .nav-ic{color:var(--rose)}
+.nav-ic{color:var(--muted);display:inline-flex}
+.nav-cuenta{margin-left:auto;background:var(--rose);color:#fff;font-size:10px;font-weight:700;border-radius:20px;padding:1px 7px}
+.pie-lateral{padding:12px 16px;border-top:1px solid var(--border);font-size:11px;color:var(--muted)}
+
+.contenido{flex:1;margin-left:var(--sidebar-w);min-width:0;padding:24px 28px 80px}
+.contenido-ancho{max-width:1040px;margin:0 auto}
+
+.topbar{display:none}
+
+/* ── Cabecera de página ──────────────────────────────────── */
+.cabecera{margin-bottom:22px}
+.cabecera h1{font-family:var(--display);font-size:26px;font-weight:600;margin:0;letter-spacing:.2px}
+.cabecera p{margin:4px 0 0;font-size:13px;color:var(--muted)}
+.eyebrow{font-family:var(--acento);font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:1.8px;color:var(--muted);margin-bottom:10px}
+
+/* ── Tarjetas ────────────────────────────────────────────── */
+.tarjeta{background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-lg);box-shadow:var(--sombra);margin-bottom:16px;overflow:hidden}
+.tarjeta-cab{padding:14px 18px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px;font-size:13px;font-weight:700}
+.tarjeta-cuerpo{padding:18px}
+
+/* ── Métricas ────────────────────────────────────────────── */
+.grilla-stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(168px,1fr));gap:12px}
+.stat{background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;box-shadow:var(--sombra)}
+.stat-etiq{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--muted);font-weight:600;margin-bottom:6px}
+.stat-val{font-family:var(--acento);font-size:22px;font-weight:700;letter-spacing:-.5px;line-height:1.1}
+.stat-sub{font-size:11px;color:var(--muted);margin-top:3px}
+
+/* ── Botones ─────────────────────────────────────────────── */
+.btn{
+  display:inline-flex;align-items:center;justify-content:center;gap:7px;
+  border-radius:var(--radius);padding:10px 16px;font-size:13px;font-weight:600;
+  border:1px solid transparent;cursor:pointer;transition:filter .12s,border-color .12s,background .12s;
+  -webkit-tap-highlight-color:transparent;
+}
+.btn:disabled{opacity:.55;cursor:default}
+.btn-primario{background:var(--grad);color:#fff}
+.btn-primario:not(:disabled):hover{filter:brightness(1.06)}
+.btn-secundario{background:var(--bg);border-color:var(--border);color:var(--text2)}
+.btn-secundario:not(:disabled):hover{border-color:var(--rose-30);color:var(--rose)}
+.btn-fantasma{background:none;border-color:transparent;color:var(--muted)}
+.btn-fantasma:hover{color:var(--rose)}
+.btn-peligro{background:none;border-color:var(--danger-border);color:var(--danger)}
+.btn-bloque{width:100%}
+
+/* ── Campos ──────────────────────────────────────────────── */
+.campo{margin-bottom:14px}
+.campo-etiq{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:1.6px;color:var(--muted);margin-bottom:5px}
+.campo-input{
+  width:100%;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);
+  padding:10px 13px;font-size:14px;transition:border-color .12s;
+}
+.campo-input:focus{outline:none;border-color:var(--rose)}
+.campo-input::placeholder{color:var(--muted)}
+.campo-ayuda{font-size:11px;color:var(--muted);margin-top:4px}
+
+.buscador{position:relative}
+.buscador .ic-lupa{position:absolute;left:13px;top:50%;transform:translateY(-50%);color:var(--muted);pointer-events:none}
+.buscador input{padding-left:38px}
+
+/* ── Listas ──────────────────────────────────────────────── */
+.lista{border:1px solid var(--border);border-radius:var(--radius-lg);overflow:hidden;background:var(--bg)}
+.fila{
+  display:flex;align-items:center;gap:12px;padding:12px 16px;width:100%;
+  border:none;border-bottom:1px solid var(--border);background:none;
+  text-align:left;cursor:pointer;transition:background .1s;
+}
+.fila:last-child{border-bottom:none}
+.fila:hover{background:var(--subtle)}
+.fila-principal{flex:1;min-width:0}
+.fila-titulo{font-size:14px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.fila-sub{font-size:12px;color:var(--muted);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.fila-derecha{text-align:right;flex-shrink:0}
+.num-cliente{
+  font-family:var(--acento);font-size:11px;font-weight:700;color:var(--rose);
+  background:var(--subtle);border:1px solid var(--rose-border);border-radius:20px;padding:3px 9px;flex-shrink:0;
+}
+
+/* ── Etiquetas de estado ─────────────────────────────────── */
+.pin{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:600;border-radius:20px;padding:2px 9px;border:1px solid}
+.pin-ok{color:var(--ok);background:var(--ok-bg);border-color:var(--ok-border)}
+.pin-info{color:var(--info);background:var(--info-bg);border-color:var(--info-border)}
+.pin-warn{color:var(--warn);background:var(--warn-bg);border-color:var(--warn-border)}
+.pin-danger{color:var(--danger);background:var(--danger-bg);border-color:var(--danger-border)}
+.pin-neutro{color:var(--muted);background:var(--surface);border-color:var(--border)}
+
+/* ── Avisos ──────────────────────────────────────────────── */
+.aviso{display:flex;gap:9px;align-items:flex-start;border:1px solid;border-radius:var(--radius);padding:10px 13px;font-size:12.5px;line-height:1.55;margin-bottom:14px}
+.aviso-ok{color:var(--ok);background:var(--ok-bg);border-color:var(--ok-border)}
+.aviso-warn{color:#9a3412;background:var(--warn-bg);border-color:var(--warn-border)}
+.aviso-danger{color:#991b1b;background:var(--danger-bg);border-color:var(--danger-border)}
+
+/* ── Estados vacíos y carga ──────────────────────────────── */
+.vacio{text-align:center;padding:44px 20px;color:var(--muted)}
+.vacio-titulo{font-family:var(--display);font-size:17px;color:var(--text2);margin:10px 0 4px}
+.vacio p{font-size:13px;margin:0 0 16px}
+.cargando{display:flex;align-items:center;gap:9px;color:var(--muted);font-size:13px;padding:20px 0}
+.girador{
+  width:15px;height:15px;border:2px solid var(--border);border-top-color:var(--rose);
+  border-radius:50%;animation:girar .7s linear infinite;
+}
+@keyframes girar{to{transform:rotate(360deg)}}
+
+/* ── Toast ───────────────────────────────────────────────── */
+.toast{
+  position:fixed;left:50%;bottom:26px;transform:translate(-50%,12px);
+  background:var(--text);color:#fff;border-radius:var(--radius);
+  padding:11px 18px;font-size:13px;font-weight:500;z-index:900;
+  opacity:0;pointer-events:none;transition:opacity .18s,transform .18s;
+  max-width:calc(100vw - 32px);box-shadow:var(--sombra-alta);
+}
+.toast.visible{opacity:1;transform:translate(-50%,0)}
+.toast.error{background:var(--danger)}
+
+/* ── Banda de modo dev ───────────────────────────────────── */
+.banda-dev{
+  position:fixed;top:0;left:0;right:0;z-index:800;background:#b45309;color:#fff;
+  font-size:11px;font-weight:600;letter-spacing:.4px;text-align:center;padding:4px 8px;
+}
+body.con-banda .barra-lateral,body.con-banda .contenido{padding-top:22px}
+
+/* ── Responsive ──────────────────────────────────────────── */
+@media (max-width:860px){
+  .barra-lateral{
+    transform:translateX(-100%);transition:transform .2s ease;
+    box-shadow:var(--sombra-alta);width:min(260px,80vw);
+  }
+  body.menu-abierto .barra-lateral{transform:translateX(0)}
+  .velo{position:fixed;inset:0;background:rgba(30,26,26,.35);z-index:55;display:none}
+  body.menu-abierto .velo{display:block}
+  .contenido{margin-left:0;padding:14px 16px 90px}
+  .topbar{
+    display:flex;align-items:center;gap:10px;position:sticky;top:0;z-index:50;
+    background:rgba(255,255,255,.92);backdrop-filter:blur(8px);
+    border-bottom:1px solid var(--border);padding:10px 14px;margin:-14px -16px 16px;
+  }
+  .topbar .marca-nombre{font-size:16px}
+  .cabecera h1{font-size:22px}
+}
+
+/* ── Modal ───────────────────────────────────────────────── */
+.modal{position:fixed;inset:0;background:rgba(30,26,26,.45);z-index:700;display:none;align-items:center;justify-content:center;padding:20px}
+.modal.visible{display:flex}
+.modal-caja{background:var(--bg);border-radius:var(--radius-lg);width:100%;max-width:440px;max-height:88vh;display:flex;flex-direction:column;box-shadow:var(--sombra-alta)}
+.modal-cab{display:flex;align-items:center;justify-content:space-between;padding:16px 18px;border-bottom:1px solid var(--border)}
+.modal-titulo{font-family:var(--display);font-size:17px;font-weight:600}
+.modal-cuerpo{padding:18px;overflow-y:auto}
+.modal-pie{padding:14px 18px;border-top:1px solid var(--border)}
+@media (max-width:860px){
+  .modal{align-items:flex-end;padding:0}
+  .modal-caja{max-width:none;border-radius:var(--radius-lg) var(--radius-lg) 0 0;max-height:92vh}
+}
+
+/* ── Desplegables ────────────────────────────────────────── */
+details > summary{list-style:none}
+details > summary::-webkit-details-marker{display:none}
+details > summary::after{content:'⌄';margin-left:8px;color:var(--muted);transition:transform .15s;display:inline-block}
+details[open] > summary::after{transform:rotate(180deg)}
+
+/* ── Tabla simple ────────────────────────────────────────── */
+.tabla{width:100%;border-collapse:collapse;font-size:13px}
+.tabla th{text-align:left;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:1.4px;color:var(--muted);padding:8px 10px;border-bottom:1px solid var(--border)}
+.tabla td{padding:9px 10px;border-bottom:1px solid var(--border)}
+.tabla tr:last-child td{border-bottom:none}
+.tabla .num{text-align:right;font-variant-numeric:tabular-nums}
+
+/* ── Atajos rápidos del inicio ───────────────────────────── */
+.atajos{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px}
+.atajo{
+  display:flex;align-items:center;justify-content:center;gap:9px;
+  border-radius:var(--radius);padding:16px 14px;font-size:13.5px;font-weight:700;
+  border:1.5px solid transparent;cursor:pointer;transition:filter .12s,border-color .12s,color .12s;
+  -webkit-tap-highlight-color:transparent;
+}
+.atajo:hover{filter:brightness(1.04)}
+.atajo-grad{background:var(--grad);color:#fff}
+.atajo-violeta{background:var(--violet);color:#fff}
+.atajo-rosa{background:var(--bg);border-color:var(--rose);color:var(--rose)}
+.atajo-rojo{background:var(--bg);border-color:var(--danger-border);color:var(--danger)}
+.atajo-neutro{background:var(--bg);border-color:var(--border);color:var(--text2)}
+.atajo-neutro:hover{border-color:var(--rose-30);color:var(--rose)}
+/* El último queda solo en la fila: que ocupe todo el ancho */
+.atajos .atajo:last-child:nth-child(odd){grid-column:1/-1}
+
+/* Banda de conexión: naranja en producción-lectura, verde en pruebas */
+.banda-dev.banda-pruebas{background:#047857}
+
+</style>
+
+<!-- config primero: define SB_URL, SB_KEY y MODO_DEV para todos los demás -->
+<script>
+/* ══ js/config.js ══ */
+/* ═══════════════════════════════════════════════════════════
+   CONEXIÓN — a qué base apunta la app.
+   Van con `var` a propósito: quedan como propiedades de window
+   y las ve cualquier script, sin depender del orden de carga.
+   ═══════════════════════════════════════════════════════════ */
+
+/* La base de producción, la que está en uso todos los días. */
+var SB_PRODUCCION = {
+  url: 'https://mcobunyyuahxtjkykfby.supabase.co',
+  key: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1jb2J1bnl5dWFoeHRqa3lrZmJ5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU4NDYwODMsImV4cCI6MjA5MTQyMjA4M30.Z4iqz6GsTF5dwU6sdMhIR9OmK8giYHTMiN3iUJEpaEY',
+  nombre: 'Producción'
+};
+
+/* La base de pruebas: mismo esquema, sin datos reales.
+   Acá se escribe sin miedo. */
+var SB_PRUEBAS = {
+  url: 'https://runlbcwrehbaqcwvzcxs.supabase.co',
+  key: 'sb_publishable_9P5b9VpiJyExFJ8-OLtDkg_JjSHJhep',
+  nombre: 'Pruebas'
+};
+
+/* Si guardaste otra base desde Configuraciones, se usa esa. */
+function _conexionGuardada() {
+  try {
+    var c = JSON.parse(localStorage.getItem('intencional_conexion') || 'null');
+    if (c && c.url && c.key) return c;
+  } catch (e) {}
+  return null;
+}
+
+/* Esta build es la de desarrollo: arranca en pruebas.
+   Desde Configuraciones se pasa a producción con un botón. */
+var CONEXION = _conexionGuardada() || SB_PRUEBAS;
+var SB_URL = CONEXION.url;
+var SB_KEY = CONEXION.key;
+
+/* El proyecto se identifica por el subdominio: mcob… es producción */
+function refProyecto(url) {
+  var m = String(url || '').match(/^https:\/\/([a-z0-9]+)\.supabase\.co/);
+  return m ? m[1] : '(desconocido)';
+}
+var ES_PRODUCCION = SB_URL === SB_PRODUCCION.url;
+
+/* El candado de escritura protege la base de producción.
+   Contra una base de pruebas se escribe sin restricciones: para
+   eso está. */
+var MODO_DEV = ES_PRODUCCION;
+
+function guardarConexion(url, key, nombre) {
+  localStorage.setItem('intencional_conexion', JSON.stringify({
+    url: url.trim().replace(/\/+$/, ''), key: key.trim(), nombre: (nombre || '').trim() || 'Pruebas'
+  }));
+}
+function usarProduccion() {
+  guardarConexion(SB_PRODUCCION.url, SB_PRODUCCION.key, SB_PRODUCCION.nombre);
+}
+function usarPruebas() {
+  localStorage.removeItem('intencional_conexion');
+}
+/* Una clave sirve si es publishable (sb_publishable_…) o un JWT anon */
+function claveValida(k) {
+  k = String(k || '').trim();
+  return /^sb_publishable_[A-Za-z0-9_\-]{10,}$/.test(k) || k.split('.').length === 3;
+}
+
+/* Tablas y su clave primaria */
+var TABLAS = {
+  clientes:         'num',
+  remitos:          'id',
+  pagos:            'id',
+  gastos:           'id',
+  compras:          'id',
+  pedidos:          'id',
+  pedidos_propios:  'id',
+  stock:            'id',
+  stock_categorias: 'id',
+  tareas:           'id',
+  config:           'key'
+};
+
+</script>
+</head>
+<body>
+
+<div id="app"></div>
+<div class="modal" id="modal"></div>
+<div class="toast" id="toast"></div>
+
+<script>
+/* ══ js/logo.js ══ */
+/* Logotipo de Intencional en base64 — así la app funciona offline sin pedir el archivo */
+var LOGO_INTENCIONAL = "data:image/png;base64,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";
+
+</script>
+<script>
+/* ══ js/iconos.js ══ */
+/* ═══════════════════════════════════════════════════════════
+   ÍCONOS DE LÍNEA — heredan el color del texto (currentColor)
+   Uso: ic('nombre')  ·  ic('nombre', 20)
+   ═══════════════════════════════════════════════════════════ */
+
+var ICONOS = {
+  alert:      '<path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4"/><path d="M12 17h.01"/>',
+  check:      '<path d="M4 12.5l5 5 11-11"/>',
+  x:          '<path d="M6 6l12 12M18 6L6 18"/>',
+  ban:        '<circle cx="12" cy="12" r="9"/><path d="M5.6 5.6l12.8 12.8"/>',
+  box:        '<path d="M12 2.5 20 7v10l-8 4.5L4 17V7z"/><path d="M4 7l8 4.5L20 7"/><path d="M12 11.5V21"/>',
+  clock:      '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+  smartphone: '<rect x="7" y="3" width="10" height="18" rx="2"/><path d="M11 18h2"/>',
+  cash:       '<rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="12" cy="12" r="2.5"/><path d="M6 12h.01M18 12h.01"/>',
+  wallet:     '<rect x="3" y="6" width="18" height="13" rx="2.5"/><path d="M3 10.5h18"/><path d="M16.5 15h1.5"/>',
+  coins:      '<ellipse cx="9" cy="7" rx="6" ry="3"/><path d="M3 7v5c0 1.7 2.7 3 6 3"/><path d="M3 12v5c0 1.7 2.7 3 6 3 .7 0 1.4-.06 2-.17"/><circle cx="16" cy="15" r="5"/>',
+  edit:       '<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"/>',
+  trash:      '<path d="M3 6h18"/><path d="M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2"/><path d="M6 6l1 14a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1l1-14"/>',
+  receipt:    '<path d="M5 3v18l2.5-1.5L10 21l2-1.5L14 21l2.5-1.5L19 21V3l-2.5 1.5L14 3l-2 1.5L10 3 7.5 4.5 5 3z"/><path d="M9 8h6M9 12h6"/>',
+  clipboard:  '<rect x="6" y="4" width="12" height="17" rx="2"/><path d="M9 4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v1H9V4z"/><path d="M9 11h6M9 15h4"/>',
+  search:     '<circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/>',
+  chart:      '<path d="M4 4v15a1 1 0 0 0 1 1h15"/><path d="M8 15l3-4 3 2 4-6"/>',
+  plus:       '<path d="M12 5v14M5 12h14"/>',
+  settings:   '<path d="M4 8h8"/><path d="M16 8h4"/><circle cx="14" cy="8" r="2"/><path d="M4 16h4"/><path d="M12 16h8"/><circle cx="10" cy="16" r="2"/>',
+  card:       '<rect x="2" y="5" width="20" height="14" rx="2.5"/><path d="M2 10h20"/><path d="M6 15h4"/>',
+  droplet:    '<path d="M12 3s6 6 6 10a6 6 0 0 1-12 0c0-4 6-10 6-10z"/>',
+  calendar:   '<rect x="4" y="5" width="16" height="16" rx="2"/><path d="M4 9h16M8 3v4M16 3v4"/>',
+  download:   '<path d="M12 3v12"/><path d="M7 11l5 5 5-5"/><path d="M4 21h16"/>',
+  upload:     '<path d="M12 21V9"/><path d="M7 13l5-5 5 5"/><path d="M4 3h16"/>',
+  save:       '<path d="M5 3h11l3 3v13a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/><path d="M8 3v5h7"/><path d="M8 15h8v6H8z"/>',
+  file:       '<path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/>',
+  pin:        '<path d="M12 21s7-5.6 7-11a7 7 0 0 0-14 0c0 5.4 7 11 7 11z"/><circle cx="12" cy="10" r="2.5"/>',
+  store:      '<path d="M4 9V6a1 1 0 0 1 1-1h14a1 1 0 0 1 1 1v3"/><path d="M4 9h16l-1 3H5L4 9z"/><path d="M5 12v8h14v-8"/><path d="M10 20v-4h4v4"/>',
+  building:   '<rect x="5" y="3" width="14" height="18" rx="1"/><path d="M9 7h2M13 7h2M9 11h2M13 11h2M9 15h2M13 15h2"/>',
+  bag:        '<path d="M6 8h12l-1 12a1 1 0 0 1-1 1H8a1 1 0 0 1-1-1L6 8z"/><path d="M9 8V6a3 3 0 0 1 6 0v2"/>',
+  cart:       '<circle cx="9" cy="20" r="1.5"/><circle cx="17" cy="20" r="1.5"/><path d="M3 4h2l2.4 12h10.2l1.9-9H6"/>',
+  trophy:     '<path d="M8 4h8v5a4 4 0 0 1-8 0V4z"/><path d="M8 5H5v2a3 3 0 0 0 3 3M16 5h3v2a3 3 0 0 1-3 3"/><path d="M10 15h4v3h-4z"/><path d="M8 21h8"/>',
+  users:      '<circle cx="9" cy="8" r="3"/><path d="M4 19c0-2.8 2.2-5 5-5s5 2.2 5 5"/><path d="M15 5.5a3 3 0 0 1 0 5.5"/><path d="M16.6 14.2c1.9.6 3.2 2.4 3.2 4.8"/>',
+  user:       '<circle cx="12" cy="8" r="3.5"/><path d="M5 20c0-3.5 3-6 7-6s7 2.5 7 6"/>',
+  map:        '<path d="M9 4 3 6v14l6-2 6 2 6-2V4l-6 2-6-2z"/><path d="M9 4v14M15 6v14"/>',
+  truck:      '<path d="M3 6h11v9H3z"/><path d="M14 9h4l3 3v3h-7z"/><circle cx="7" cy="18" r="1.6"/><circle cx="17" cy="18" r="1.6"/>',
+  phone:      '<path d="M6 3h3l2 5-2 1.5a11 11 0 0 0 5 5L17.5 12l5 2v3a2 2 0 0 1-2 2A16 16 0 0 1 4 5a2 2 0 0 1 2-2z"/>',
+  eye:        '<path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/>',
+  hash:       '<path d="M5 9h14M5 15h14M9 4l-1 16M16 4l-1 16"/>',
+  refresh:    '<path d="M20 11a8 8 0 0 0-14-4L3 10"/><path d="M4 13a8 8 0 0 0 14 4l3-3"/><path d="M3 6v4h4M21 18v-4h-4"/>',
+  lock:       '<rect x="5" y="10" width="14" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/>',
+  zap:        '<path d="M13 2 4 14h7l-2 8 9-12h-7l2-8z"/>',
+  chevronDown:'<path d="M6 9l6 6 6-6"/>',
+  bulb:       '<path d="M9 18h6"/><path d="M10 21h4"/><path d="M8 14a5 5 0 1 1 8 0c-.7.9-1 1.5-1 2.5H9c0-1-.3-1.6-1-2.5z"/>',
+  pill:       '<rect x="3" y="8" width="18" height="8" rx="4" transform="rotate(-45 12 12)"/><path d="M8.5 8.5l7 7"/>',
+  scissors:   '<circle cx="6" cy="6" r="2.5"/><circle cx="6" cy="18" r="2.5"/><path d="M8 8l12 10M8 16L20 6"/>',
+  folder:     '<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z"/>',
+  tag:        '<path d="M3 12V4a1 1 0 0 1 1-1h8l9 9-9 9-9-9z"/><circle cx="7.5" cy="7.5" r="1.3"/>',
+  menu:       '<path d="M4 7h16M4 12h16M4 17h16"/>',
+  shuffle:    '<path d="M3 6h4l10 12h4"/><path d="M3 18h4L17 6h4"/><path d="M18 3l3 3-3 3M18 15l3 3-3 3"/>',
+  sparkles:   '<path d="M12 3l1.8 4.2L18 9l-4.2 1.8L12 15l-1.8-4.2L6 9l4.2-1.8L12 3z"/><path d="M18 15l.9 2.1L21 18l-2.1.9L18 21l-.9-2.1L15 18l2.1-.9L18 15z"/>',
+  palette:    '<path d="M12 3a9 9 0 0 0 0 18c1.5 0 2-1 2-2s-.6-1.2-.6-2 .8-1 1.6-1H18a3 3 0 0 0 3-3 8 8 0 0 0-9-8z"/><circle cx="7.5" cy="10.5" r="1"/><circle cx="12" cy="7.5" r="1"/><circle cx="16.5" cy="10.5" r="1"/>',
+  gem:        '<path d="M6 3h12l3 6-9 12L3 9l3-6z"/><path d="M3 9h18M9 3 6 9l6 12 6-12-3-6"/>',
+  signal:     '<path d="M4 20v-3M9 20v-7M14 20v-11M19 20V6"/>',
+  message:    '<path d="M4 5h16a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H9l-4 4v-4H4a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1z"/>',
+  fuel:       '<path d="M5 21V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v16M4 21h11"/><path d="M13 9h3l2 2v6a2 2 0 0 1-4 0v-3h-1"/>',
+  shield:     '<path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6l8-3z"/>',
+  tool:       '<path d="M14 7a4 4 0 0 0-5 5L3 18l3 3 6-6a4 4 0 0 0 5-5l-2.5 2.5L12 11l1.5-3L14 7z"/>',
+  megaphone:  '<path d="M3 11v2a1 1 0 0 0 1 1h2l9 5V5L6 10H4a1 1 0 0 0-1 1z"/><path d="M18 9a3 3 0 0 1 0 6"/>',
+  camera:     '<rect x="3" y="7" width="18" height="13" rx="2"/><path d="M8 7l1.5-3h5L16 7"/><circle cx="12" cy="13" r="3.5"/>',
+  scale:      '<path d="M12 3v18M7 21h10"/><path d="M12 6l-6 1 3 6a3 3 0 0 1-6 0l3-6M12 6l6 1-3 6a3 3 0 0 0 6 0l-3-6"/>',
+  square:     '<rect x="4" y="4" width="16" height="16" rx="3"/>',
+  checkSquare:'<rect x="4" y="4" width="16" height="16" rx="3"/><path d="M8 12l3 3 5-5.5"/>',
+  home:       '<path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V20a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V9.5"/>',
+  flask:      '<path d="M9 3h6M10 3v6l-5 9a1 1 0 0 0 1 1.5h12a1 1 0 0 0 1-1.5l-5-9V3"/><path d="M7.5 14h9"/>',
+  db:         '<ellipse cx="12" cy="6" rx="7" ry="3"/><path d="M5 6v12c0 1.7 3.1 3 7 3s7-1.3 7-3V6"/><path d="M5 12c0 1.7 3.1 3 7 3s7-1.3 7-3"/>',
+  undo:       '<path d="M9 7L4 12l5 5"/><path d="M4 12h11a5 5 0 0 1 0 10h-1"/>'
+};
+
+function ic(nombre, tam) {
+  var p = ICONOS[nombre] || '';
+  var s = tam || 16;
+  return '<svg viewBox="0 0 24 24" width="' + s + '" height="' + s + '" fill="none" ' +
+    'stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" ' +
+    'style="vertical-align:middle;position:relative;top:-1px;flex-shrink:0;display:inline-block">' + p + '</svg>';
+}
+
+</script>
+<script>
+/* ══ js/ui.js ══ */
+/* ═══════════════════════════════════════════════════════════
+   UI — helpers que usa todo el resto: escapado, formatos,
+   toast, atajos de DOM. Sin dependencias.
+   ═══════════════════════════════════════════════════════════ */
+
+/* ── DOM ─────────────────────────────────────────────────── */
+function $(sel, raiz) { return (raiz || document).querySelector(sel); }
+function $$(sel, raiz) { return Array.prototype.slice.call((raiz || document).querySelectorAll(sel)); }
+function porId(id) { return document.getElementById(id); }
+
+/* ── Escapado: TODO lo que venga de la base pasa por acá ─── */
+function esc(v) {
+  if (v === null || v === undefined) return '';
+  return String(v).replace(/[&<>"']/g, function (c) {
+    return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+  });
+}
+
+/* ── Plata ───────────────────────────────────────────────── */
+function plata(n) {
+  return '$' + (+n || 0).toLocaleString('es-AR', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+}
+function plataCorta(n) {
+  var v = +n || 0;
+  if (Math.abs(v) >= 1000000) return '$' + (v / 1000000).toLocaleString('es-AR', { maximumFractionDigits: 1 }) + 'M';
+  if (Math.abs(v) >= 10000)   return '$' + Math.round(v / 1000) + 'k';
+  return plata(v);
+}
+
+/* ── Fechas ──────────────────────────────────────────────────
+   La base guarda las fechas de remitos/gastos como texto en
+   dd/mm/aa. Estas funciones aguantan ese formato, el de cuatro
+   dígitos y el ISO, sin romperse con ninguno.
+   ────────────────────────────────────────────────────────── */
+function hoyTexto() {
+  var d = new Date();
+  return dosDig(d.getDate()) + '/' + dosDig(d.getMonth() + 1) + '/' + String(d.getFullYear()).slice(2);
+}
+function hoyISO() {
+  var d = new Date();
+  return d.getFullYear() + '-' + dosDig(d.getMonth() + 1) + '-' + dosDig(d.getDate());
+}
+function dosDig(n) { return String(n).padStart(2, '0'); }
+
+/* Devuelve {a,m,d} o null. Acepta 2026-08-02, 02/08/26 y 02/08/2026 */
+function partesFecha(valor) {
+  if (!valor) return null;
+  var s = String(valor).trim();
+  var m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (m) return { a: +m[1], m: +m[2], d: +m[3] };
+  m = s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})/);
+  if (m) {
+    var a = m[3].length === 2 ? 2000 + (+m[3]) : +m[3];
+    return { a: a, m: +m[2], d: +m[1] };
+  }
+  return null;
+}
+/* Clave ordenable aaaa-mm-dd; sirve para comparar y agrupar */
+function claveFecha(valor) {
+  var p = partesFecha(valor);
+  return p ? p.a + '-' + dosDig(p.m) + '-' + dosDig(p.d) : '';
+}
+function claveMes(valor) {
+  var p = partesFecha(valor);
+  return p ? p.a + '-' + dosDig(p.m) : '';
+}
+function fechaCorta(valor) {
+  var p = partesFecha(valor);
+  return p ? dosDig(p.d) + '/' + dosDig(p.m) + '/' + String(p.a).slice(2) : '';
+}
+var MESES = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
+var DIAS = ['domingo','lunes','martes','miércoles','jueves','viernes','sábado'];
+function fechaLarga(valor) {
+  var p = partesFecha(valor);
+  return p ? p.d + ' de ' + MESES[p.m - 1] + ' de ' + p.a : '';
+}
+function diasEntre(desde, hasta) {
+  var a = partesFecha(desde), b = partesFecha(hasta);
+  if (!a || !b) return null;
+  var ms = Date.UTC(b.a, b.m - 1, b.d) - Date.UTC(a.a, a.m - 1, a.d);
+  return Math.round(ms / 86400000);
+}
+
+/* ── Texto ───────────────────────────────────────────────── */
+/* Normaliza para buscar: sin tildes, sin mayúsculas, sin dobles espacios */
+function normalizar(s) {
+  return String(s || '')
+    .toLowerCase()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+function plural(n, singular, plural_) {
+  return n + ' ' + (n === 1 ? singular : (plural_ || singular + 's'));
+}
+
+/* Booleano tolerante: Postgres devuelve true/false, pero un CSV
+   reimportado o un jsonb pueden traer "false" como texto, que en
+   JavaScript es verdadero. Todo lo que sea booleano pasa por acá. */
+function bool(v) {
+  if (v === true) return true;
+  if (v === false || v === null || v === undefined) return false;
+  var s = String(v).trim().toLowerCase();
+  return s === 'true' || s === 't' || s === '1' || s === 'si' || s === 'sí';
+}
+
+/* ── Toast ───────────────────────────────────────────────── */
+var _toastTimer = null;
+function toast(mensaje, tipo) {
+  var el = porId('toast');
+  if (!el) return;
+  el.textContent = mensaje;
+  el.className = 'toast visible' + (tipo === 'error' ? ' error' : '');
+  clearTimeout(_toastTimer);
+  _toastTimer = setTimeout(function () { el.className = 'toast'; }, tipo === 'error' ? 4200 : 2600);
+}
+
+/* ── Bloques reutilizables ───────────────────────────────── */
+function cargando(texto) {
+  return '<div class="cargando"><span class="girador"></span>' + esc(texto || 'Cargando…') + '</div>';
+}
+function vacio(icono, titulo, texto, accionHTML) {
+  return '<div class="vacio">' + ic(icono, 30) +
+    '<div class="vacio-titulo">' + esc(titulo) + '</div>' +
+    (texto ? '<p>' + esc(texto) + '</p>' : '') +
+    (accionHTML || '') + '</div>';
+}
+function avisoHTML(tipo, contenidoHTML, icono) {
+  return '<div class="aviso aviso-' + tipo + '">' + ic(icono || 'alert', 15) +
+    '<div>' + contenidoHTML + '</div></div>';
+}
+
+/* ── Modal ───────────────────────────────────────────────── */
+function abrirModal(titulo, cuerpoHTML, pieHTML) {
+  var m = porId('modal');
+  m.innerHTML =
+    '<div class="modal-caja" role="dialog" aria-modal="true" aria-label="' + esc(titulo) + '">' +
+      '<div class="modal-cab">' +
+        '<div class="modal-titulo">' + esc(titulo) + '</div>' +
+        '<button class="btn btn-fantasma" style="padding:2px 6px" aria-label="Cerrar" onclick="cerrarModal()">✕</button>' +
+      '</div>' +
+      '<div class="modal-cuerpo">' + cuerpoHTML + '</div>' +
+      (pieHTML ? '<div class="modal-pie">' + pieHTML + '</div>' : '') +
+    '</div>';
+  m.className = 'modal visible';
+  document.body.style.overflow = 'hidden';
+  var primero = m.querySelector('input,select,textarea,button');
+  if (primero) primero.focus();
+}
+
+function cerrarModal() {
+  var m = porId('modal');
+  m.className = 'modal';
+  m.innerHTML = '';
+  document.body.style.overflow = '';
+}
+
+document.addEventListener('keydown', function (e) {
+  if (e.key === 'Escape') cerrarModal();
+});
+
+</script>
+<script>
+/* ══ js/api.js ══ */
+/* ═══════════════════════════════════════════════════════════
+   API — única puerta de entrada a Supabase.
+   Ninguna página llama a fetch por su cuenta: todo pasa por acá,
+   así el candado de MODO_DEV, la paginación y el manejo de
+   errores viven en un solo lugar.
+   ═══════════════════════════════════════════════════════════ */
+
+var TOPE_PAGINA = 1000;   // tope que impone PostgREST por request
+var _sesion = null;       // sesión de Supabase Auth
+var _cache = {};          // { tabla: {datos, ts} }
+var TTL_CACHE = 15000;    // 15 s: evita ráfagas de pedidos iguales
+
+/* ── Sesión ──────────────────────────────────────────────── */
+function sesionActual() { return _sesion; }
+function tokenActual() { return (_sesion && _sesion.access_token) || SB_KEY; }
+
+function guardarSesion(s) {
+  _sesion = s;
+  try { localStorage.setItem('intencional_sesion', JSON.stringify(s)); } catch (e) {}
+}
+function recuperarSesion() {
+  try {
+    var s = JSON.parse(localStorage.getItem('intencional_sesion') || 'null');
+    if (s && s.access_token) { _sesion = s; return s; }
+  } catch (e) {}
+  return null;
+}
+function borrarSesion() {
+  _sesion = null;
+  try { localStorage.removeItem('intencional_sesion'); } catch (e) {}
+}
+
+async function authFetch(ruta, opciones) {
+  if (typeof SB_URL === 'undefined') {
+    throw new Error('Falta config.js. Recargá la página con Ctrl/Cmd + Shift + R.');
+  }
+  var res = await fetch(SB_URL + '/auth/v1/' + ruta, Object.assign({
+    headers: Object.assign({ apikey: SB_KEY, 'Content-Type': 'application/json' }, opciones && opciones.headers)
+  }, opciones));
+  var txt = await res.text();
+  var data = txt ? JSON.parse(txt) : {};
+  if (!res.ok) throw new Error(data.error_description || data.msg || data.error || 'No se pudo iniciar sesión');
+  return data;
+}
+
+async function iniciarSesion(email, contrasena) {
+  var d = await authFetch('token?grant_type=password', {
+    method: 'POST',
+    body: JSON.stringify({ email: email, password: contrasena })
+  });
+  guardarSesion(d);
+  return d;
+}
+
+async function cerrarSesion() {
+  try {
+    if (_sesion) {
+      await authFetch('logout', {
+        method: 'POST',
+        headers: { Authorization: 'Bearer ' + _sesion.access_token }
+      });
+    }
+  } catch (e) { /* si falla, igual cerramos del lado del navegador */ }
+  borrarSesion();
+  _cache = {};
+}
+
+/* ── REST ────────────────────────────────────────────────── */
+var ESCRITURAS = { POST: 1, PATCH: 1, PUT: 1, DELETE: 1 };
+
+async function rest(ruta, opciones) {
+  opciones = opciones || {};
+  var metodo = (opciones.method || 'GET').toUpperCase();
+
+  if (MODO_DEV && ESCRITURAS[metodo]) {
+    console.warn('[MODO DEV] Escritura bloqueada: ' + metodo + ' ' + ruta);
+    toast('Modo dev: no se guardó nada en la base', 'error');
+    return [];
+  }
+
+  var ctrl = new AbortController();
+  var corte = setTimeout(function () { ctrl.abort(); }, opciones.timeout || 20000);
+  try {
+    var res = await fetch(SB_URL + '/rest/v1/' + ruta, {
+      method: metodo,
+      signal: ctrl.signal,
+      body: opciones.body,
+      headers: Object.assign({
+        apikey: SB_KEY,
+        Authorization: 'Bearer ' + tokenActual(),
+        'Content-Type': 'application/json',
+        Prefer: 'return=representation'
+      }, opciones.headers || {})
+    });
+    clearTimeout(corte);
+    var txt = await res.text();
+    if (!res.ok) throw new Error(mensajeDeError(res.status, txt));
+    return txt ? JSON.parse(txt) : [];
+  } catch (e) {
+    clearTimeout(corte);
+    if (e.name === 'AbortError') throw new Error('La base tardó demasiado en responder. Revisá la conexión.');
+    throw e;
+  }
+}
+
+/* Traduce el error crudo de PostgREST a algo que se pueda leer */
+function mensajeDeError(status, txt) {
+  var d = {};
+  try { d = JSON.parse(txt); } catch (e) {}
+  if (status === 401 || status === 403) return 'La sesión venció. Volvé a entrar.';
+  if (d.message && /column .* does not exist/.test(d.message)) {
+    return 'Falta una columna en la base: ' + d.message + '. ¿Corriste el SQL?';
+  }
+  return d.message || d.hint || ('Error ' + status);
+}
+
+/* ── Lecturas ────────────────────────────────────────────── */
+/* Trae una tabla entera paginando. Sin esto, cualquier consulta
+   se corta en 1000 filas y el error pasa desapercibido. */
+async function traerTodo(tabla, consulta) {
+  var pk = TABLAS[tabla] || 'id';
+  var filas = [], offset = 0;
+  for (;;) {
+    var q = tabla + '?select=*' + (consulta ? '&' + consulta : '') +
+            '&order=' + encodeURIComponent(pk) + '.asc' +
+            '&limit=' + TOPE_PAGINA + '&offset=' + offset;
+    var lote = await rest(q);
+    filas = filas.concat(lote);
+    if (lote.length < TOPE_PAGINA) break;
+    offset += TOPE_PAGINA;
+    if (offset > 200000) break;   // freno de seguridad
+  }
+  return filas;
+}
+
+/* Igual que traerTodo pero con caché corta, para las pantallas
+   que piden la misma tabla varias veces seguidas */
+async function traerCacheado(tabla, consulta) {
+  var clave = tabla + '|' + (consulta || '');
+  var c = _cache[clave];
+  if (c && (Date.now() - c.ts) < TTL_CACHE) return c.datos;
+  var datos = await traerTodo(tabla, consulta);
+  _cache[clave] = { datos: datos, ts: Date.now() };
+  return datos;
+}
+
+function invalidarCache(tabla) {
+  if (!tabla) { _cache = {}; return; }
+  Object.keys(_cache).forEach(function (k) {
+    if (k.indexOf(tabla + '|') === 0) delete _cache[k];
+  });
+}
+
+/* ── Escrituras ──────────────────────────────────────────── */
+async function crear(tabla, fila) {
+  var r = await rest(tabla, { method: 'POST', body: JSON.stringify(fila) });
+  invalidarCache(tabla);
+  return r;
+}
+
+async function actualizar(tabla, valorPk, cambios) {
+  var pk = TABLAS[tabla] || 'id';
+  var r = await rest(tabla + '?' + pk + '=eq.' + encodeURIComponent(valorPk), {
+    method: 'PATCH', body: JSON.stringify(cambios)
+  });
+  invalidarCache(tabla);
+  return r;
+}
+
+async function borrar(tabla, valorPk) {
+  var pk = TABLAS[tabla] || 'id';
+  var r = await rest(tabla + '?' + pk + '=eq.' + encodeURIComponent(valorPk), { method: 'DELETE' });
+  invalidarCache(tabla);
+  return r;
+}
+
+/* ── Config (tabla key/value) ────────────────────────────── */
+var _config = null;
+
+async function cargarConfig() {
+  if (_config) return _config;
+  var filas = await traerTodo('config');
+  _config = {};
+  filas.forEach(function (f) { _config[f.key] = f.value; });
+  return _config;
+}
+
+function leerConfig(clave, pordefecto) {
+  if (_config && _config[clave] !== undefined && _config[clave] !== null) return _config[clave];
+  try {
+    var v = localStorage.getItem('cfg_' + clave);
+    if (v !== null) return v;
+  } catch (e) {}
+  return pordefecto;
+}
+
+async function guardarConfig(clave, valor) {
+  try { localStorage.setItem('cfg_' + clave, String(valor)); } catch (e) {}
+  if (_config) _config[clave] = String(valor);
+  await rest('config', {
+    method: 'POST',
+    headers: { Prefer: 'resolution=merge-duplicates' },
+    body: JSON.stringify({ key: clave, value: String(valor) })
+  });
+  invalidarCache('config');
+}
+
+</script>
+<script>
+/* ══ js/dominio.js ══ */
+/* ═══════════════════════════════════════════════════════════
+   DOMINIO — las reglas del negocio, separadas de la pantalla.
+   Acá vive la única verdad sobre cómo se reparte el pago de un
+   remito, que es de donde salen TODAS las métricas.
+   ═══════════════════════════════════════════════════════════ */
+
+var TIPOS_PAGO = {
+  efectivo:      { etiqueta: 'Efectivo',      corta: 'Efectivo',      color: '#059669', icono: 'cash' },
+  transferencia: { etiqueta: 'Transferencia', corta: 'Transferencia', color: '#2563eb', icono: 'smartphone' },
+  deuda:         { etiqueta: 'Deuda pendiente', corta: 'Deuda',       color: '#d97706', icono: 'clock' },
+  sin_definir:   { etiqueta: 'Sin definir',   corta: 'Sin definir',   color: '#9c8b88', icono: 'alert' }
+};
+
+/* ── Partes de pago de un remito ──────────────────────────────
+   Hay dos modelos conviviendo en la base:
+   · nuevo → columna pagos_detalle, un array de partes
+   · viejo → columnas pago / pago2_tipo / pago2_monto
+   Un mismo remito puede sumar a efectivo y a deuda a la vez.
+   ────────────────────────────────────────────────────────── */
+function partesPago(r) {
+  if (!r) return [];
+
+  if (r.pagos_detalle) {
+    try {
+      var arr = typeof r.pagos_detalle === 'string' ? JSON.parse(r.pagos_detalle) : r.pagos_detalle;
+      if (Array.isArray(arr) && arr.length) {
+        return arr.map(function (p) {
+          return {
+            tipo: p.tipo || 'sin_definir',
+            monto: +p.monto || 0,
+            alias: p.alias || null,
+            eraDeuda: bool(p.era_deuda),
+            saldadoFecha: p.saldado_fecha || null,
+            deudaVieja: false
+          };
+        });
+      }
+    } catch (e) { /* si el JSON está roto, cae al modelo viejo */ }
+  }
+
+  var total = +r.total || 0;
+  var m2 = +r.pago2_monto || 0;
+  var partes = [];
+  if (r.pago2_tipo && m2 > 0 && m2 < total) {
+    partes.push({ tipo: r.pago || 'sin_definir', monto: total - m2, alias: r.alias || null,
+                  eraDeuda: false, saldadoFecha: r.saldado_fecha || null, deudaVieja: bool(r.saldado) });
+    partes.push({ tipo: r.pago2_tipo, monto: m2, alias: r.pago2_alias || null,
+                  eraDeuda: false, saldadoFecha: null, deudaVieja: false });
+  } else {
+    partes.push({ tipo: r.pago || 'sin_definir', monto: total, alias: r.alias || null,
+                  eraDeuda: false, saldadoFecha: r.saldado_fecha || null, deudaVieja: bool(r.saldado) });
+  }
+  return partes;
+}
+
+/* Cuánto de un remito corresponde a un tipo de pago */
+function montoPorTipo(r, tipo) {
+  return partesPago(r).reduce(function (s, p) {
+    if (p.tipo !== tipo) return s;
+    if (tipo === 'deuda' && p.deudaVieja) return s;   // deuda vieja ya saldada
+    return s + p.monto;
+  }, 0);
+}
+
+function deudaPendiente(r)   { return montoPorTipo(r, 'deuda'); }
+function tieneDeuda(r)       { return deudaPendiente(r) > 0; }
+function esPagoMixto(r)      { return partesPago(r).filter(function (p) { return p.monto > 0; }).length > 1; }
+function sumarTipo(lista, tipo) {
+  return (lista || []).reduce(function (s, r) { return s + montoPorTipo(r, tipo); }, 0);
+}
+
+/* Etiqueta corta para listados */
+function pagoHTML(r) {
+  var partes = partesPago(r).filter(function (p) { return p.monto > 0; });
+  if (!partes.length) return '<span class="pin pin-neutro">—</span>';
+  return partes.map(function (p) {
+    var t = TIPOS_PAGO[p.tipo] || TIPOS_PAGO.sin_definir;
+    if (p.tipo === 'deuda' && p.deudaVieja) return '<span class="pin pin-ok">' + ic('check', 12) + ' Saldada</span>';
+    var clase = p.tipo === 'deuda' ? 'pin-warn' : p.tipo === 'efectivo' ? 'pin-ok' : p.tipo === 'transferencia' ? 'pin-info' : 'pin-neutro';
+    return '<span class="pin ' + clase + '">' + ic(t.icono, 12) + ' ' + esc(t.corta) +
+           (partes.length > 1 ? ' ' + plata(p.monto) : '') + '</span>';
+  }).join(' ');
+}
+
+/* ── Resumen de un conjunto de remitos ───────────────────── */
+function resumirRemitos(remitos) {
+  var r = {
+    cantidad: remitos.length,
+    unidades: 0,
+    facturado: 0,
+    efectivo: 0,
+    transferencia: 0,
+    deuda: 0
+  };
+  remitos.forEach(function (x) {
+    r.unidades      += (+x.unidades || 0);
+    r.facturado     += (+x.total || 0);
+    r.efectivo      += montoPorTipo(x, 'efectivo');
+    r.transferencia += montoPorTipo(x, 'transferencia');
+    r.deuda         += montoPorTipo(x, 'deuda');
+  });
+  return r;
+}
+
+/* ── Clientes ────────────────────────────────────────────── */
+/* Un cliente entra en la búsqueda por número, nombre, zona o
+   dirección. Es la búsqueda que se usa en toda la app. */
+function coincideCliente(c, termino) {
+  var t = normalizar(termino);
+  if (!t) return true;
+  return normalizar(c.local).indexOf(t) !== -1 ||
+         normalizar(c.num_str).indexOf(t) !== -1 ||
+         String(c.num || '').indexOf(t) !== -1 ||
+         normalizar(c.loc).indexOf(t) !== -1 ||
+         normalizar(c.dir).indexOf(t) !== -1 ||
+         normalizar(c.duenio).indexOf(t) !== -1;
+}
+
+/* Número de ruta guardado en la columna jsonb `ruta` */
+function rutaDe(c) {
+  if (!c || !c.ruta) return '';
+  try {
+    var r = typeof c.ruta === 'string' ? JSON.parse(c.ruta) : c.ruta;
+    return (r && r.orden) ? String(r.orden) : '';
+  } catch (e) { return ''; }
+}
+
+function clienteActivo(c) { return c.activo === undefined || c.activo === null || bool(c.activo); }
+
+/* ═══════════════════════════════════════════════════════════
+   PRECIOS Y AUMENTO
+   La lista de precios sale de la tabla `stock`. El aumento tiene
+   dos tramos: el precio viejo se le cobra a quien todavía no fue
+   notificado, el nuevo a quien ya lo fue.
+   ═══════════════════════════════════════════════════════════ */
+
+var CFG_AUMENTO = {
+  activo:  'aumento_activo',
+  producto:'aumento_producto',
+  viejo:   'aumento_precio_viejo',
+  nuevo:   'aumento_precio_nuevo'
+};
+
+function aumentoConfig() {
+  return {
+    activo:   leerConfig(CFG_AUMENTO.activo, 'true') === 'true',
+    producto: leerConfig(CFG_AUMENTO.producto, 'Esmalte en Gel'),
+    viejo:   +leerConfig(CFG_AUMENTO.viejo, 2200) || 0,
+    nuevo:   +leerConfig(CFG_AUMENTO.nuevo, 2400) || 0
+  };
+}
+
+function textoAviso(precio) {
+  return 'A partir de la próxima reposición se aplicará un aumento. El nuevo costo será de ' + plata(precio) + '.';
+}
+
+function clienteAvisado(c) { return !!c && bool(c.aviso_aumento); }
+
+/* Qué precio le corresponde hoy a este cliente por el producto en aumento */
+function precioParaCliente(c) {
+  var cfg = aumentoConfig();
+  if (!cfg.activo) return null;
+  return clienteAvisado(c) ? cfg.nuevo : cfg.viejo;
+}
+
+function esProductoEnAumento(nombre) {
+  var obj = normalizar(aumentoConfig().producto);
+  if (!obj) return false;
+  var n = normalizar(nombre);
+  return n === obj || n.indexOf(obj) !== -1 || obj.indexOf(n) !== -1;
+}
+
+/* Precio de lista de un producto, según la tabla stock */
+function precioDeLista(nombre, stock) {
+  var item = (stock || []).find(function (s) { return normalizar(s.nombre) === normalizar(nombre) && +s.precio > 0; });
+  return item ? +item.precio : 0;
+}
+
+/* ── Última reposición ───────────────────────────────────── */
+function ultimaReposicion(nombreCliente, remitos) {
+  var suyos = (remitos || []).filter(function (r) {
+    return normalizar(r.cliente_nombre) === normalizar(nombreCliente) && r.motivo !== 'cerrado';
+  });
+  if (!suyos.length) return null;
+  suyos.sort(function (a, b) { return claveFecha(b.created_at || b.fecha).localeCompare(claveFecha(a.created_at || a.fecha)); });
+  var u = suyos[0];
+  return {
+    remito: u,
+    fecha: u.fecha || fechaCorta(u.created_at),
+    dias: diasEntre(u.fecha || u.created_at, hoyTexto()),
+    total: +u.total || 0,
+    unidades: +u.unidades || 0
+  };
+}
+
+/* ── Pendientes (tabla tareas) ───────────────────────────── */
+var TIPOS_PENDIENTE = {
+  nuevo:   { etiqueta: 'Cliente nuevo', clase: 'pin-ok',     icono: 'user',  color: 'var(--ok)' },
+  pedido:  { etiqueta: 'Pedido',        clase: 'pin-info',   icono: 'bag',   color: 'var(--info)' },
+  retirar: { etiqueta: 'A retirar',     clase: 'pin-danger', icono: 'truck', color: 'var(--danger)' },
+  otro:    { etiqueta: 'Otro',          clase: 'pin-neutro', icono: 'clipboard', color: 'var(--muted)' }
+};
+function tipoPendiente(t) { return TIPOS_PENDIENTE[(t && t.tipo) || 'otro'] || TIPOS_PENDIENTE.otro; }
+
+</script>
+<script>
+/* ══ js/router.js ══ */
+/* ═══════════════════════════════════════════════════════════
+   RUTAS — navegación por hash (#/clientes). Cada página se
+   registra sola con registrarPagina() y el router se encarga
+   del resto: pintar, marcar el menú, manejar errores.
+   ═══════════════════════════════════════════════════════════ */
+
+var PAGINAS = {};
+var rutaActual = '';
+
+/* def = { id, titulo, subtitulo, icono, menu, grupo, montar(cont, params) } */
+function registrarPagina(def) { PAGINAS[def.id] = def; }
+
+function irA(id, params) {
+  var hash = '#/' + id + (params ? '?' + params : '');
+  if (location.hash === hash) pintarRuta();
+  else location.hash = hash;
+}
+
+function leerRuta() {
+  var h = (location.hash || '').replace(/^#\/?/, '');
+  var i = h.indexOf('?');
+  return {
+    id: (i === -1 ? h : h.slice(0, i)) || 'inicio',
+    params: new URLSearchParams(i === -1 ? '' : h.slice(i + 1))
+  };
+}
+
+async function pintarRuta() {
+  var r = leerRuta();
+  var pagina = PAGINAS[r.id] || PAGINAS.inicio;
+  rutaActual = pagina.id;
+
+  document.body.classList.remove('menu-abierto');
+  marcarMenu(pagina.id);
+
+  var cont = porId('contenido');
+  cont.innerHTML =
+    '<div class="contenido-ancho">' +
+      '<div class="cabecera">' +
+        '<h1>' + esc(pagina.titulo) + '</h1>' +
+        (pagina.subtitulo ? '<p>' + esc(pagina.subtitulo) + '</p>' : '') +
+      '</div>' +
+      '<div id="cuerpo-pagina">' + cargando() + '</div>' +
+    '</div>';
+
+  var cuerpo = porId('cuerpo-pagina');
+  window.scrollTo(0, 0);
+
+  try {
+    await pagina.montar(cuerpo, r.params);
+  } catch (e) {
+    console.error('[' + pagina.id + ']', e);
+    cuerpo.innerHTML = avisoHTML('danger',
+      '<strong>No se pudo cargar esta pantalla.</strong><br>' + esc(e.message) +
+      '<br><button class="btn btn-secundario" style="margin-top:10px" onclick="pintarRuta()">Reintentar</button>');
+  }
+}
+
+function marcarMenu(id) {
+  $$('.nav-item').forEach(function (b) {
+    if (b.dataset.pagina === id) b.setAttribute('aria-current', 'page');
+    else b.removeAttribute('aria-current');
+  });
+}
+
+function construirMenu() {
+  var grupos = {};
+  Object.keys(PAGINAS).forEach(function (id) {
+    var p = PAGINAS[id];
+    if (!p.menu) return;
+    (grupos[p.grupo || 'General'] = grupos[p.grupo || 'General'] || []).push(p);
+  });
+  var html = '';
+  Object.keys(grupos).forEach(function (g) {
+    html += '<div class="nav-grupo">' + esc(g) + '</div>';
+    grupos[g].forEach(function (p) {
+      html += '<button class="nav-item" data-pagina="' + p.id + '" onclick="irA(\'' + p.id + '\')">' +
+                '<span class="nav-ic">' + ic(p.icono, 17) + '</span>' + esc(p.menu) +
+              '</button>';
+    });
+  });
+  porId('nav').innerHTML = html;
+}
+
+window.addEventListener('hashchange', pintarRuta);
+
+</script>
+
+<!-- páginas: cada una se registra sola, el menú se arma de esa lista -->
+<script>
+/* ══ js/paginas/inicio.js ══ */
+/* ═══════════════════════════════════════════════════════════
+   INICIO — pendientes, cómo viene el día y los atajos.
+   Los dos bloques largos (pendientes y los remitos de hoy) se
+   pliegan, así la pantalla entra de una en el celular.
+   ═══════════════════════════════════════════════════════════ */
+
+var _pendientes = [];
+
+registrarPagina({
+  id: 'inicio',
+  menu: 'Inicio',
+  grupo: 'Día a día',
+  icono: 'home',
+  titulo: 'Intencional',
+  subtitulo: capitalizar(DIAS[new Date().getDay()]) + ', ' + new Date().getDate() + ' de ' + MESES[new Date().getMonth()],
+
+  async montar(cont) {
+    var datos = await Promise.all([
+      traerCacheado('remitos'),
+      traerCacheado('tareas').catch(function () { return []; })
+    ]);
+    var remitos = datos[0];
+    _pendientes = datos[1];
+
+    var hoy = claveFecha(hoyTexto());
+    var deHoy = remitos.filter(function (r) {
+      return claveFecha(r.fecha) === hoy || claveFecha(r.created_at) === hoy;
+    });
+    var visitas = deHoy.filter(function (r) { return r.motivo !== 'cerrado'; });
+    var cerrados = deHoy.filter(function (r) { return r.motivo === 'cerrado'; });
+    var res = resumirRemitos(visitas);
+
+    cont.innerHTML =
+      bloquePendientes() +
+
+      '<div class="eyebrow" style="margin-top:22px">' + ic('calendar', 13) + ' Métricas de hoy</div>' +
+      '<div class="grilla-stats">' +
+        stat('users', 'Clientes de hoy', String(visitas.length),
+             plural(res.unidades, 'unidad', 'unidades') + (cerrados.length ? ' · ' + cerrados.length + ' cerrados' : ''),
+             'var(--rose)') +
+        stat('db', 'Total (c/deuda)', plata(res.facturado),
+             'Sin deuda: ' + plata(res.efectivo + res.transferencia), 'var(--violet)') +
+        stat('cash', 'Efectivo', plata(res.efectivo), '', 'var(--ok)') +
+        stat('smartphone', 'Transferencia', plata(res.transferencia), '', 'var(--info)') +
+        stat('clock', 'Deuda', plata(res.deuda), '', 'var(--warn)') +
+      '</div>' +
+
+      '<div class="eyebrow" style="margin-top:22px">' + ic('zap', 13) + ' Accesos rápidos</div>' +
+      '<div class="atajos">' +
+        atajo('receipt', 'Crear remito', "irA('remito')", 'grad') +
+        atajo('clipboard', 'Remitos hechos', "irA('hechos')", 'violeta') +
+        atajo('user', 'Nuevo cliente', 'nuevoCliente()', 'rosa') +
+        atajo('wallet', 'Gastos', "irA('gastos')", 'rojo') +
+        atajo('settings', 'Configuraciones', "irA('configuraciones')", 'neutro') +
+      '</div>' +
+
+      bloqueRemitosHoy(deHoy);
+  }
+});
+
+/* ── Atajos ──────────────────────────────────────────────── */
+function atajo(icono, texto, accion, estilo) {
+  return '<button class="atajo atajo-' + estilo + '" onclick="' + accion + '">' +
+    ic(icono, 20) + '<span>' + esc(texto) + '</span></button>';
+}
+
+/* ── Pendientes ──────────────────────────────────────────── */
+function bloquePendientes() {
+  var abiertos = _pendientes.filter(function (t) { return !bool(t.hecha); });
+  var hechas = _pendientes.filter(function (t) { return bool(t.hecha); });
+
+  var porTipo = {};
+  abiertos.forEach(function (t) { var k = t.tipo || 'otro'; porTipo[k] = (porTipo[k] || 0) + 1; });
+  var resumen = Object.keys(TIPOS_PENDIENTE)
+    .filter(function (k) { return porTipo[k]; })
+    .map(function (k) {
+      var d = TIPOS_PENDIENTE[k];
+      return '<span class="pin ' + d.clase + '">' + ic(d.icono, 12) + ' ' + porTipo[k] + '</span>';
+    }).join(' ');
+
+  return '<details class="tarjeta"' + (abiertos.length ? ' open' : '') + '>' +
+    '<summary class="tarjeta-cab" style="cursor:pointer">' +
+      ic('clipboard', 16) + ' Pendientes' +
+      '<span style="margin-left:auto;display:inline-flex;gap:5px;align-items:center">' +
+        resumen +
+        '<span class="pin pin-neutro">' +
+          (abiertos.length ? abiertos.length + ' por hacer' : 'todo listo') +
+        '</span>' +
+      '</span>' +
+    '</summary>' +
+    '<div class="tarjeta-cuerpo">' +
+      '<div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">' +
+        '<input class="campo-input" id="pend-texto" style="flex:1;min-width:170px" ' +
+               'placeholder="Agregar pendiente…" onkeydown="if(event.key===\'Enter\')agregarPendiente()"/>' +
+        '<select class="campo-input" id="pend-tipo" style="width:auto">' +
+          Object.keys(TIPOS_PENDIENTE).map(function (k) {
+            return '<option value="' + k + '">' + esc(TIPOS_PENDIENTE[k].etiqueta) + '</option>';
+          }).join('') +
+        '</select>' +
+        '<button class="btn btn-primario" onclick="agregarPendiente()" aria-label="Agregar">' + ic('plus', 17) + '</button>' +
+      '</div>' +
+
+      (abiertos.length
+        ? '<div class="lista">' + abiertos.map(function (t) { return filaPendiente(t, false); }).join('') + '</div>'
+        : '<div class="campo-ayuda">No queda nada pendiente. Agregá uno arriba si te acordás de algo.</div>') +
+
+      (hechas.length
+        ? '<div class="eyebrow" style="margin:16px 0 8px">Hechas</div>' +
+          '<div class="lista">' + hechas.slice(0, 8).map(function (t) { return filaPendiente(t, true); }).join('') + '</div>'
+        : '') +
+    '</div>' +
+  '</details>';
+}
+
+function filaPendiente(t, hecha) {
+  var d = tipoPendiente(t);
+  return '<div class="fila" style="cursor:default;border-left:3px solid ' + (hecha ? 'var(--border)' : d.color) + '">' +
+    '<input type="checkbox"' + (hecha ? ' checked' : '') +
+           ' onchange="marcarPendiente(' + t.id + ',this.checked)" aria-label="Marcar como hecho"/>' +
+    '<div class="fila-principal">' +
+      '<div class="fila-titulo"' + (hecha ? ' style="text-decoration:line-through;color:var(--muted);font-weight:500"' : '') + '>' +
+        esc(t.texto) + '</div>' +
+      (hecha ? '' : '<div class="fila-sub"><span class="pin ' + d.clase + '">' + ic(d.icono, 12) + ' ' + esc(d.etiqueta) + '</span></div>') +
+    '</div>' +
+    '<button class="btn btn-fantasma" style="padding:4px" aria-label="Borrar" onclick="borrarPendiente(' + t.id + ')">' + ic('trash', 15) + '</button>' +
+  '</div>';
+}
+
+async function agregarPendiente() {
+  var inp = porId('pend-texto');
+  var texto = (inp.value || '').trim();
+  if (!texto) { toast('Escribí el pendiente', 'error'); return; }
+  try {
+    await crear('tareas', { texto: texto, hecha: false, tipo: porId('pend-tipo').value });
+    inp.value = '';
+    toast('Pendiente agregado');
+    pintarRuta();
+  } catch (e) { toast(e.message, 'error'); }
+}
+
+async function marcarPendiente(id, hecha) {
+  try { await actualizar('tareas', id, { hecha: hecha }); pintarRuta(); }
+  catch (e) { toast(e.message, 'error'); }
+}
+
+async function borrarPendiente(id) {
+  try { await borrar('tareas', id); toast('Pendiente borrado'); pintarRuta(); }
+  catch (e) { toast(e.message, 'error'); }
+}
+
+/* ── Remitos de hoy ──────────────────────────────────────── */
+function bloqueRemitosHoy(deHoy) {
+  if (!deHoy.length) {
+    return '<div class="tarjeta" style="margin-top:22px"><div class="tarjeta-cuerpo">' +
+      vacio('receipt', 'Todavía no hay remitos hoy', 'Cuando cargues el primero, acá vas a ver el detalle del día.',
+            '<button class="btn btn-primario" onclick="irA(\'remito\')">' + ic('plus', 15) + ' Cargar el primero</button>') +
+      '</div></div>';
+  }
+  return '<details class="tarjeta" style="margin-top:22px">' +
+    '<summary class="tarjeta-cab" style="cursor:pointer">' +
+      ic('receipt', 16) + ' Remitos de hoy' +
+      '<span style="margin-left:auto"><span class="pin pin-neutro">' + plural(deHoy.length, 'remito') + '</span></span>' +
+    '</summary>' +
+    '<div class="tarjeta-cuerpo" style="padding:0">' +
+      '<div class="lista" style="border:none;border-radius:0">' + deHoy.slice().reverse().map(filaRemitoHoy).join('') + '</div>' +
+    '</div>' +
+  '</details>';
+}
+
+/* ── Bloques compartidos con otras páginas ───────────────── */
+function stat(icono, etiqueta, valor, sub, color) {
+  return '<div class="stat">' +
+    '<div class="stat-etiq">' + ic(icono, 14) + esc(etiqueta) + '</div>' +
+    '<div class="stat-val" style="color:' + color + '">' + esc(valor) + '</div>' +
+    (sub ? '<div class="stat-sub">' + esc(sub) + '</div>' : '') +
+  '</div>';
+}
+
+function filaRemitoHoy(r) {
+  var cerrado = r.motivo === 'cerrado';
+  return '<button class="fila" onclick="irA(\'hechos\',\'q=' + encodeURIComponent(r.cliente_nombre || '') + '\')">' +
+    '<div class="fila-principal">' +
+      '<div class="fila-titulo">' + esc(r.cliente_nombre || 'Sin cliente') +
+        (cerrado ? ' <span class="pin pin-neutro">' + ic('ban', 12) + ' Cerrado</span>' : '') + '</div>' +
+      '<div class="fila-sub">' +
+        [r.cliente_loc, r.unidades ? plural(+r.unidades, 'unidad', 'unidades') : ''].filter(Boolean).map(esc).join(' · ') +
+      '</div>' +
+    '</div>' +
+    '<div class="fila-derecha">' +
+      '<div class="fila-titulo">' + plata(r.total) + '</div>' +
+      (cerrado ? '' : '<div style="margin-top:4px">' + pagoHTML(r) + '</div>') +
+    '</div>' +
+  '</button>';
+}
+
+function capitalizar(s) { return String(s || '').charAt(0).toUpperCase() + String(s || '').slice(1); }
+
+</script>
+<script>
+/* ══ js/paginas/remito.js ══ */
+/* ═══════════════════════════════════════════════════════════
+   REMITO — la pantalla principal.
+   Arriba, fuera del comprobante: el cliente, su última
+   reposición, su deuda y los datos editables.
+   Abajo: el remito propiamente dicho, que es lo que se comparte.
+   ═══════════════════════════════════════════════════════════ */
+
+var R = null;   // estado del remito en curso
+
+function remitoVacio() {
+  return {
+    cliente: null,                 // fila de la tabla clientes
+    nombre: '', dir: '', loc: '', tel: '',
+    fecha: hoyTexto(),
+    filas: [{ prod: '', cant: 1, precio: 0 }],
+    notas: '',
+    pago1: '', alias1: '',
+    pago2: '', monto2: 0, alias2: '',
+    guardando: false
+  };
+}
+
+registrarPagina({
+  id: 'remito',
+  menu: 'Nuevo remito',
+  grupo: 'Día a día',
+  icono: 'receipt',
+  titulo: 'Nuevo remito',
+  subtitulo: 'Buscá el cliente o cargalo a mano',
+
+  async montar(cont, params) {
+    R = remitoVacio();
+    _stock = await traerCacheado('stock');
+    _clientesRemito = await traerCacheado('clientes');
+    await cargarConfig().catch(function () {});
+
+    var num = params.get('cliente');
+    cont.innerHTML = '<div id="zona-cliente"></div><div id="zona-precios"></div><div id="zona-remito"></div>';
+    pintarZonaCliente();
+    pintarPrecios();
+    pintarRemito();
+
+    if (num) {
+      var c = _clientesRemito.find(function (x) { return String(x.num) === String(num); });
+      if (c) elegirCliente(c.num);
+    }
+  }
+});
+
+var _stock = [];
+var _clientesRemito = [];
+var _resultados = [];
+
+/* ── Cliente ─────────────────────────────────────────────── */
+function pintarZonaCliente() {
+  var z = porId('zona-cliente');
+  if (!z) return;
+
+  if (!R.cliente) {
+    z.innerHTML =
+      '<div class="tarjeta"><div class="tarjeta-cuerpo">' +
+        '<div class="buscador">' +
+          '<span class="ic-lupa">' + ic('search', 16) + '</span>' +
+          '<input class="campo-input" id="q-cli" autocomplete="off" ' +
+                 'placeholder="Número, nombre, zona o dirección" oninput="buscarClienteRemito(this.value)"/>' +
+        '</div>' +
+        '<div id="res-cli"></div>' +
+        '<div class="campo-ayuda" style="margin-top:8px">Si no está en la base, escribí los datos directamente en el remito.</div>' +
+      '</div></div>';
+    return;
+  }
+
+  var c = R.cliente;
+  var rep = _ultimaRep;
+  var deuda = _deudaCliente;
+
+  z.innerHTML =
+    '<div class="tarjeta">' +
+      '<div class="tarjeta-cab" style="justify-content:space-between">' +
+        '<span style="display:flex;align-items:center;gap:8px">' +
+          '<span class="num-cliente">' + esc(c.num_str || c.num) + '</span>' + esc(c.local) +
+        '</span>' +
+        '<button class="btn btn-fantasma" style="padding:2px 6px" onclick="soltarCliente()" aria-label="Quitar cliente">✕</button>' +
+      '</div>' +
+      '<div class="tarjeta-cuerpo">' +
+
+        '<div class="grilla-stats" style="grid-template-columns:repeat(auto-fit,minmax(150px,1fr));margin-bottom:14px">' +
+          '<div class="stat">' +
+            '<div class="stat-etiq">' + ic('calendar', 14) + 'Última reposición</div>' +
+            (rep
+              ? '<div class="stat-val" style="font-size:17px">' + esc(fechaCorta(rep.fecha)) + '</div>' +
+                '<div class="stat-sub">' + (rep.dias === 0 ? 'hoy' : rep.dias === 1 ? 'ayer' : 'hace ' + plural(rep.dias, 'día')) +
+                  ' · ' + plata(rep.total) + ' · ' + plural(rep.unidades, 'unidad', 'unidades') + '</div>'
+              : '<div class="stat-val" style="font-size:17px;color:var(--muted)">Primera vez</div>' +
+                '<div class="stat-sub">no tiene remitos anteriores</div>') +
+          '</div>' +
+          '<div class="stat">' +
+            '<div class="stat-etiq">' + ic('clock', 14) + 'Deuda</div>' +
+            '<div class="stat-val" style="font-size:17px;color:' + (deuda > 0 ? 'var(--warn)' : 'var(--ok)') + '">' +
+              (deuda > 0 ? plata(deuda) : 'Al día') + '</div>' +
+            (deuda > 0 ? '<div class="stat-sub">' + plural(_remitosConDeuda, 'remito') + ' sin saldar</div>' : '') +
+          '</div>' +
+        '</div>' +
+
+        (clienteAvisado(c)
+          ? avisoHTML('ok', 'Ya se le avisó del aumento' +
+              (c.aviso_aumento_fecha ? ' el <strong>' + esc(fechaCorta(c.aviso_aumento_fecha)) + '</strong>' : '') +
+              '. Por eso el aviso no sale en el remito. ' +
+              '<button class="btn btn-fantasma" style="padding:0;text-decoration:underline" onclick="volverAAvisar()">Volver a avisar</button>', 'check')
+          : '') +
+
+        '<div style="display:flex;gap:8px;flex-wrap:wrap">' +
+          '<button class="btn btn-secundario" onclick="abrirEditarCliente()">' + ic('edit', 15) + ' Editar datos</button>' +
+          '<button class="btn btn-secundario" onclick="marcarCerrado()">' + ic('ban', 15) + ' Estaba cerrado</button>' +
+        '</div>' +
+      '</div>' +
+    '</div>';
+}
+
+function buscarClienteRemito(q) {
+  var cont = porId('res-cli');
+  if (!q || q.length < 2) { cont.innerHTML = ''; return; }
+  _resultados = _clientesRemito.filter(clienteActivo)
+    .filter(function (c) { return coincideCliente(c, q); })
+    .slice(0, 8);
+
+  cont.innerHTML = _resultados.length
+    ? '<div class="lista" style="margin-top:10px">' + _resultados.map(function (c) {
+        return '<button class="fila" onclick="elegirCliente(' + JSON.stringify(String(c.num)) + ')">' +
+          '<span class="num-cliente">' + esc(c.num_str || c.num) + '</span>' +
+          '<div class="fila-principal">' +
+            '<div class="fila-titulo">' + esc(c.local) + '</div>' +
+            '<div class="fila-sub">' + [c.loc, c.dir].filter(Boolean).map(esc).join(' · ') + '</div>' +
+          '</div></button>';
+      }).join('') + '</div>'
+    : '<div class="campo-ayuda" style="margin-top:10px">Ningún cliente coincide con “' + esc(q) + '”.</div>';
+}
+
+var _ultimaRep = null, _deudaCliente = 0, _remitosConDeuda = 0;
+
+async function elegirCliente(num) {
+  var c = _clientesRemito.find(function (x) { return String(x.num) === String(num); });
+  if (!c) return;
+  R.cliente = c;
+  R.nombre = c.local || '';
+  R.dir = c.dir || '';
+  R.loc = c.loc || '';
+  R.tel = c.tel || '';
+
+  _ultimaRep = null; _deudaCliente = 0; _remitosConDeuda = 0;
+  pintarZonaCliente();
+  pintarRemito();
+
+  try {
+    var suyos = await traerTodo('remitos', 'cliente_nombre=eq.' + encodeURIComponent(c.local));
+    if (!R.cliente || R.cliente.num !== c.num) return;   // cambió mientras cargaba
+    _ultimaRep = ultimaReposicion(c.local, suyos);
+    var conDeuda = suyos.filter(tieneDeuda);
+    _remitosConDeuda = conDeuda.length;
+    _deudaCliente = sumarTipo(conDeuda, 'deuda');
+  } catch (e) { console.warn('historial del cliente:', e.message); }
+
+  aplicarPrecioSugerido();
+  pintarZonaCliente();
+  pintarRemito();
+}
+
+function soltarCliente() {
+  R.cliente = null; _ultimaRep = null; _deudaCliente = 0;
+  pintarZonaCliente(); pintarRemito();
+}
+
+/* ── Editar datos del cliente sin salir del remito ────────── */
+function abrirEditarCliente() {
+  var c = R.cliente; if (!c) return;
+  var campos = [
+    { k: 'local', et: 'Nombre del local' },
+    { k: 'dir',   et: 'Dirección' },
+    { k: 'loc',   et: 'Localidad / zona' },
+    { k: 'tel',   et: 'Teléfono' }
+  ];
+  abrirModal('Datos de ' + (c.local || 'el cliente'),
+    campos.map(function (f) {
+      return '<div class="campo"><div class="campo-etiq">' + esc(f.et) + '</div>' +
+        '<input class="campo-input" id="ec-' + f.k + '" value="' + esc(c[f.k] || '') + '"/></div>';
+    }).join(''),
+    '<button class="btn btn-primario btn-bloque" onclick="guardarEditarCliente()">Guardar en la base</button>');
+}
+
+async function guardarEditarCliente() {
+  var c = R.cliente; if (!c) return;
+  var cambios = {};
+  ['local', 'dir', 'loc', 'tel'].forEach(function (k) {
+    var el = porId('ec-' + k); if (!el) return;
+    var v = el.value.trim();
+    if (v !== (c[k] || '')) cambios[k] = v || null;
+  });
+  if (!Object.keys(cambios).length) { cerrarModal(); return; }
+
+  try {
+    await actualizar('clientes', c.num, cambios);
+    Object.assign(c, cambios);
+    R.nombre = c.local || ''; R.dir = c.dir || ''; R.loc = c.loc || ''; R.tel = c.tel || '';
+    cerrarModal();
+    pintarZonaCliente(); pintarRemito();
+    toast('Datos actualizados');
+  } catch (e) {
+    toast(e.message, 'error');
+  }
+}
+
+/* ── Cliente cerrado: queda registrado como un remito más ── */
+function marcarCerrado() {
+  var c = R.cliente; if (!c) return;
+  abrirModal('Marcar como cerrado',
+    '<p style="font-size:13px;color:var(--text2);line-height:1.6">Se guarda un remito de ' + plata(0) +
+    ' para <strong>' + esc(c.local) + '</strong> con fecha de hoy. Queda en el historial como visita, ' +
+    'pero no suma a lo facturado.</p>' +
+    '<div class="campo" style="margin-top:12px"><div class="campo-etiq">Nota (opcional)</div>' +
+    '<input class="campo-input" id="cerrado-nota" placeholder="Ej: cerrado por vacaciones"/></div>',
+    '<button class="btn btn-primario btn-bloque" onclick="confirmarCerrado()">Registrar la visita</button>');
+}
+
+async function confirmarCerrado() {
+  var c = R.cliente; if (!c) return;
+  var nota = (porId('cerrado-nota').value || '').trim();
+  try {
+    await crear('remitos', {
+      fecha: hoyTexto(),
+      cliente_nombre: c.local, cliente_dir: c.dir, cliente_loc: c.loc, cliente_tel: c.tel,
+      total: 0, unidades: 0, pago: 'sin_definir',
+      productos: '[]', pagos_detalle: JSON.stringify([{ tipo: 'sin_definir', monto: 0 }]),
+      motivo: 'cerrado', notas: nota || null,
+      created_at: new Date().toISOString()
+    });
+    cerrarModal();
+    toast('Visita registrada: estaba cerrado');
+    irA('inicio');
+  } catch (e) { toast(e.message, 'error'); }
+}
+
+async function volverAAvisar() {
+  var c = R.cliente; if (!c) return;
+  try {
+    await actualizar('clientes', c.num, { aviso_aumento: false, aviso_aumento_fecha: null });
+    c.aviso_aumento = false; c.aviso_aumento_fecha = null;
+    aplicarPrecioSugerido();
+    pintarZonaCliente(); pintarRemito();
+    toast('El aviso vuelve a salir en el remito');
+  } catch (e) { toast(e.message, 'error'); }
+}
+
+/* ── Lista de precios: se ve siempre, con o sin cliente ───── */
+function pintarPrecios() {
+  var z = porId('zona-precios'); if (!z) return;
+  var conPrecio = _stock.filter(function (s) { return +s.precio > 0; });
+  if (!conPrecio.length) { z.innerHTML = ''; return; }
+
+  var cfg = aumentoConfig();
+  z.innerHTML =
+    '<details class="tarjeta" open>' +
+      '<summary class="tarjeta-cab" style="cursor:pointer;list-style:none">' +
+        ic('tag', 16) + ' Precios' +
+        '<span style="margin-left:auto;font-size:11px;color:var(--muted);font-weight:500">' +
+          plural(conPrecio.length, 'producto') + '</span>' +
+      '</summary>' +
+      '<div class="tarjeta-cuerpo" style="padding-top:12px">' +
+        '<div style="display:flex;flex-wrap:wrap;gap:8px">' +
+          conPrecio.map(function (s) {
+            var enAumento = cfg.activo && esProductoEnAumento(s.nombre);
+            return '<div class="pin ' + (enAumento ? 'pin-warn' : 'pin-neutro') + '" style="padding:6px 12px;font-size:12px">' +
+              esc(s.nombre) + ' · <strong>' + plata(s.precio) + '</strong>' + '</div>';
+          }).join('') +
+        '</div>' +
+        (cfg.activo
+          ? '<div class="campo-ayuda" style="margin-top:10px">' + esc(cfg.producto) + ': ' + plata(cfg.viejo) +
+            ' para quien no fue avisado, ' + plata(cfg.nuevo) + ' para quien ya sabe del aumento.</div>'
+          : '') +
+      '</div>' +
+    '</details>';
+}
+
+/* ── El remito ───────────────────────────────────────────── */
+function totalRemito() {
+  return R.filas.reduce(function (s, f) { return s + (+f.cant || 0) * (+f.precio || 0); }, 0);
+}
+function unidadesRemito() {
+  return R.filas.reduce(function (s, f) { return s + (+f.cant || 0); }, 0);
+}
+
+function pintarRemito() {
+  var z = porId('zona-remito'); if (!z) return;
+  var total = totalRemito();
+  var mostrarAviso = aumentoConfig().activo && !clienteAvisado(R.cliente);
+
+  z.innerHTML =
+    '<div class="tarjeta" id="remito-card">' +
+      '<div style="padding:18px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:12px">' +
+        '<img src="' + LOGO_INTENCIONAL + '" style="width:44px;height:44px;object-fit:contain" alt=""/>' +
+        '<div>' +
+          '<div class="marca-nombre">Intencional</div>' +
+          '<div class="marca-sub">Esmaltes · Cremas · Belleza</div>' +
+        '</div>' +
+        '<div style="margin-left:auto;text-align:right">' +
+          '<div class="campo-etiq" style="margin:0">Fecha</div>' +
+          '<div style="font-weight:600">' + esc(R.fecha) + '</div>' +
+        '</div>' +
+      '</div>' +
+
+      '<div class="tarjeta-cuerpo">' +
+        '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px">' +
+          campoTexto('Cliente', 'r-nombre', R.nombre, 'Nombre del local') +
+          campoTexto('Dirección', 'r-dir', R.dir, 'Calle y número') +
+          campoTexto('Localidad', 'r-loc', R.loc, 'Ciudad / partido') +
+          campoTexto('Teléfono', 'r-tel', R.tel, 'Opcional') +
+        '</div>' +
+
+        '<div class="eyebrow" style="margin-top:18px">Productos</div>' +
+        '<div id="filas-remito">' + R.filas.map(filaProducto).join('') + '</div>' +
+        '<button class="btn btn-secundario" style="margin-top:8px" onclick="agregarFila()">' + ic('plus', 15) + ' Agregar producto</button>' +
+
+        '<div class="campo" style="margin-top:18px">' +
+          '<div class="campo-etiq">Notas u observaciones</div>' +
+          '<input class="campo-input" id="r-notas" value="' + esc(R.notas) + '" ' +
+                 'placeholder="Ej: pidió reponer crema la semana que viene" oninput="R.notas=this.value"/>' +
+        '</div>' +
+
+        '<div style="display:flex;align-items:center;justify-content:space-between;margin-top:18px;padding-top:16px;border-top:1px solid var(--border)">' +
+          '<div class="campo-etiq" style="margin:0">Total</div>' +
+          '<div class="stat-val" style="font-size:26px;color:var(--rose)">' + plata(total) + '</div>' +
+        '</div>' +
+
+        (mostrarAviso
+          ? '<div class="aviso aviso-warn" id="bloque-aviso" style="margin-top:14px">' + ic('megaphone', 15) +
+            '<div><strong>Aviso:</strong> ' + esc(textoAviso(aumentoConfig().nuevo)) + '</div></div>'
+          : '') +
+
+        (R.notas ? '' : '') +
+      '</div>' +
+    '</div>' +
+
+    /* Fuera del remito: cómo se paga y el botón de confirmar */
+    '<div class="tarjeta">' +
+      '<div class="tarjeta-cab">' + ic('wallet', 16) + ' Cómo se paga</div>' +
+      '<div class="tarjeta-cuerpo">' +
+        botonesPago(1) +
+        (R.pago1
+          ? '<div style="margin-top:14px">' +
+              (R.pago2
+                ? '<div class="campo"><div class="campo-etiq">Monto del segundo pago</div>' +
+                  '<input class="campo-input" type="number" inputmode="decimal" min="0" id="r-monto2" ' +
+                         'value="' + (R.monto2 || '') + '" oninput="R.monto2=+this.value||0;pintarDesglose()"/>' +
+                  '<div class="campo-ayuda" id="resto-pago"></div></div>'
+                : '') +
+              botonesPago(2) +
+            '</div>'
+          : '') +
+        '<div id="desglose"></div>' +
+        '<button class="btn btn-primario btn-bloque" style="margin-top:16px" id="btn-confirmar" onclick="confirmarRemito()">' +
+          ic('check', 16) + ' Confirmar y compartir' +
+        '</button>' +
+      '</div>' +
+    '</div>';
+
+  pintarDesglose();
+}
+
+function campoTexto(etiqueta, id, valor, ph) {
+  return '<div class="campo" style="margin:0">' +
+    '<div class="campo-etiq">' + esc(etiqueta) + '</div>' +
+    '<input class="campo-input" id="' + id + '" value="' + esc(valor) + '" placeholder="' + esc(ph) + '" ' +
+           'oninput="R.' + id.slice(2) + '=this.value"/>' +
+  '</div>';
+}
+
+function filaProducto(f, i) {
+  var opciones = ['<option value="">— elegir —</option>'].concat(
+    _stock.filter(function (s) { return s.nombre; }).map(function (s) {
+      return '<option' + (normalizar(s.nombre) === normalizar(f.prod) ? ' selected' : '') + '>' + esc(s.nombre) + '</option>';
+    })).join('');
+
+  return '<div style="display:grid;grid-template-columns:1fr 68px 96px 32px;gap:8px;align-items:center;margin-bottom:8px">' +
+    '<select class="campo-input" onchange="cambiarProducto(' + i + ',this.value)">' + opciones + '</select>' +
+    '<input class="campo-input" type="number" min="0" inputmode="numeric" value="' + (+f.cant || 0) + '" ' +
+           'aria-label="Cantidad" oninput="R.filas[' + i + '].cant=+this.value||0;pintarTotales()"/>' +
+    '<input class="campo-input" type="number" min="0" inputmode="decimal" value="' + (+f.precio || 0) + '" ' +
+           'aria-label="Precio" oninput="R.filas[' + i + '].precio=+this.value||0;pintarTotales()"/>' +
+    (R.filas.length > 1
+      ? '<button class="btn btn-fantasma" style="padding:4px" aria-label="Quitar" onclick="quitarFila(' + i + ')">✕</button>'
+      : '<span></span>') +
+  '</div>';
+}
+
+function cambiarProducto(i, nombre) {
+  R.filas[i].prod = nombre;
+  var sugerido = R.cliente && esProductoEnAumento(nombre) ? precioParaCliente(R.cliente) : 0;
+  R.filas[i].precio = sugerido || precioDeLista(nombre, _stock) || R.filas[i].precio || 0;
+  pintarRemito();
+}
+
+function agregarFila() { R.filas.push({ prod: '', cant: 1, precio: 0 }); pintarRemito(); }
+function quitarFila(i) { R.filas.splice(i, 1); pintarRemito(); }
+
+/* Cuando cambia el cliente, se actualiza el precio del producto en aumento,
+   pero nunca se pisa un precio escrito a mano. */
+function aplicarPrecioSugerido() {
+  var cfg = aumentoConfig();
+  if (!cfg.activo) return;
+  var nuevo = precioParaCliente(R.cliente);
+  R.filas.forEach(function (f) {
+    if (!esProductoEnAumento(f.prod)) return;
+    var actual = +f.precio || 0;
+    if (!actual || actual === cfg.viejo || actual === cfg.nuevo) f.precio = nuevo;
+  });
+}
+
+function pintarTotales() {
+  var z = porId('zona-remito');
+  if (!z) return;
+  var t = z.querySelector('.stat-val');
+  if (t) t.textContent = plata(totalRemito());
+  pintarDesglose();
+}
+
+function botonesPago(cual) {
+  var actual = cual === 1 ? R.pago1 : R.pago2;
+  var etiqueta = cual === 1 ? 'Medio de pago' : 'Segundo medio de pago (opcional)';
+  return '<div class="campo-etiq">' + etiqueta + '</div>' +
+    '<div style="display:flex;gap:8px;flex-wrap:wrap">' +
+      ['efectivo', 'transferencia', 'deuda'].map(function (t) {
+        var d = TIPOS_PAGO[t];
+        var activo = actual === t;
+        return '<button class="btn ' + (activo ? 'btn-primario' : 'btn-secundario') + '" ' +
+          'onclick="setPago(' + cual + ',\'' + t + '\')">' + ic(d.icono, 15) + ' ' + esc(d.corta) + '</button>';
+      }).join('') +
+      (actual && cual === 2
+        ? '<button class="btn btn-fantasma" onclick="setPago(2,\'\')">Quitar</button>'
+        : '') +
+    '</div>';
+}
+
+function setPago(cual, tipo) {
+  if (cual === 1) { R.pago1 = tipo; }
+  else { R.pago2 = tipo; if (!tipo) R.monto2 = 0; }
+  pintarRemito();
+}
+
+/* El desglose entra en la imagen: si hay dos medios, el cliente
+   tiene que ver cuánto pagó de cada forma. */
+function pintarDesglose() {
+  var partes = partesDelFormulario();
+  var cont = porId('desglose');
+  var resto = porId('resto-pago');
+  if (resto) {
+    var r = totalRemito() - (+R.monto2 || 0);
+    resto.textContent = 'Con el primer medio quedan ' + plata(Math.max(0, r)) + '.';
+  }
+  if (!cont) return;
+
+  var visibles = partes.filter(function (p) { return p.monto > 0; });
+  if (visibles.length < 2) { cont.innerHTML = ''; return; }
+  cont.innerHTML =
+    '<div class="tarjeta" style="margin:14px 0 0;box-shadow:none">' +
+      '<div class="tarjeta-cuerpo" style="padding:12px 14px">' +
+        '<div class="campo-etiq">Forma de pago</div>' +
+        visibles.map(function (p) {
+          var d = TIPOS_PAGO[p.tipo] || TIPOS_PAGO.sin_definir;
+          return '<div style="display:flex;justify-content:space-between;padding:4px 0;font-size:13px">' +
+            '<span style="color:' + d.color + ';font-weight:600">' + ic(d.icono, 13) + ' ' + esc(d.etiqueta) + '</span>' +
+            '<strong>' + plata(p.monto) + '</strong></div>';
+        }).join('') +
+      '</div>' +
+    '</div>';
+}
+
+function partesDelFormulario() {
+  var total = totalRemito();
+  var m2 = Math.min(+R.monto2 || 0, total);
+  var partes = [{ tipo: R.pago1 || 'sin_definir', monto: R.pago2 && m2 > 0 ? total - m2 : total, alias: R.alias1 || null }];
+  if (R.pago2 && m2 > 0) partes.push({ tipo: R.pago2, monto: m2, alias: R.alias2 || null });
+  return partes;
+}
+
+/* ── Confirmar ───────────────────────────────────────────── */
+async function confirmarRemito() {
+  var btn = porId('btn-confirmar');
+  var total = totalRemito();
+
+  if (!R.nombre.trim()) { toast('Falta el nombre del cliente', 'error'); return; }
+  if (!R.filas.some(function (f) { return f.prod && f.cant > 0; })) { toast('Agregá al menos un producto', 'error'); return; }
+  if (!R.pago1) { toast('Elegí cómo se paga', 'error'); return; }
+
+  if (btn) { btn.disabled = true; btn.textContent = 'Guardando…'; }
+  var partes = partesDelFormulario();
+  var m2 = Math.min(+R.monto2 || 0, total);
+
+  var remito = {
+    fecha: R.fecha,
+    cliente_nombre: R.nombre.trim(),
+    cliente_dir: R.dir || null,
+    cliente_loc: R.loc || null,
+    cliente_tel: R.tel || null,
+    total: total,
+    unidades: unidadesRemito(),
+    pago: R.pago1,
+    alias: R.alias1 || null,
+    notas: R.notas.trim() || null,
+    productos: JSON.stringify(R.filas.filter(function (f) { return f.prod; })
+      .map(function (f) { return { prod: f.prod, cant: +f.cant || 0, precio: +f.precio || 0 }; })),
+    pagos_detalle: JSON.stringify(partes),
+    created_at: new Date().toISOString()
+  };
+  if (R.pago2 && m2 > 0) {
+    remito.pago2_tipo = R.pago2;
+    remito.pago2_monto = m2;
+    remito.pago2_alias = R.alias2 || null;
+  }
+
+  try {
+    await crear('remitos', remito);
+    await marcarAvisoSiSalio();
+    toast('Remito guardado');
+    R = remitoVacio();
+    irA('hechos');
+  } catch (e) {
+    if (btn) { btn.disabled = false; btn.innerHTML = ic('check', 16) + ' Confirmar y compartir'; }
+    toast(e.message, 'error');
+  }
+}
+
+/* Si el aviso salió impreso en el remito, queda registrado con la fecha */
+async function marcarAvisoSiSalio() {
+  var c = R.cliente;
+  if (!c || !c.num || clienteAvisado(c)) return;
+  if (!aumentoConfig().activo) return;
+  try {
+    await actualizar('clientes', c.num, { aviso_aumento: true, aviso_aumento_fecha: hoyISO() });
+    c.aviso_aumento = true;
+    c.aviso_aumento_fecha = hoyISO();
+  } catch (e) { console.warn('no se pudo marcar el aviso:', e.message); }
+}
+
+</script>
+<script>
+/* ══ js/paginas/hechos.js ══ */
+/* ═══════════════════════════════════════════════════════════
+   REMITOS HECHOS — historial con el buscador ampliado:
+   número de cliente, zona, nombre y dirección en un solo campo.
+   ═══════════════════════════════════════════════════════════ */
+
+var _hechos = [];
+var _porNombre = {};      // nombre normalizado → cliente, para poder buscar por número
+var _qHechos = '';
+var _filtroHechos = '';
+var _topeHechos = 40;
+
+registrarPagina({
+  id: 'hechos',
+  menu: 'Remitos hechos',
+  grupo: 'Día a día',
+  icono: 'clipboard',
+  titulo: 'Remitos hechos',
+  subtitulo: 'Buscá por número de cliente, nombre, zona o dirección',
+
+  async montar(cont, params) {
+    _qHechos = params.get('q') || '';
+    _filtroHechos = params.get('filtro') || '';
+    _topeHechos = 40;
+
+    var res = await Promise.all([traerCacheado('remitos'), traerCacheado('clientes')]);
+    _hechos = res[0].slice().reverse();
+
+    /* El remito guarda el nombre del cliente pero no su número.
+       Este índice permite igual buscar por número: se resuelve
+       contra la tabla de clientes por nombre. */
+    _porNombre = {};
+    res[1].forEach(function (c) { _porNombre[normalizar(c.local)] = c; });
+
+    cont.innerHTML =
+      '<div class="buscador" style="margin-bottom:12px">' +
+        '<span class="ic-lupa">' + ic('search', 16) + '</span>' +
+        '<input class="campo-input" id="q-hechos" type="search" autocomplete="off" ' +
+               'placeholder="Ej: r14-0310, Farmacia Posik, chingolo, Belgrano 378" ' +
+               'value="' + esc(_qHechos) + '" oninput="filtrarHechos(this.value)"/>' +
+      '</div>' +
+      '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px">' +
+        chipFiltro('', 'Todos') +
+        chipFiltro('deuda', 'Con deuda') +
+        chipFiltro('cerrado', 'Estaban cerrados') +
+      '</div>' +
+      '<div id="resumen-hechos"></div>' +
+      '<div id="lista-hechos"></div>';
+
+    pintarHechos();
+  }
+});
+
+function chipFiltro(valor, etiqueta) {
+  return '<button class="btn ' + (_filtroHechos === valor ? 'btn-primario' : 'btn-secundario') + '" ' +
+    'style="padding:7px 13px" onclick="setFiltroHechos(\'' + valor + '\')">' + esc(etiqueta) + '</button>';
+}
+
+function setFiltroHechos(v) { _filtroHechos = v; _topeHechos = 40; irA('hechos', 'filtro=' + v + (_qHechos ? '&q=' + encodeURIComponent(_qHechos) : '')); }
+function filtrarHechos(v) { _qHechos = v; _topeHechos = 40; pintarHechos(); }
+function verMasHechos() { _topeHechos += 40; pintarHechos(); }
+
+/* Un remito coincide si coincide su propio texto o el del cliente
+   al que pertenece (por eso el índice por nombre). */
+function coincideRemito(r, termino) {
+  var t = normalizar(termino);
+  if (!t) return true;
+  if (normalizar(r.cliente_nombre).indexOf(t) !== -1) return true;
+  if (normalizar(r.cliente_loc).indexOf(t) !== -1) return true;
+  if (normalizar(r.cliente_dir).indexOf(t) !== -1) return true;
+  var c = _porNombre[normalizar(r.cliente_nombre)];
+  if (c && (normalizar(c.num_str).indexOf(t) !== -1 || String(c.num || '').indexOf(t) !== -1)) return true;
+  return false;
+}
+
+function hechosFiltrados() {
+  return _hechos.filter(function (r) {
+    if (_filtroHechos === 'deuda' && !tieneDeuda(r)) return false;
+    if (_filtroHechos === 'cerrado' && r.motivo !== 'cerrado') return false;
+    return coincideRemito(r, _qHechos);
+  });
+}
+
+function pintarHechos() {
+  var lista = hechosFiltrados();
+  var res = resumirRemitos(lista);
+
+  var resumen = porId('resumen-hechos');
+  if (resumen) {
+    resumen.innerHTML = '<div class="grilla-stats" style="margin-bottom:14px">' +
+      stat('clipboard', 'Remitos', String(res.cantidad), plural(res.unidades, 'unidad', 'unidades'), 'var(--violet)') +
+      stat('receipt', 'Facturado', plata(res.facturado), '', 'var(--rose)') +
+      stat('cash', 'Cobrado', plata(res.efectivo + res.transferencia), '', 'var(--ok)') +
+      (res.deuda > 0 ? stat('clock', 'En deuda', plata(res.deuda), '', 'var(--warn)') : '') +
+    '</div>';
+  }
+
+  var cont = porId('lista-hechos');
+  if (!cont) return;
+  if (!lista.length) {
+    cont.innerHTML = vacio('search', 'Sin resultados',
+      _qHechos ? 'Probá con el número de cliente, la zona o parte de la dirección.' : 'Todavía no hay remitos con este filtro.');
+    return;
+  }
+
+  cont.innerHTML =
+    '<div class="lista">' + lista.slice(0, _topeHechos).map(filaHecho).join('') + '</div>' +
+    (lista.length > _topeHechos
+      ? '<button class="btn btn-secundario btn-bloque" style="margin-top:12px" onclick="verMasHechos()">Ver más</button>'
+      : '');
+}
+
+function filaHecho(r) {
+  var c = _porNombre[normalizar(r.cliente_nombre)];
+  var cerrado = r.motivo === 'cerrado';
+  return '<button class="fila" onclick="verRemito(' + r.id + ')">' +
+    (c ? '<span class="num-cliente">' + esc(c.num_str || c.num) + '</span>' : '') +
+    '<div class="fila-principal">' +
+      '<div class="fila-titulo">' + esc(r.cliente_nombre || 'Sin cliente') +
+        (cerrado ? ' <span class="pin pin-neutro">' + ic('ban', 12) + ' Cerrado</span>' : '') + '</div>' +
+      '<div class="fila-sub">' + [fechaCorta(r.fecha), r.cliente_loc, r.cliente_dir].filter(Boolean).map(esc).join(' · ') + '</div>' +
+    '</div>' +
+    '<div class="fila-derecha">' +
+      '<div class="fila-titulo">' + plata(r.total) + '</div>' +
+      '<div style="margin-top:4px">' + pagoHTML(r) + '</div>' +
+    '</div>' +
+  '</button>';
+}
+
+function verRemito(id) {
+  var r = _hechos.find(function (x) { return String(x.id) === String(id); });
+  if (!r) return;
+  var prods = [];
+  try { prods = typeof r.productos === 'string' ? JSON.parse(r.productos || '[]') : (r.productos || []); } catch (e) {}
+
+  abrirModal('Remito de ' + (r.cliente_nombre || '—'),
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px">' +
+      dato('Fecha', fechaCorta(r.fecha)) +
+      dato('Localidad', r.cliente_loc || '—') +
+      dato('Dirección', r.cliente_dir || '—') +
+      dato('Teléfono', r.cliente_tel || '—') +
+    '</div>' +
+    (prods.length
+      ? '<table class="tabla"><thead><tr><th>Producto</th><th class="num">Cant</th><th class="num">Precio</th><th class="num">Subtotal</th></tr></thead><tbody>' +
+        prods.map(function (p) {
+          return '<tr><td>' + esc(p.prod) + '</td><td class="num">' + (+p.cant || 0) + '</td>' +
+            '<td class="num">' + plata(p.precio) + '</td><td class="num">' + plata((+p.cant || 0) * (+p.precio || 0)) + '</td></tr>';
+        }).join('') + '</tbody></table>'
+      : '<div class="campo-ayuda">Sin productos: se registró como visita.</div>') +
+    '<div style="display:flex;justify-content:space-between;align-items:center;margin-top:14px;padding-top:12px;border-top:1px solid var(--border)">' +
+      '<span class="campo-etiq" style="margin:0">Total</span>' +
+      '<strong style="font-size:19px;color:var(--rose)">' + plata(r.total) + '</strong>' +
+    '</div>' +
+    '<div style="margin-top:10px">' + pagoHTML(r) + '</div>' +
+    (r.notas ? '<div class="aviso aviso-warn" style="margin-top:14px">' + ic('edit', 15) + '<div>' + esc(r.notas) + '</div></div>' : ''),
+    '');
+}
+
+function dato(etiqueta, valor) {
+  return '<div><div class="campo-etiq">' + esc(etiqueta) + '</div>' +
+    '<div style="font-size:13px;font-weight:600">' + esc(valor) + '</div></div>';
+}
+
+</script>
+<script>
+/* ══ js/paginas/clientes.js ══ */
+/* ═══════════════════════════════════════════════════════════
+   CLIENTES — listado con el buscador único: número, nombre,
+   zona, dirección o dueño, todo en el mismo campo.
+   ═══════════════════════════════════════════════════════════ */
+
+var _clientes = [];
+var _terminoCliente = '';
+var _mostrarInactivos = false;
+var _topeVisible = 60;   // se pinta de a tandas: son casi mil filas
+
+registrarPagina({
+  id: 'clientes',
+  menu: 'Clientes',
+  grupo: 'Día a día',
+  icono: 'users',
+  titulo: 'Clientes',
+  subtitulo: 'Buscá por número, nombre, zona o dirección',
+
+  async montar(cont, params) {
+    _terminoCliente = params.get('q') || '';
+    _topeVisible = 60;
+    _clientes = await traerCacheado('clientes');
+
+    cont.innerHTML =
+      '<div class="buscador" style="margin-bottom:14px">' +
+        '<span class="ic-lupa">' + ic('search', 16) + '</span>' +
+        '<input class="campo-input" id="q-clientes" type="search" autocomplete="off" ' +
+               'placeholder="Ej: r14-0310, Farmacia Posik, chingolo, Belgrano 378" ' +
+               'value="' + esc(_terminoCliente) + '" oninput="filtrarClientes(this.value)"/>' +
+      '</div>' +
+      '<div style="display:flex;align-items:center;gap:14px;margin-bottom:14px;flex-wrap:wrap">' +
+        '<div id="cuenta-clientes" style="font-size:12px;color:var(--muted)"></div>' +
+        '<label style="font-size:12px;color:var(--muted);display:flex;align-items:center;gap:6px;cursor:pointer;margin-left:auto">' +
+          '<input type="checkbox" onchange="alternarInactivos(this.checked)"' + (_mostrarInactivos ? ' checked' : '') + '/> Ver inactivos' +
+        '</label>' +
+      '</div>' +
+      '<div id="lista-clientes"></div>';
+
+    pintarClientes();
+  }
+});
+
+function filtrarClientes(v) {
+  _terminoCliente = v;
+  _topeVisible = 60;
+  pintarClientes();
+}
+
+function alternarInactivos(v) {
+  _mostrarInactivos = v;
+  _topeVisible = 60;
+  pintarClientes();
+}
+
+function clientesFiltrados() {
+  return _clientes.filter(function (c) {
+    if (!_mostrarInactivos && !clienteActivo(c)) return false;
+    return coincideCliente(c, _terminoCliente);
+  });
+}
+
+function pintarClientes() {
+  var lista = clientesFiltrados();
+  var cuenta = porId('cuenta-clientes');
+  if (cuenta) {
+    cuenta.textContent = _terminoCliente
+      ? plural(lista.length, 'resultado') + ' de ' + _clientes.length
+      : plural(lista.length, 'cliente');
+  }
+
+  var cont = porId('lista-clientes');
+  if (!cont) return;
+
+  if (!lista.length) {
+    cont.innerHTML = _terminoCliente
+      ? vacio('search', 'Sin resultados para “' + _terminoCliente + '”', 'Probá con el número de cliente, la zona o parte de la dirección.')
+      : vacio('users', 'Todavía no hay clientes', 'Cuando cargues el primero va a aparecer acá.');
+    return;
+  }
+
+  var visibles = lista.slice(0, _topeVisible);
+  cont.innerHTML =
+    '<div class="lista">' + visibles.map(filaCliente).join('') + '</div>' +
+    (lista.length > _topeVisible
+      ? '<button class="btn btn-secundario btn-bloque" style="margin-top:12px" onclick="verMasClientes()">' +
+          'Ver ' + Math.min(60, lista.length - _topeVisible) + ' más de ' + (lista.length - _topeVisible) +
+        '</button>'
+      : '');
+}
+
+function verMasClientes() { _topeVisible += 60; pintarClientes(); }
+
+function filaCliente(c) {
+  var ruta = rutaDe(c);
+  return '<button class="fila" onclick="irA(\'cliente\',\'num=' + encodeURIComponent(c.num) + '\')">' +
+    '<span class="num-cliente">' + esc(c.num_str || c.num) + '</span>' +
+    '<div class="fila-principal">' +
+      '<div class="fila-titulo">' + esc(c.local || 'Sin nombre') +
+        (!clienteActivo(c) ? ' <span class="pin pin-neutro">Inactivo</span>' : '') +
+      '</div>' +
+      '<div class="fila-sub">' +
+        [c.loc, c.dir, ruta ? 'Ruta ' + ruta : ''].filter(Boolean).map(esc).join(' · ') +
+      '</div>' +
+    '</div>' +
+    (c.aviso_aumento
+      ? '<span class="pin pin-ok">' + ic('check', 12) + ' Avisado</span>'
+      : '') +
+  '</button>';
+}
+
+/* ── Alta rápida de cliente ──────────────────────────────── */
+function nuevoCliente() {
+  abrirModal('Nuevo cliente',
+    '<div class="campo"><div class="campo-etiq">Nombre del local</div>' +
+      '<input class="campo-input" id="nc-local" placeholder="Ej: Perfumería Sol"/></div>' +
+    '<div class="campo"><div class="campo-etiq">Dirección</div>' +
+      '<input class="campo-input" id="nc-dir" placeholder="Calle y número"/></div>' +
+    '<div class="campo"><div class="campo-etiq">Localidad / zona</div>' +
+      '<input class="campo-input" id="nc-loc" placeholder="Ciudad o partido"/></div>' +
+    '<div class="campo"><div class="campo-etiq">Teléfono</div>' +
+      '<input class="campo-input" id="nc-tel" inputmode="tel" placeholder="11-1234-5678"/></div>' +
+    '<div class="campo" style="margin:0"><div class="campo-etiq">Dueño (opcional)</div>' +
+      '<input class="campo-input" id="nc-duenio"/></div>',
+    '<button class="btn btn-primario btn-bloque" onclick="guardarNuevoCliente()">Guardar cliente</button>');
+}
+
+async function guardarNuevoCliente() {
+  var local = (porId('nc-local').value || '').trim();
+  if (!local) { toast('Escribí el nombre del local', 'error'); return; }
+  try {
+    var todos = await traerCacheado('clientes');
+    var siguiente = todos.reduce(function (m, c) { return Math.max(m, +c.num || 0); }, 0) + 1;
+    await crear('clientes', {
+      num: siguiente,
+      num_str: String(siguiente),
+      local: local,
+      dir: (porId('nc-dir').value || '').trim() || null,
+      loc: (porId('nc-loc').value || '').trim() || null,
+      tel: (porId('nc-tel').value || '').trim() || null,
+      duenio: (porId('nc-duenio').value || '').trim() || null,
+      fecha: hoyTexto(),
+      activo: true,
+      created_at: new Date().toISOString()
+    });
+    cerrarModal();
+    toast('Cliente guardado con el número ' + siguiente);
+    irA('clientes');
+  } catch (e) { toast(e.message, 'error'); }
+}
+
+</script>
+<script>
+/* ══ js/paginas/compras.js ══ */
+/* ═══════════════════════════════════════════════════════════
+   COMPRAS — la mercadería que entra.
+   ═══════════════════════════════════════════════════════════ */
+
+var _compras = [], _mesCompra = '';
+
+registrarPagina({
+  id: 'compras',
+  menu: 'Compras',
+  grupo: 'Plata',
+  icono: 'cart',
+  titulo: 'Compras',
+  subtitulo: 'Mercadería que entra y lo que costó',
+
+  async montar(cont) {
+    _compras = (await traerCacheado('compras')).slice().reverse();
+    if (!_mesCompra) _mesCompra = claveMes(hoyTexto());
+    cont.innerHTML =
+      '<div style="display:flex;gap:8px;align-items:center;margin-bottom:14px;flex-wrap:wrap">' +
+        selectorMes('_mesCompra', _compras, 'pintarCompras') +
+        '<button class="btn btn-primario" style="margin-left:auto" onclick="nuevaCompra()">' + ic('plus', 15) + ' Cargar compra</button>' +
+      '</div>' +
+      '<div id="cont-compras"></div>';
+    pintarCompras();
+  }
+});
+
+function itemsCompra(c) {
+  try { return typeof c.items === 'string' ? JSON.parse(c.items || '[]') : (c.items || []); }
+  catch (e) { return []; }
+}
+function costoCompra(c) { return +c.total_costo || +c.total || 0; }
+
+function pintarCompras() {
+  var lista = _compras.filter(function (c) { return claveMes(c.fecha || c.created_at) === _mesCompra; });
+  var costo = lista.reduce(function (s, c) { return s + costoCompra(c); }, 0);
+  var unidades = lista.reduce(function (s, c) { return s + (+c.total_unidades || 0); }, 0);
+
+  porId('cont-compras').innerHTML =
+    '<div class="grilla-stats" style="margin-bottom:14px">' +
+      stat('cart', 'Costo del mes', plata(costo), plural(lista.length, 'compra'), 'var(--violet)') +
+      stat('box', 'Unidades', String(unidades), unidades && costo ? 'costo unitario ' + plata(costo / unidades) : '', 'var(--text2)') +
+    '</div>' +
+    (lista.length
+      ? '<div class="lista">' + lista.map(function (c) {
+          var its = itemsCompra(c);
+          return '<div class="fila" style="cursor:default;align-items:flex-start">' +
+            '<div class="fila-principal">' +
+              '<div class="fila-titulo">' + esc(capitalizar(c.tipo || 'compra')) + ' · ' + esc(fechaCorta(c.fecha)) + '</div>' +
+              '<div class="fila-sub">' +
+                (its.length
+                  ? its.map(function (i) { return esc(i.prod || i.cat) + (i.color ? ' ' + esc(i.color) : '') + ' ×' + (+i.cant || 0); }).join(' · ')
+                  : '—') +
+                (c.notas ? '<br>' + esc(c.notas) : '') +
+              '</div>' +
+            '</div>' +
+            '<div class="fila-derecha">' +
+              '<div class="fila-titulo">' + plata(costoCompra(c)) + '</div>' +
+              '<div class="stat-sub">' + plural(+c.total_unidades || 0, 'unidad', 'unidades') + '</div>' +
+            '</div>' +
+          '</div>';
+        }).join('') + '</div>'
+      : vacio('cart', 'Sin compras este mes', 'Cuando cargues una, aparece acá con su costo.'));
+}
+
+function nuevaCompra() {
+  abrirModal('Cargar compra',
+    '<div class="campo"><div class="campo-etiq">Producto</div>' +
+      '<input class="campo-input" id="c-prod" placeholder="Ej: Esmalte En Gel"/></div>' +
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">' +
+      '<div class="campo"><div class="campo-etiq">Unidades</div>' +
+        '<input class="campo-input" id="c-cant" type="number" inputmode="numeric" min="0"/></div>' +
+      '<div class="campo"><div class="campo-etiq">Costo por unidad</div>' +
+        '<input class="campo-input" id="c-costo" type="number" inputmode="decimal" min="0" oninput="previewCompra()"/></div>' +
+    '</div>' +
+    '<div class="campo"><div class="campo-etiq">Fecha</div>' +
+      '<input class="campo-input" id="c-fecha" value="' + hoyTexto() + '"/></div>' +
+    '<div class="campo" style="margin:0"><div class="campo-etiq">Nota (opcional)</div>' +
+      '<input class="campo-input" id="c-notas" oninput="previewCompra()"/></div>' +
+    '<div class="campo-ayuda" id="c-preview" style="margin-top:10px"></div>',
+    '<button class="btn btn-primario btn-bloque" onclick="guardarCompra()">Guardar compra</button>');
+  previewCompra();
+}
+
+function previewCompra() {
+  var cant = +porId('c-cant').value || 0;
+  var costo = +porId('c-costo').value || 0;
+  porId('c-preview').textContent = cant && costo ? 'Total: ' + plata(cant * costo) : '';
+}
+
+async function guardarCompra() {
+  var prod = (porId('c-prod').value || '').trim();
+  var cant = +porId('c-cant').value || 0;
+  var costo = +porId('c-costo').value || 0;
+  if (!prod) { toast('Escribí qué producto compraste', 'error'); return; }
+  if (cant <= 0 || costo <= 0) { toast('Cargá unidades y costo', 'error'); return; }
+  try {
+    await crear('compras', {
+      fecha: (porId('c-fecha').value || hoyTexto()).trim(),
+      tipo: 'pedido',
+      items: JSON.stringify([{ cat: 'esmalte', prod: prod, color: '', cant: cant, costo: costo }]),
+      total_unidades: cant,
+      total_costo: cant * costo,
+      notas: (porId('c-notas').value || '').trim() || null,
+      created_at: new Date().toISOString()
+    });
+    cerrarModal();
+    toast('Compra guardada');
+    pintarRuta();
+  } catch (e) { toast(e.message, 'error'); }
+}
+
+</script>
+<script>
+/* ══ js/paginas/gastos.js ══ */
+/* ═══════════════════════════════════════════════════════════
+   GASTOS — carga rápida y corte por mes.
+   ═══════════════════════════════════════════════════════════ */
+
+var CAT_GASTO = ['combustible','impuestos','insumos','mantenimiento','sueldos','otro'];
+var _gastos = [], _mesGasto = '';
+
+registrarPagina({
+  id: 'gastos',
+  menu: 'Gastos',
+  grupo: 'Plata',
+  icono: 'wallet',
+  titulo: 'Gastos',
+  subtitulo: 'Lo que sale, mes por mes',
+
+  async montar(cont) {
+    _gastos = (await traerCacheado('gastos')).slice().reverse();
+    if (!_mesGasto) _mesGasto = claveMes(hoyTexto());
+    cont.innerHTML =
+      '<div style="display:flex;gap:8px;align-items:center;margin-bottom:14px;flex-wrap:wrap">' +
+        selectorMes('_mesGasto', _gastos, 'pintarGastos') +
+        '<button class="btn btn-primario" style="margin-left:auto" onclick="nuevoGasto()">' + ic('plus', 15) + ' Cargar gasto</button>' +
+      '</div>' +
+      '<div id="cont-gastos"></div>';
+    pintarGastos();
+  }
+});
+
+function pintarGastos() {
+  var lista = _gastos.filter(function (g) { return claveMes(g.fecha || g.created_at) === _mesGasto; });
+  var total = lista.reduce(function (s, g) { return s + (+g.monto || 0); }, 0);
+
+  var porCat = {};
+  lista.forEach(function (g) { porCat[g.categoria || 'otro'] = (porCat[g.categoria || 'otro'] || 0) + (+g.monto || 0); });
+
+  porId('cont-gastos').innerHTML =
+    '<div class="grilla-stats" style="margin-bottom:14px">' +
+      stat('wallet', 'Total del mes', plata(total), plural(lista.length, 'gasto'), 'var(--danger)') +
+      Object.keys(porCat).sort(function (a, b) { return porCat[b] - porCat[a]; }).slice(0, 3).map(function (c) {
+        return stat('tag', capitalizar(c), plata(porCat[c]), '', 'var(--text2)');
+      }).join('') +
+    '</div>' +
+    (lista.length
+      ? '<div class="lista">' + lista.map(function (g) {
+          return '<div class="fila" style="cursor:default">' +
+            '<div class="fila-principal">' +
+              '<div class="fila-titulo">' + esc(g.descripcion || '—') + '</div>' +
+              '<div class="fila-sub">' + esc(fechaCorta(g.fecha)) + ' · ' + esc(capitalizar(g.categoria || 'otro')) +
+                (g.notas ? ' · ' + esc(g.notas) : '') + '</div>' +
+            '</div>' +
+            '<div class="fila-derecha"><div class="fila-titulo">' + plata(g.monto) + '</div></div>' +
+          '</div>';
+        }).join('') + '</div>'
+      : vacio('wallet', 'Sin gastos este mes', 'Cargá el primero para que aparezca acá.'));
+}
+
+function nuevoGasto() {
+  abrirModal('Cargar gasto',
+    '<div class="campo"><div class="campo-etiq">Descripción</div>' +
+      '<input class="campo-input" id="g-desc" placeholder="Ej: nafta Scenic"/></div>' +
+    '<div class="campo"><div class="campo-etiq">Monto</div>' +
+      '<input class="campo-input" id="g-monto" type="number" inputmode="decimal" min="0" placeholder="0"/></div>' +
+    '<div class="campo"><div class="campo-etiq">Categoría</div>' +
+      '<select class="campo-input" id="g-cat">' +
+        CAT_GASTO.map(function (c) { return '<option value="' + c + '">' + capitalizar(c) + '</option>'; }).join('') +
+      '</select></div>' +
+    '<div class="campo"><div class="campo-etiq">Fecha</div>' +
+      '<input class="campo-input" id="g-fecha" value="' + hoyTexto() + '"/></div>' +
+    '<div class="campo" style="margin:0"><div class="campo-etiq">Nota (opcional)</div>' +
+      '<input class="campo-input" id="g-notas"/></div>',
+    '<button class="btn btn-primario btn-bloque" onclick="guardarGasto()">Guardar gasto</button>');
+}
+
+async function guardarGasto() {
+  var monto = +porId('g-monto').value || 0;
+  var desc = (porId('g-desc').value || '').trim();
+  if (!desc) { toast('Escribí una descripción', 'error'); return; }
+  if (monto <= 0) { toast('El monto tiene que ser mayor a cero', 'error'); return; }
+  try {
+    await crear('gastos', {
+      descripcion: desc, monto: monto,
+      categoria: porId('g-cat').value,
+      fecha: (porId('g-fecha').value || hoyTexto()).trim(),
+      notas: (porId('g-notas').value || '').trim() || null,
+      created_at: new Date().toISOString()
+    });
+    cerrarModal();
+    toast('Gasto guardado');
+    pintarRuta();
+  } catch (e) { toast(e.message, 'error'); }
+}
+
+/* Selector de mes compartido por Gastos, Compras y Métricas */
+function selectorMes(nombreVar, filas, alCambiar) {
+  var meses = {};
+  (filas || []).forEach(function (f) {
+    var m = claveMes(f.fecha || f.created_at);
+    if (m) meses[m] = 1;
+  });
+  meses[claveMes(hoyTexto())] = 1;
+  var ordenados = Object.keys(meses).sort().reverse();
+  return '<select class="campo-input" style="width:auto" onchange="' + nombreVar + '=this.value;' + alCambiar + '()">' +
+    ordenados.map(function (m) {
+      var p = m.split('-');
+      var sel = window[nombreVar] === m ? ' selected' : '';
+      return '<option value="' + m + '"' + sel + '>' + capitalizar(MESES[+p[1] - 1]) + ' ' + p[0] + '</option>';
+    }).join('') + '</select>';
+}
+
+</script>
+<script>
+/* ══ js/paginas/metricas.js ══ */
+/* ═══════════════════════════════════════════════════════════
+   MÉTRICAS — el mes elegido, de dónde salió la plata y a dónde
+   se fue. Todo se calcula de los remitos: no hay ningún total
+   guardado aparte que se pueda desincronizar.
+   ═══════════════════════════════════════════════════════════ */
+
+var _mesMetricas = '';
+var _datosMetricas = null;
+
+registrarPagina({
+  id: 'metricas',
+  menu: 'Métricas',
+  grupo: 'Plata',
+  icono: 'chart',
+  titulo: 'Métricas',
+  subtitulo: 'Cómo viene el mes',
+
+  async montar(cont) {
+    var r = await Promise.all([traerCacheado('remitos'), traerCacheado('gastos'), traerCacheado('compras')]);
+    _datosMetricas = { remitos: r[0], gastos: r[1], compras: r[2] };
+    if (!_mesMetricas) _mesMetricas = claveMes(hoyTexto());
+
+    cont.innerHTML =
+      '<div style="margin-bottom:14px">' + selectorMes('_mesMetricas', r[0], 'pintarMetricas') + '</div>' +
+      '<div id="cont-metricas"></div>';
+    pintarMetricas();
+  }
+});
+
+function pintarMetricas() {
+  var d = _datosMetricas;
+  var delMes = function (f) { return claveMes(f.fecha || f.created_at) === _mesMetricas; };
+
+  var remitos = d.remitos.filter(delMes).filter(function (r) { return r.motivo !== 'cerrado'; });
+  var cerrados = d.remitos.filter(delMes).filter(function (r) { return r.motivo === 'cerrado'; });
+  var gastos = d.gastos.filter(delMes).reduce(function (s, g) { return s + (+g.monto || 0); }, 0);
+  var compras = d.compras.filter(delMes).reduce(function (s, c) { return s + (+c.total_costo || +c.total || 0); }, 0);
+
+  var res = resumirRemitos(remitos);
+  var neto = res.facturado - gastos - compras;
+
+  /* Clientes del mes, ordenados por lo que facturaron */
+  var porCliente = {};
+  remitos.forEach(function (r) {
+    var n = r.cliente_nombre || 'Sin cliente';
+    var c = porCliente[n] = porCliente[n] || { n: n, remitos: 0, facturado: 0, deuda: 0 };
+    c.remitos++; c.facturado += (+r.total || 0); c.deuda += montoPorTipo(r, 'deuda');
+  });
+  var ranking = Object.keys(porCliente).map(function (k) { return porCliente[k]; })
+    .sort(function (a, b) { return b.facturado - a.facturado; });
+
+  /* Días con actividad */
+  var porDia = {};
+  remitos.forEach(function (r) { var k = claveFecha(r.fecha || r.created_at); if (k) porDia[k] = (porDia[k] || 0) + 1; });
+  var dias = Object.keys(porDia).sort();
+
+  porId('cont-metricas').innerHTML =
+    '<div class="grilla-stats">' +
+      stat('receipt', 'Facturado', plata(res.facturado), plural(res.cantidad, 'remito'), 'var(--rose)') +
+      stat('cash', 'Efectivo', plata(res.efectivo), '', 'var(--ok)') +
+      stat('smartphone', 'Transferencia', plata(res.transferencia), '', 'var(--info)') +
+      stat('clock', 'Deuda pendiente', plata(res.deuda), '', 'var(--warn)') +
+      stat('wallet', 'Gastos', plata(gastos), '', 'var(--danger)') +
+      stat('cart', 'Compras', plata(compras), '', 'var(--violet)') +
+      stat('chart', 'Neto', plata(neto), 'facturado − gastos − compras', neto >= 0 ? 'var(--ok)' : 'var(--danger)') +
+      stat('box', 'Unidades', String(res.unidades), res.cantidad ? Math.round(res.unidades / res.cantidad) + ' por remito' : '', 'var(--text2)') +
+    '</div>' +
+
+    (cerrados.length
+      ? avisoHTML('warn', plural(cerrados.length, 'visita') + ' a clientes que estaban cerrados. No suman a lo facturado.', 'ban')
+      : '') +
+
+    '<div class="eyebrow" style="margin-top:26px">Actividad</div>' +
+    '<div class="tarjeta"><div class="tarjeta-cuerpo">' +
+      (dias.length
+        ? '<div style="display:flex;align-items:flex-end;gap:3px;height:90px">' +
+            dias.map(function (k) {
+              var n = porDia[k];
+              var max = Math.max.apply(null, dias.map(function (x) { return porDia[x]; }));
+              var alto = Math.max(6, Math.round(n / max * 84));
+              return '<div title="' + esc(fechaCorta(k)) + ': ' + plural(n, 'remito') + '" ' +
+                'style="flex:1;height:' + alto + 'px;background:var(--grad);border-radius:3px 3px 0 0;min-width:4px"></div>';
+            }).join('') +
+          '</div>' +
+          '<div class="campo-ayuda" style="margin-top:8px">' +
+            plural(dias.length, 'día') + ' con actividad · ' +
+            'promedio ' + Math.round(res.cantidad / dias.length) + ' remitos por día' +
+          '</div>'
+        : '<div class="campo-ayuda">Todavía no hay remitos este mes.</div>') +
+    '</div></div>' +
+
+    '<div class="eyebrow" style="margin-top:26px">Clientes del mes</div>' +
+    (ranking.length
+      ? '<div class="tarjeta"><div class="tarjeta-cuerpo" style="padding:0">' +
+          '<table class="tabla"><thead><tr>' +
+            '<th>Cliente</th><th class="num">Remitos</th><th class="num">Facturado</th><th class="num">Deuda</th>' +
+          '</tr></thead><tbody>' +
+          ranking.slice(0, 25).map(function (c) {
+            return '<tr><td>' + esc(c.n) + '</td>' +
+              '<td class="num">' + c.remitos + '</td>' +
+              '<td class="num">' + plata(c.facturado) + '</td>' +
+              '<td class="num" style="color:' + (c.deuda > 0 ? 'var(--warn)' : 'var(--muted)') + '">' +
+                (c.deuda > 0 ? plata(c.deuda) : '—') + '</td></tr>';
+          }).join('') +
+          '</tbody></table>' +
+        '</div></div>'
+      : vacio('users', 'Sin clientes este mes', 'Cuando cargues remitos, el ranking aparece acá.'));
+}
+
+</script>
+<script>
+/* ══ js/paginas/configuraciones.js ══ */
+/* ═══════════════════════════════════════════════════════════
+   CONFIGURACIONES — lo que se cambia poco pero se cambia.
+   ═══════════════════════════════════════════════════════════ */
+
+registrarPagina({
+  id: 'configuraciones',
+  menu: 'Configuraciones',
+  grupo: 'Ajustes',
+  icono: 'settings',
+  titulo: 'Configuraciones',
+  subtitulo: 'Precios, aviso de aumento y datos de la cuenta',
+
+  async montar(cont) {
+    await cargarConfig().catch(function () {});
+    var cfg = aumentoConfig();
+    var stock = await traerCacheado('stock');
+
+    cont.innerHTML =
+      '<div class="tarjeta">' +
+        '<div class="tarjeta-cab">' + ic('megaphone', 16) + ' Aviso de aumento</div>' +
+        '<div class="tarjeta-cuerpo">' +
+          '<div class="campo-ayuda" style="margin-bottom:14px">' +
+            'El aviso sale dentro del remito solo para los clientes que todavía no fueron notificados. ' +
+            'Al confirmar el remito, el cliente queda marcado con la fecha.' +
+          '</div>' +
+
+          '<label style="display:flex;align-items:center;gap:8px;margin-bottom:16px;cursor:pointer;font-size:13px">' +
+            '<input type="checkbox" id="cfg-activo"' + (cfg.activo ? ' checked' : '') + ' onchange="previewAviso()"/> ' +
+            'Mostrar el aviso en los remitos' +
+          '</label>' +
+
+          '<div class="campo"><div class="campo-etiq">Producto que aumenta</div>' +
+            '<input class="campo-input" id="cfg-producto" list="lista-prods" value="' + esc(cfg.producto) + '" oninput="previewAviso()"/>' +
+            '<datalist id="lista-prods">' +
+              stock.map(function (s) { return '<option value="' + esc(s.nombre) + '">'; }).join('') +
+            '</datalist>' +
+          '</div>' +
+
+          '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">' +
+            '<div class="campo"><div class="campo-etiq">Precio actual</div>' +
+              '<input class="campo-input" id="cfg-viejo" type="number" inputmode="decimal" min="0" ' +
+                     'value="' + cfg.viejo + '" oninput="previewAviso()"/>' +
+              '<div class="campo-ayuda">Para quien no fue avisado</div></div>' +
+            '<div class="campo"><div class="campo-etiq">Precio nuevo</div>' +
+              '<input class="campo-input" id="cfg-nuevo" type="number" inputmode="decimal" min="0" ' +
+                     'value="' + cfg.nuevo + '" oninput="previewAviso()"/>' +
+              '<div class="campo-ayuda">Para quien ya sabe</div></div>' +
+          '</div>' +
+
+          '<div id="preview-aviso"></div>' +
+          '<button class="btn btn-primario btn-bloque" style="margin-top:14px" onclick="guardarAumento()">Guardar</button>' +
+        '</div>' +
+      '</div>' +
+
+      '<div class="tarjeta">' +
+        '<div class="tarjeta-cab">' + ic('users', 16) + ' Clientes ya notificados</div>' +
+        '<div class="tarjeta-cuerpo" id="cont-avisados">' + cargando() + '</div>' +
+      '</div>' +
+
+      tarjetaConexion() +
+
+      '<div class="tarjeta">' +
+        '<div class="tarjeta-cab">' + ic('db', 16) + ' Sesión y datos</div>' +
+        '<div class="tarjeta-cuerpo">' +
+          '<div class="campo-ayuda" style="margin-bottom:12px">' +
+            (MODO_DEV
+              ? 'Conectado a producción en modo lectura: se ven los datos reales pero no se guarda nada.'
+              : 'Escribiendo en <strong>' + esc(CONEXION.nombre) + '</strong> (' + esc(refProyecto(SB_URL)) + ').') +
+          '</div>' +
+          '<button class="btn btn-secundario" onclick="invalidarCache();pintarRuta();toast(\'Datos actualizados\')">' +
+            ic('refresh', 15) + ' Volver a leer la base</button> ' +
+          '<button class="btn btn-secundario" onclick="salir()">' + ic('undo', 15) + ' Cerrar sesión</button>' +
+        '</div>' +
+      '</div>';
+
+    previewAviso();
+    pintarAvisados();
+  }
+});
+
+function previewAviso() {
+  var activo = porId('cfg-activo').checked;
+  var nuevo = +porId('cfg-nuevo').value || 0;
+  porId('preview-aviso').innerHTML = activo && nuevo
+    ? avisoHTML('warn', '<strong>Aviso:</strong> ' + esc(textoAviso(nuevo)), 'megaphone')
+    : '<div class="campo-ayuda" style="margin-top:10px">Con el aviso apagado, los remitos salen sin ese texto.</div>';
+}
+
+async function guardarAumento() {
+  var activo = porId('cfg-activo').checked;
+  var producto = (porId('cfg-producto').value || '').trim();
+  var viejo = +porId('cfg-viejo').value || 0;
+  var nuevo = +porId('cfg-nuevo').value || 0;
+
+  if (activo && (!viejo || !nuevo)) { toast('Cargá los dos precios', 'error'); return; }
+  if (activo && !producto) { toast('Escribí qué producto aumenta', 'error'); return; }
+
+  try {
+    await guardarConfig(CFG_AUMENTO.activo, activo ? 'true' : 'false');
+    await guardarConfig(CFG_AUMENTO.producto, producto);
+    await guardarConfig(CFG_AUMENTO.viejo, viejo);
+    await guardarConfig(CFG_AUMENTO.nuevo, nuevo);
+    toast('Configuración guardada');
+  } catch (e) { toast(e.message, 'error'); }
+}
+
+async function pintarAvisados() {
+  var cont = porId('cont-avisados');
+  if (!cont) return;
+  try {
+    var clientes = await traerCacheado('clientes');
+    var avisados = clientes.filter(clienteAvisado);
+    cont.innerHTML = avisados.length
+      ? '<div class="campo-ayuda" style="margin-bottom:10px">' +
+          plural(avisados.length, 'cliente') + ' de ' + clientes.length + ' ya sabe del aumento.</div>' +
+        '<div class="lista">' + avisados.slice(0, 30).map(function (c) {
+          return '<div class="fila" style="cursor:default">' +
+            '<span class="num-cliente">' + esc(c.num_str || c.num) + '</span>' +
+            '<div class="fila-principal"><div class="fila-titulo">' + esc(c.local) + '</div>' +
+              '<div class="fila-sub">' + esc(c.loc || '') + '</div></div>' +
+            '<span class="pin pin-ok">' + esc(fechaCorta(c.aviso_aumento_fecha) || 'sin fecha') + '</span>' +
+          '</div>';
+        }).join('') + '</div>' +
+        (avisados.length > 30 ? '<div class="campo-ayuda" style="margin-top:10px">y ' + (avisados.length - 30) + ' más.</div>' : '')
+      : '<div class="campo-ayuda">Todavía no se le avisó a nadie. Se van marcando solos al confirmar cada remito.</div>';
+  } catch (e) {
+    cont.innerHTML = '<div class="campo-ayuda">No se pudo leer la lista.</div>';
+  }
+}
+
+
+/* ── Conexión: a qué base apunta la app ──────────────────── */
+function tarjetaConexion() {
+  return '<div class="tarjeta">' +
+    '<div class="tarjeta-cab">' + ic('signal', 16) + ' Base de datos' +
+      '<span style="margin-left:auto"><span class="pin ' + (ES_PRODUCCION ? 'pin-danger' : 'pin-ok') + '">' +
+        esc(ES_PRODUCCION ? 'Producción' : CONEXION.nombre) + '</span></span>' +
+    '</div>' +
+    '<div class="tarjeta-cuerpo">' +
+      '<div class="campo-ayuda" style="margin-bottom:14px">' +
+        'Proyecto actual: <strong>' + esc(refProyecto(SB_URL)) + '</strong>. ' +
+        (ES_PRODUCCION
+          ? 'Mientras apunte a producción, la app no escribe nada: solo lee. Para probar cambios de verdad, ' +
+            'conectá una base de pruebas y corré ahí el SQL del esquema.'
+          : 'Estás sobre una base de pruebas: se guarda todo, sin riesgo para los datos reales.') +
+      '</div>' +
+
+      '<div class="campo"><div class="campo-etiq">Nombre</div>' +
+        '<input class="campo-input" id="cx-nombre" placeholder="Pruebas" ' +
+               'value="' + esc(ES_PRODUCCION ? '' : CONEXION.nombre) + '"/></div>' +
+      '<div class="campo"><div class="campo-etiq">URL del proyecto</div>' +
+        '<input class="campo-input" id="cx-url" placeholder="https://xxxxxxxx.supabase.co" ' +
+               'value="' + esc(ES_PRODUCCION ? '' : SB_URL) + '"/></div>' +
+      '<div class="campo"><div class="campo-etiq">Clave anon (public)</div>' +
+        '<input class="campo-input" id="cx-key" placeholder="eyJhbGciOi…" ' +
+               'value="' + esc(ES_PRODUCCION ? '' : SB_KEY) + '"/>' +
+        '<div class="campo-ayuda">Está en Supabase → Project Settings → API. Es la clave pública: no uses la service_role.</div>' +
+      '</div>' +
+
+      '<div style="display:flex;gap:8px;flex-wrap:wrap">' +
+        '<button class="btn btn-primario" onclick="conectarOtraBase()">' + ic('signal', 15) + ' Conectar y recargar</button>' +
+        (ES_PRODUCCION
+          ? '<button class="btn btn-secundario" onclick="cambiarA(\'pruebas\')">' + ic('flask', 15) + ' Usar la base de pruebas</button>'
+          : '<button class="btn btn-secundario" onclick="cambiarA(\'produccion\')">' + ic('db', 15) + ' Usar producción (solo lectura)</button>') +
+      '</div>' +
+      '<div id="cx-estado" style="margin-top:12px"></div>' +
+    '</div>' +
+  '</div>';
+}
+
+async function conectarOtraBase() {
+  var url = (porId('cx-url').value || '').trim().replace(/\/+$/, '');
+  var key = (porId('cx-key').value || '').trim();
+  var nombre = (porId('cx-nombre').value || '').trim() || 'Pruebas';
+  var estado = porId('cx-estado');
+
+  if (!/^https:\/\/[a-z0-9]+\.supabase\.co$/.test(url)) {
+    estado.innerHTML = avisoHTML('danger', 'La URL tiene que ser del tipo <code>https://xxxxxxxx.supabase.co</code>.');
+    return;
+  }
+  if (!claveValida(key)) {
+    estado.innerHTML = avisoHTML('danger', 'Esa no parece una clave de Supabase. Copiá entera la <strong>publishable</strong> (empieza con sb_publishable_) o la anon.');
+    return;
+  }
+  if (url === SB_PRODUCCION.url) {
+    estado.innerHTML = avisoHTML('warn', 'Esa es la base de producción. Usá el botón de volver a producción.');
+    return;
+  }
+
+  estado.innerHTML = cargando('Probando la conexión…');
+  try {
+    var res = await fetch(url + '/rest/v1/config?select=key&limit=1', {
+      headers: { apikey: key, Authorization: 'Bearer ' + key }
+    });
+    var txt = await res.text();
+    if (!res.ok) {
+      estado.innerHTML = avisoHTML('danger',
+        'La base respondió con error ' + res.status + '. ' +
+        (res.status === 404 ? 'Falta la tabla <code>config</code>: corré primero el SQL del esquema.'
+                            : 'Revisá la clave. Detalle: ' + esc(txt.slice(0, 140))));
+      return;
+    }
+    guardarConexion(url, key, nombre);
+    estado.innerHTML = avisoHTML('ok', 'Conectado. Recargando…', 'check');
+    setTimeout(function () { location.reload(); }, 700);
+  } catch (e) {
+    estado.innerHTML = avisoHTML('danger', 'No se pudo llegar a esa URL: ' + esc(e.message));
+  }
+}
+
+function cambiarA(cual) {
+  if (cual === 'produccion') usarProduccion(); else usarPruebas();
+  location.reload();
+}
+
+</script>
+
+<script>
+/* ══ js/app.js ══ */
+/* ═══════════════════════════════════════════════════════════
+   APP — arranque: pinta el armazón, resuelve la sesión y le
+   pasa el control al router.
+   ═══════════════════════════════════════════════════════════ */
+
+function pintarMarca(destino) {
+  destino.innerHTML =
+    '<img src="' + LOGO_INTENCIONAL + '" alt=""/>' +
+    '<div>' +
+      '<div class="marca-nombre">Intencional</div>' +
+      '<div class="marca-sub">Esmaltes · Cremas</div>' +
+    '</div>';
+}
+
+/* ── Pantalla de ingreso ─────────────────────────────────── */
+function pantallaIngreso() {
+  porId('app').innerHTML =
+    '<div style="min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px;background:var(--surface)">' +
+      '<div style="width:100%;max-width:360px">' +
+        '<div class="marca" id="marca-ingreso" style="border:none;justify-content:center;margin-bottom:22px;padding:0"></div>' +
+        '<div class="tarjeta"><div class="tarjeta-cuerpo">' +
+          '<div class="campo">' +
+            '<div class="campo-etiq">Email</div>' +
+            '<input class="campo-input" id="ing-email" type="email" autocomplete="username" placeholder="usuario@intencional.com"/>' +
+          '</div>' +
+          '<div class="campo">' +
+            '<div class="campo-etiq">Contraseña</div>' +
+            '<input class="campo-input" id="ing-pass" type="password" autocomplete="current-password" ' +
+                   'onkeydown="if(event.key===\'Enter\')entrar()"/>' +
+          '</div>' +
+          '<button class="btn btn-primario btn-bloque" id="ing-btn" onclick="entrar()">Entrar</button>' +
+          (ES_PRODUCCION ? '' :
+            '<div class="campo-ayuda" style="margin:14px 0 8px;text-align:center">La base de pruebas no tiene usuarios cargados</div>' +
+            '<button class="btn btn-secundario btn-bloque" onclick="arrancarApp()">Entrar sin cuenta</button>') +
+          '<div id="ing-error" style="margin-top:12px"></div>' +
+        '</div></div>' +
+      '</div>' +
+    '</div>';
+  pintarMarca(porId('marca-ingreso'));
+  var e = porId('ing-email'); if (e) e.focus();
+}
+
+async function entrar() {
+  var btn = porId('ing-btn');
+  var email = (porId('ing-email').value || '').trim();
+  var pass = porId('ing-pass').value || '';
+  var err = porId('ing-error');
+  err.innerHTML = '';
+
+  if (!email || !pass) {
+    err.innerHTML = avisoHTML('danger', 'Escribí el email y la contraseña.');
+    return;
+  }
+  btn.disabled = true;
+  btn.textContent = 'Entrando…';
+  try {
+    await iniciarSesion(email, pass);
+    arrancarApp();
+  } catch (e) {
+    btn.disabled = false;
+    btn.textContent = 'Entrar';
+    err.innerHTML = avisoHTML('danger', esc(e.message));
+  }
+}
+
+async function salir() {
+  await cerrarSesion();
+  pantallaIngreso();
+}
+
+/* ── Armazón ─────────────────────────────────────────────── */
+function arrancarApp() {
+  porId('app').innerHTML =
+    '<div class="velo" onclick="document.body.classList.remove(\'menu-abierto\')"></div>' +
+    '<div class="shell">' +
+      '<aside class="barra-lateral">' +
+        '<div class="marca" id="marca-lateral"></div>' +
+        '<nav class="nav" id="nav"></nav>' +
+        '<div class="pie-lateral">' +
+          '<button class="btn btn-fantasma" style="padding:6px 0" onclick="salir()">' + ic('undo', 15) + ' Cerrar sesión</button>' +
+        '</div>' +
+      '</aside>' +
+      '<main class="contenido">' +
+        '<div class="topbar">' +
+          '<button class="btn btn-fantasma" style="padding:6px" aria-label="Abrir menú" ' +
+                  'onclick="document.body.classList.toggle(\'menu-abierto\')">' + ic('menu', 20) + '</button>' +
+          '<div class="marca-nombre">Intencional</div>' +
+        '</div>' +
+        '<div id="contenido"></div>' +
+      '</main>' +
+    '</div>';
+
+  pintarMarca(porId('marca-lateral'));
+  construirMenu();
+  cargarConfig().catch(function () { /* si no hay red, se usa lo local */ });
+  pintarRuta();
+}
+
+/* ── Arranque ────────────────────────────────────────────── */
+document.addEventListener('DOMContentLoaded', function () {
+  if (MODO_DEV || !ES_PRODUCCION) {
+    document.body.classList.add('con-banda');
+    var b = document.createElement('div');
+    b.className = 'banda-dev' + (ES_PRODUCCION ? '' : ' banda-pruebas');
+    b.textContent = ES_PRODUCCION
+      ? 'Conectado a PRODUCCIÓN en modo lectura · no se guarda nada'
+      : 'Base de pruebas (' + refProyecto(SB_URL) + ') · acá sí se guarda';
+    document.body.insertBefore(b, document.body.firstChild);
+  }
+
+  if (recuperarSesion()) arrancarApp();
+  else pantallaIngreso();
+});
+
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', function () {
+    navigator.serviceWorker.register('sw.js').catch(function (e) {
+      console.warn('[SW] no se registró:', e.message);
+    });
+  });
+}
+
+</script>
+</body>
+</html>
