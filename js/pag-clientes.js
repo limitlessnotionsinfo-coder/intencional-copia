@@ -191,21 +191,24 @@ function porHojaDeRuta(lista) {
     return (+a || 0) - (+b || 0);
   });
 
-  var plan = planRutas();
-  var diaDeRuta = {};
-  Object.keys(plan).forEach(function (d) { diaDeRuta[String(plan[d])] = DIAS[+d]; });
+  /* Si alguna de estas rutas está anotada en la agenda, se marca */
+  var agenda = agendaRutas();
+  var proximaDe = {};
+  Object.keys(agenda).sort().forEach(function (iso) {
+    if (iso >= hoyISO() && !proximaDe[agenda[iso]]) proximaDe[agenda[iso]] = iso;
+  });
   var hoy = rutaDelDia();
 
   return claves.map(function (r) {
     var g = grupos[r];
     var exhibidores = g.reduce(function (s, c) { return s + (+c.exhibidores || 0); }, 0);
-    var dia = diaDeRuta[r];
+    var proxima = proximaDe[r];
     var esHoy = r !== 'sin' && String(r) === String(hoy);
 
     return '<details class="tarjeta"' + (esHoy ? ' open' : '') + '>' +
       '<summary class="tarjeta-cab" style="cursor:pointer">' +
         ic('map', 16) + ' ' + (r === 'sin' ? 'Sin hoja de ruta' : 'Ruta ' + esc(r)) +
-        (dia ? ' <span class="campo-ayuda" style="font-weight:500;margin-left:6px">' + capitalizar(dia) + '</span>' : '') +
+        (proxima && !esHoy ? ' <span class="campo-ayuda" style="font-weight:500;margin-left:6px">' + esc(fechaCorta(proxima)) + '</span>' : '') +
         '<span style="margin-left:auto;display:inline-flex;gap:6px;align-items:center">' +
           (esHoy ? '<span class="pin pin-ok">hoy</span>' : '') +
           (exhibidores ? '<span class="pin pin-info">' + exhibidores + ' exhib.</span>' : '') +

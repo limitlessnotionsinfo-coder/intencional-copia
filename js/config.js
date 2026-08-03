@@ -12,6 +12,10 @@ var SB_BASE = {
   nombre: 'Intencional'
 };
 
+/* Mientras se termina la app se entra directo, sin login.
+   Poner en true para volver a pedir email y contraseña. */
+var PEDIR_LOGIN = false;
+
 /* Si guardaste otra base desde Configuraciones, se usa esa. */
 function _conexionGuardada() {
   try {
@@ -48,15 +52,11 @@ function claveValida(k) {
 
 /* Tablas y su clave primaria */
 var TABLAS = {
-  clientes:         'num',
-  remitos:          'id',
-  pagos:            'id',
-  gastos:           'id',
-  compras:          'id',
-  pedidos:          'id',
-  pedidos_propios:  'id',
-  stock:            'id',
-  stock_categorias: 'id',
-  tareas:           'id',
-  config:           'key'
+  clientes: 'num',
+  remitos:  'id',
+  pagos:    'id',
+  gastos:   'id',
+  compras:  'id',
+  tareas:   'id',
+  config:   'key'
 };

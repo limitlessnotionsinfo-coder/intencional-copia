@@ -1,11 +1,10 @@
 /* ═══════════════════════════════════════════════════════════
-   MÉTRICAS — el mes elegido, de dónde salió la plata y a dónde
-   se fue. Todo se calcula de los remitos: no hay ningún total
-   guardado aparte que se pueda desincronizar.
+   MÉTRICAS — tres cosas: cómo viene hoy, un período a elección
+   y el acumulado de siempre. Todo sale de los remitos.
    ═══════════════════════════════════════════════════════════ */
 
-var _mesMetricas = '';
 var _datosMetricas = null;
+var P = { modo: 'semana', desde: '', hasta: '' };   // período elegido
 
 registrarPagina({
   id: 'metricas',
@@ -13,96 +12,134 @@ registrarPagina({
   grupo: 'Plata',
   icono: 'chart',
   titulo: 'Métricas',
-  subtitulo: 'Cómo viene el mes',
+  subtitulo: 'Lo de hoy, el período que elijas y el total histórico',
 
   async montar(cont) {
-    var r = await Promise.all([traerCacheado('remitos'), traerCacheado('gastos'), traerCacheado('compras')]);
+    var r = await Promise.all([
+      traerCacheado('remitos'),
+      traerCacheado('gastos').catch(function () { return []; }),
+      traerCacheado('compras').catch(function () { return []; })
+    ]);
     _datosMetricas = { remitos: r[0], gastos: r[1], compras: r[2] };
-    if (!_mesMetricas) _mesMetricas = claveMes(hoyTexto());
 
     cont.innerHTML =
-      '<div style="margin-bottom:14px">' + selectorMes('_mesMetricas', r[0], 'pintarMetricas') + '</div>' +
-      '<div id="cont-metricas"></div>';
+      '<div id="met-hoy"></div>' +
+      '<div class="eyebrow" style="margin-top:24px">' + ic('chart', 13) + ' Período</div>' +
+      '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px" id="met-chips"></div>' +
+      '<div id="met-rango"></div>' +
+      '<div id="met-periodo"></div>' +
+      '<div class="eyebrow" style="margin-top:24px">' + ic('db', 13) + ' Total histórico</div>' +
+      '<div id="met-historico"></div>';
+
     pintarMetricas();
   }
 });
 
+/* ── Qué remitos entran en el período elegido ────────────── */
+function rangoElegido() {
+  var hoy = hoyISO();
+  if (P.modo === 'semana') return { desde: isoDe(sumarDias(-6)), hasta: hoy, etiqueta: 'Últimos 7 días' };
+  if (P.modo === 'mes')    return { desde: isoDe(sumarDias(-29)), hasta: hoy, etiqueta: 'Últimos 30 días' };
+  return {
+    desde: P.desde || '0000-00-00',
+    hasta: P.hasta || '9999-99-99',
+    etiqueta: (P.desde ? fechaCorta(P.desde) : 'el principio') + ' a ' + (P.hasta ? fechaCorta(P.hasta) : 'hoy')
+  };
+}
+
+function enRango(fila, r) {
+  var k = claveFecha(fila.fecha || fila.created_at);
+  return k && k >= r.desde && k <= r.hasta;
+}
+
+function setPeriodo(modo) { P.modo = modo; pintarMetricas(); }
+function setFechaP(cual, valor) { P[cual] = valor; P.modo = 'rango'; pintarMetricas(); }
+
+/* ── Pintado ─────────────────────────────────────────────── */
 function pintarMetricas() {
   var d = _datosMetricas;
-  var delMes = function (f) { return claveMes(f.fecha || f.created_at) === _mesMetricas; };
+  var reales = function (r) { return r.motivo !== 'cerrado'; };
 
-  var remitos = d.remitos.filter(delMes).filter(function (r) { return r.motivo !== 'cerrado'; });
-  var cerrados = d.remitos.filter(delMes).filter(function (r) { return r.motivo === 'cerrado'; });
-  var gastos = d.gastos.filter(delMes).reduce(function (s, g) { return s + (+g.monto || 0); }, 0);
-  var compras = d.compras.filter(delMes).reduce(function (s, c) { return s + (+c.total_costo || +c.total || 0); }, 0);
-
-  var res = resumirRemitos(remitos);
-  var neto = res.facturado - gastos - compras;
-
-  /* Clientes del mes, ordenados por lo que facturaron */
-  var porCliente = {};
-  remitos.forEach(function (r) {
-    var n = r.cliente_nombre || 'Sin cliente';
-    var c = porCliente[n] = porCliente[n] || { n: n, remitos: 0, facturado: 0, deuda: 0 };
-    c.remitos++; c.facturado += (+r.total || 0); c.deuda += montoPorTipo(r, 'deuda');
+  /* Hoy */
+  var hoy = claveFecha(hoyTexto());
+  var deHoy = d.remitos.filter(reales).filter(function (r) {
+    return claveFecha(r.fecha) === hoy || claveFecha(r.created_at) === hoy;
   });
-  var ranking = Object.keys(porCliente).map(function (k) { return porCliente[k]; })
-    .sort(function (a, b) { return b.facturado - a.facturado; });
+  var h = resumirRemitos(deHoy);
 
-  /* Días con actividad */
-  var porDia = {};
-  remitos.forEach(function (r) { var k = claveFecha(r.fecha || r.created_at); if (k) porDia[k] = (porDia[k] || 0) + 1; });
-  var dias = Object.keys(porDia).sort();
-
-  porId('cont-metricas').innerHTML =
+  porId('met-hoy').innerHTML =
+    '<div class="eyebrow">' + ic('calendar', 13) + ' Facturado hoy</div>' +
     '<div class="grilla-stats">' +
-      stat('receipt', 'Facturado', plata(res.facturado), plural(res.cantidad, 'remito'), 'var(--rose)') +
-      stat('cash', 'Efectivo', plata(res.efectivo), '', 'var(--ok)') +
-      stat('smartphone', 'Transferencia', plata(res.transferencia), '', 'var(--info)') +
-      stat('clock', 'Deuda pendiente', plata(res.deuda), '', 'var(--warn)') +
-      stat('wallet', 'Gastos', plata(gastos), '', 'var(--danger)') +
-      stat('cart', 'Compras', plata(compras), '', 'var(--violet)') +
-      stat('chart', 'Neto', plata(neto), 'facturado − gastos − compras', neto >= 0 ? 'var(--ok)' : 'var(--danger)') +
-      stat('box', 'Unidades', String(res.unidades), res.cantidad ? Math.round(res.unidades / res.cantidad) + ' por remito' : '', 'var(--text2)') +
-    '</div>' +
+      stat('receipt', 'Facturado', plata(h.facturado), plural(h.cantidad, 'remito'), 'var(--rose)') +
+      stat('cash', 'Efectivo', plata(h.efectivo), '', 'var(--ok)') +
+      stat('smartphone', 'Transferencia', plata(h.transferencia), '', 'var(--info)') +
+      stat('clock', 'Deuda', plata(h.deuda), '', 'var(--warn)') +
+    '</div>';
 
-    (cerrados.length
-      ? avisoHTML('warn', plural(cerrados.length, 'visita') + ' a clientes que estaban cerrados. No suman a lo facturado.', 'ban')
-      : '') +
+  /* Chips del período */
+  porId('met-chips').innerHTML = [['semana', 'Semana'], ['mes', 'Mes'], ['rango', 'Rango']].map(function (o) {
+    return '<button class="btn ' + (P.modo === o[0] ? 'btn-primario' : 'btn-secundario') + '" ' +
+      'style="padding:7px 15px" onclick="setPeriodo(\'' + o[0] + '\')">' + o[1] + '</button>';
+  }).join('');
 
-    '<div class="eyebrow" style="margin-top:26px">Actividad</div>' +
-    '<div class="tarjeta"><div class="tarjeta-cuerpo">' +
-      (dias.length
-        ? '<div style="display:flex;align-items:flex-end;gap:3px;height:90px">' +
-            dias.map(function (k) {
-              var n = porDia[k];
-              var max = Math.max.apply(null, dias.map(function (x) { return porDia[x]; }));
-              var alto = Math.max(6, Math.round(n / max * 84));
-              return '<div title="' + esc(fechaCorta(k)) + ': ' + plural(n, 'remito') + '" ' +
-                'style="flex:1;height:' + alto + 'px;background:var(--grad);border-radius:3px 3px 0 0;min-width:4px"></div>';
-            }).join('') +
-          '</div>' +
-          '<div class="campo-ayuda" style="margin-top:8px">' +
-            plural(dias.length, 'día') + ' con actividad · ' +
-            'promedio ' + Math.round(res.cantidad / dias.length) + ' remitos por día' +
-          '</div>'
-        : '<div class="campo-ayuda">Todavía no hay remitos este mes.</div>') +
-    '</div></div>' +
+  porId('met-rango').innerHTML = P.modo === 'rango'
+    ? '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">' +
+        '<div class="campo" style="margin:0"><div class="campo-etiq">Desde</div>' +
+          '<input class="campo-input" type="date" value="' + esc(P.desde) + '" onchange="setFechaP(\'desde\',this.value)"/></div>' +
+        '<div class="campo" style="margin:0"><div class="campo-etiq">Hasta</div>' +
+          '<input class="campo-input" type="date" value="' + esc(P.hasta) + '" onchange="setFechaP(\'hasta\',this.value)"/></div>' +
+      '</div>'
+    : '';
 
-    '<div class="eyebrow" style="margin-top:26px">Clientes del mes</div>' +
-    (ranking.length
-      ? '<div class="tarjeta"><div class="tarjeta-cuerpo" style="padding:0">' +
-          '<table class="tabla"><thead><tr>' +
-            '<th>Cliente</th><th class="num">Remitos</th><th class="num">Facturado</th><th class="num">Deuda</th>' +
-          '</tr></thead><tbody>' +
-          ranking.slice(0, 25).map(function (c) {
-            return '<tr><td>' + esc(c.n) + '</td>' +
-              '<td class="num">' + c.remitos + '</td>' +
-              '<td class="num">' + plata(c.facturado) + '</td>' +
-              '<td class="num" style="color:' + (c.deuda > 0 ? 'var(--warn)' : 'var(--muted)') + '">' +
-                (c.deuda > 0 ? plata(c.deuda) : '—') + '</td></tr>';
-          }).join('') +
-          '</tbody></table>' +
-        '</div></div>'
-      : vacio('users', 'Sin clientes este mes', 'Cuando cargues remitos, el ranking aparece acá.'));
+  /* Período */
+  var r = rangoElegido();
+  var remitosP = d.remitos.filter(reales).filter(function (x) { return enRango(x, r); });
+  var p = resumirRemitos(remitosP);
+  var gastosP = d.gastos.filter(function (x) { return enRango(x, r); })
+    .reduce(function (s, g) { return s + (+g.monto || 0); }, 0);
+  var comprasP = d.compras.filter(function (x) { return enRango(x, r); })
+    .reduce(function (s, c) { return s + (+c.total_costo || +c.total || 0); }, 0);
+  var dias = {};
+  remitosP.forEach(function (x) { var k = claveFecha(x.fecha || x.created_at); if (k) dias[k] = 1; });
+  var cantDias = Object.keys(dias).length;
+
+  porId('met-periodo').innerHTML =
+    '<div class="campo-ayuda" style="margin-bottom:10px">' + esc(r.etiqueta) + '</div>' +
+    '<div class="grilla-stats">' +
+      stat('receipt', 'Facturado', plata(p.facturado), plural(p.cantidad, 'remito'), 'var(--rose)') +
+      stat('cash', 'Efectivo', plata(p.efectivo), '', 'var(--ok)') +
+      stat('smartphone', 'Transferencia', plata(p.transferencia), '', 'var(--info)') +
+      stat('clock', 'Deuda pendiente', plata(p.deuda), '', 'var(--warn)') +
+      stat('wallet', 'Gastos', plata(gastosP), '', 'var(--danger)') +
+      stat('cart', 'Compras', plata(comprasP), '', 'var(--violet)') +
+      stat('chart', 'Neto', plata(p.facturado - gastosP - comprasP), 'facturado − gastos − compras',
+           (p.facturado - gastosP - comprasP) >= 0 ? 'var(--ok)' : 'var(--danger)') +
+      stat('box', 'Unidades', String(p.unidades),
+           cantDias ? Math.round(p.cantidad / cantDias) + ' remitos por día' : '', 'var(--text2)') +
+    '</div>';
+
+  /* Histórico */
+  var todos = d.remitos.filter(reales);
+  var t = resumirRemitos(todos);
+  var gastosT = d.gastos.reduce(function (s, g) { return s + (+g.monto || 0); }, 0);
+  var comprasT = d.compras.reduce(function (s, c) { return s + (+c.total_costo || +c.total || 0); }, 0);
+  var clientes = {};
+  todos.forEach(function (x) { if (x.cliente_nombre) clientes[normalizar(x.cliente_nombre)] = 1; });
+  var fechas = todos.map(function (x) { return claveFecha(x.fecha || x.created_at); })
+    .filter(Boolean).sort();
+
+  porId('met-historico').innerHTML =
+    '<div class="campo-ayuda" style="margin-bottom:10px">' +
+      (fechas.length ? 'Desde ' + esc(fechaCorta(fechas[0])) + ' hasta hoy' : 'Todavía no hay remitos') + '</div>' +
+    '<div class="grilla-stats">' +
+      stat('receipt', 'Facturado', plata(t.facturado), plural(t.cantidad, 'remito'), 'var(--rose)') +
+      stat('cash', 'Efectivo', plata(t.efectivo), '', 'var(--ok)') +
+      stat('smartphone', 'Transferencia', plata(t.transferencia), '', 'var(--info)') +
+      stat('clock', 'Deuda pendiente', plata(t.deuda), '', 'var(--warn)') +
+      stat('users', 'Clientes atendidos', String(Object.keys(clientes).length), '', 'var(--violet)') +
+      stat('box', 'Unidades', String(t.unidades), '', 'var(--text2)') +
+      stat('chart', 'Neto', plata(t.facturado - gastosT - comprasT),
+           plata(gastosT) + ' en gastos · ' + plata(comprasT) + ' en compras',
+           (t.facturado - gastosT - comprasT) >= 0 ? 'var(--ok)' : 'var(--danger)') +
+    '</div>';
 }

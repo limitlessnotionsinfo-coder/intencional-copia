@@ -129,7 +129,7 @@ function clienteActivo(c) { return c.activo === undefined || c.activo === null |
 
 /* ═══════════════════════════════════════════════════════════
    PRECIOS Y AUMENTO
-   La lista de precios sale de la tabla `stock`. El aumento tiene
+   La lista de precios sale de la configuración. El aumento tiene
    dos tramos: el precio viejo se le cobra a quien todavía no fue
    notificado, el nuevo a quien ya lo fue.
    ═══════════════════════════════════════════════════════════ */
@@ -170,10 +170,22 @@ function esProductoEnAumento(nombre) {
   return n === obj || n.indexOf(obj) !== -1 || obj.indexOf(n) !== -1;
 }
 
-/* Precio de lista de un producto, según la tabla stock */
-function precioDeLista(nombre, stock) {
-  var item = (stock || []).find(function (s) { return normalizar(s.nombre) === normalizar(nombre) && +s.precio > 0; });
-  return item ? +item.precio : 0;
+/* ── Productos y precios ─────────────────────────────────────
+   Viven en la configuración, no en una tabla aparte: son cinco
+   o seis y cambian de precio, no hace falta más que eso.
+   Formato: "Esmalte en Gel|2200, Crema de Ordeñe|6900"
+   ────────────────────────────────────────────────────────── */
+function productos() {
+  var crudo = leerConfig('productos', 'Esmalte en Gel|2200, Crema de Ordeñe|6900');
+  return String(crudo).split(',').map(function (t) {
+    var p = t.split('|');
+    return { nombre: (p[0] || '').trim(), precio: +(p[1] || 0) || 0 };
+  }).filter(function (p) { return p.nombre; });
+}
+
+function precioDeLista(nombre) {
+  var item = productos().find(function (p) { return normalizar(p.nombre) === normalizar(nombre); });
+  return item ? item.precio : 0;
 }
 
 /* ── Última reposición ───────────────────────────────────── */
@@ -317,23 +329,53 @@ function textoPagoPendiente(alias) {
 
 var RUBROS = ['Perfumería', 'Farmacia', 'Supermercado', 'Almacén', 'Kiosco', 'Química', 'Otro'];
 
-/* { "1": "14", "2": "12", … } — 0 es domingo */
-function planRutas() {
+/* ── Agenda de rutas ─────────────────────────────────────────
+   Son 56 hojas y no se repiten semana a semana, así que no hay
+   plan fijo: se anota qué ruta toca cada fecha concreta.
+   Formato: { "2026-08-03": "14", "2026-08-04": "12" }
+   ────────────────────────────────────────────────────────── */
+function agendaRutas() {
   try {
-    var p = JSON.parse(leerConfig('plan_rutas', '{}'));
-    return (p && typeof p === 'object') ? p : {};
+    var a = JSON.parse(leerConfig('agenda_rutas', '{}'));
+    return (a && typeof a === 'object') ? a : {};
   } catch (e) { return {}; }
 }
 
-function rutaDelDia(fecha) {
+function isoDe(fecha) {
   var d = fecha || new Date();
-  return planRutas()[String(d.getDay())] || '';
+  return d.getFullYear() + '-' + dosDig(d.getMonth() + 1) + '-' + dosDig(d.getDate());
+}
+
+function sumarDias(dias, desde) {
+  var d = desde ? new Date(desde) : new Date();
+  d.setDate(d.getDate() + dias);
+  return d;
+}
+
+function rutaDelDia(fecha) {
+  return agendaRutas()[isoDe(fecha)] || '';
 }
 
 function rutaDeManana() {
-  var m = new Date();
-  m.setDate(m.getDate() + 1);
-  return { ruta: rutaDelDia(m), fecha: m };
+  var m = sumarDias(1);
+  return { ruta: rutaDelDia(m), fecha: m, iso: isoDe(m) };
+}
+
+async function anotarRuta(iso, ruta) {
+  var a = agendaRutas();
+  if (ruta) a[iso] = String(ruta); else delete a[iso];
+  await guardarConfig('agenda_rutas', JSON.stringify(a));
+}
+
+/* Las rutas que ya usaste alguna vez, para ofrecerlas de nuevo */
+function rutasConocidas(clientes) {
+  var r = {};
+  (clientes || []).forEach(function (c) {
+    var n = rutaDe(c);
+    if (n) r[n] = (r[n] || 0) + 1;
+  });
+  return Object.keys(r).sort(function (a, b) { return (+a || 0) - (+b || 0); })
+    .map(function (n) { return { ruta: n, clientes: r[n] }; });
 }
 
 function clientesDeRuta(clientes, ruta) {
@@ -366,27 +408,28 @@ function avisosAnticipados(clientes, ruta, diasFalta) {
   });
 }
 
-/* Pedidos abiertos, con el cliente resuelto por nombre */
-function pedidosAbiertos(pedidos, clientes) {
+/* Pedidos abiertos: son pendientes de tipo "pedido", con el
+   cliente resuelto por nombre contra la tabla de clientes */
+function pedidosAbiertos(pendientes, clientes) {
   var porNombre = {};
   (clientes || []).forEach(function (c) { porNombre[normalizar(c.local)] = c; });
-  return (pedidos || [])
-    .filter(function (p) { return (p.estado || 'pendiente') !== 'entregado'; })
-    .map(function (p) {
-      var c = porNombre[normalizar(p.cliente_nombre)];
+  return (pendientes || [])
+    .filter(function (t) { return t.tipo === 'pedido' && !bool(t.hecha); })
+    .map(function (t) {
+      var c = t.cliente_nombre ? porNombre[normalizar(t.cliente_nombre)] : null;
       return {
-        pedido: p,
+        pedido: t,
         cliente: c || null,
         ruta: c ? rutaDe(c) : '',
-        loc: (c && c.loc) || p.cliente_loc || ''
+        loc: (c && c.loc) || ''
       };
     });
 }
 
 /* Cruce: pedidos que caen en la ruta de mañana, o al menos en su zona */
-function pedidosParaRuta(pedidos, clientes, ruta) {
+function pedidosParaRuta(pendientes, clientes, ruta) {
   var zonas = zonasDeRuta(clientes, ruta);
-  return pedidosAbiertos(pedidos, clientes).map(function (x) {
+  return pedidosAbiertos(pendientes, clientes).map(function (x) {
     var enRuta = ruta && String(x.ruta) === String(ruta);
     var enZona = !enRuta && x.loc && zonas[normalizar(x.loc)];
     return Object.assign({}, x, { enRuta: !!enRuta, enZona: !!enZona });

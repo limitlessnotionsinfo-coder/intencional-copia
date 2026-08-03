@@ -82,9 +82,11 @@ function arrancarApp() {
       '<aside class="barra-lateral">' +
         '<div class="marca" id="marca-lateral"></div>' +
         '<nav class="nav" id="nav"></nav>' +
-        '<div class="pie-lateral">' +
-          '<button class="btn btn-fantasma" style="padding:6px 0" onclick="salir()">' + ic('undo', 15) + ' Cerrar sesión</button>' +
-        '</div>' +
+        (PEDIR_LOGIN
+          ? '<div class="pie-lateral">' +
+              '<button class="btn btn-fantasma" style="padding:6px 0" onclick="salir()">' + ic('undo', 15) + ' Cerrar sesión</button>' +
+            '</div>'
+          : '') +
       '</aside>' +
       '<main class="contenido">' +
         '<div class="topbar">' +
@@ -127,7 +129,8 @@ document.addEventListener('DOMContentLoaded', function () {
   bloquearZoom();
   var sinCuenta = false;
   try { sinCuenta = localStorage.getItem('intencional_sin_cuenta') === '1'; } catch (e) {}
-  if (recuperarSesion() || sinCuenta) arrancarApp();
+  recuperarSesion();
+  if (!PEDIR_LOGIN || _sesion || sinCuenta) arrancarApp();
   else pantallaIngreso();
 });
 

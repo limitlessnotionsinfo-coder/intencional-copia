@@ -15,13 +15,60 @@ function sesionActual() { return _sesion; }
 function tokenActual() { return (_sesion && _sesion.access_token) || SB_KEY; }
 
 function guardarSesion(s) {
+  /* El token dura una hora. Guardamos cuándo vence para poder
+     renovarlo antes, en vez de esperar a que la app se caiga. */
+  if (s && s.expires_in && !s.expires_at) {
+    s.expires_at = Math.floor(Date.now() / 1000) + (+s.expires_in || 3600);
+  }
   _sesion = s;
   try { localStorage.setItem('intencional_sesion', JSON.stringify(s)); } catch (e) {}
+}
+
+function sesionPorVencer() {
+  if (!_sesion || !_sesion.expires_at) return false;
+  return (_sesion.expires_at - 60) <= Math.floor(Date.now() / 1000);   // 60 s de margen
+}
+
+/* Renueva el token con el refresh_token. Si falla de verdad,
+   recién ahí se pierde la sesión. */
+var _renovando = null;
+async function renovarSesion() {
+  if (!_sesion || !_sesion.refresh_token) return null;
+  if (_renovando) return _renovando;                 // una sola renovación a la vez
+
+  _renovando = (async function () {
+    try {
+      var d = await authFetch('token?grant_type=refresh_token', {
+        method: 'POST',
+        body: JSON.stringify({ refresh_token: _sesion.refresh_token })
+      });
+      guardarSesion(d);
+      return d;
+    } catch (e) {
+      console.warn('no se pudo renovar la sesión:', e.message);
+      borrarSesion();
+      return null;
+    } finally {
+      _renovando = null;
+    }
+  })();
+  return _renovando;
+}
+
+/* Se llama antes de cada pedido: si el token está por vencer, lo renueva */
+async function asegurarSesion() {
+  if (_sesion && sesionPorVencer()) await renovarSesion();
 }
 function recuperarSesion() {
   try {
     var s = JSON.parse(localStorage.getItem('intencional_sesion') || 'null');
-    if (s && s.access_token) { _sesion = s; return s; }
+    if (s && s.access_token) {
+      _sesion = s;
+      /* Vencido pero con refresh_token: se renueva en segundo plano
+         en vez de mandar al usuario de vuelta al login. */
+      if (sesionPorVencer() && s.refresh_token) renovarSesion();
+      return s;
+    }
   } catch (e) {}
   return null;
 }
@@ -66,9 +113,10 @@ async function cerrarSesion() {
 }
 
 /* ── REST ────────────────────────────────────────────────── */
-async function rest(ruta, opciones) {
+async function rest(ruta, opciones, _reintento) {
   opciones = opciones || {};
   var metodo = (opciones.method || 'GET').toUpperCase();
+  await asegurarSesion();
   var ctrl = new AbortController();
   var corte = setTimeout(function () { ctrl.abort(); }, opciones.timeout || 20000);
   try {
@@ -85,6 +133,14 @@ async function rest(ruta, opciones) {
     });
     clearTimeout(corte);
     var txt = await res.text();
+
+    /* Si el token venció igual, se renueva y se reintenta una vez.
+       El usuario no se entera de nada. */
+    if ((res.status === 401 || res.status === 403) && !_reintento && _sesion && _sesion.refresh_token) {
+      var nueva = await renovarSesion();
+      if (nueva) return rest(ruta, opciones, true);
+    }
+
     if (!res.ok) throw new Error(mensajeDeError(res.status, txt));
     return txt ? JSON.parse(txt) : [];
   } catch (e) {

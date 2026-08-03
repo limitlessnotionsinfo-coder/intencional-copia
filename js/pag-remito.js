@@ -31,7 +31,6 @@ registrarPagina({
 
   async montar(cont, params) {
     R = remitoVacio();
-    _stock = await traerCacheado('stock');
     _clientesRemito = await traerCacheado('clientes');
     await cargarConfig().catch(function () {});
     try {
@@ -52,7 +51,6 @@ registrarPagina({
   }
 });
 
-var _stock = [];
 var _clientesRemito = [];
 var _remitosAlias = [];
 var _pagosAlias = [];
@@ -267,7 +265,7 @@ async function volverAAvisar() {
 function precioInicial() {
   R.filas.forEach(function (f) {
     if (!f.prod || f.precio) return;
-    f.precio = (esProductoEnAumento(f.prod) ? precioParaCliente(R.cliente) : 0) || precioDeLista(f.prod, _stock);
+    f.precio = (esProductoEnAumento(f.prod) ? precioParaCliente(R.cliente) : 0) || precioDeLista(f.prod);
   });
 }
 
@@ -382,8 +380,8 @@ function campoTexto(etiqueta, id, valor, ph) {
 
 function filaProducto(f, i) {
   var opciones = ['<option value="">— elegir —</option>'].concat(
-    _stock.filter(function (s) { return s.nombre; }).map(function (s) {
-      return '<option' + (normalizar(s.nombre) === normalizar(f.prod) ? ' selected' : '') + '>' + esc(s.nombre) + '</option>';
+    productos().map(function (p) {
+      return '<option' + (normalizar(p.nombre) === normalizar(f.prod) ? ' selected' : '') + '>' + esc(p.nombre) + '</option>';
     })).join('');
 
   var subtotal = (+f.cant || 0) * (+f.precio || 0);
@@ -404,7 +402,7 @@ function filaProducto(f, i) {
 function cambiarProducto(i, nombre) {
   R.filas[i].prod = nombre;
   var sugerido = R.cliente && esProductoEnAumento(nombre) ? precioParaCliente(R.cliente) : 0;
-  R.filas[i].precio = sugerido || precioDeLista(nombre, _stock) || R.filas[i].precio || 0;
+  R.filas[i].precio = sugerido || precioDeLista(nombre) || R.filas[i].precio || 0;
   pintarRemito();
 }
 

@@ -13,7 +13,6 @@ registrarPagina({
   async montar(cont) {
     await cargarConfig().catch(function () {});
     var cfg = aumentoConfig();
-    var stock = await traerCacheado('stock');
 
     cont.innerHTML =
       '<details class="tarjeta">' +
@@ -32,7 +31,7 @@ registrarPagina({
           '<div class="campo"><div class="campo-etiq">Producto que aumenta</div>' +
             '<input class="campo-input" id="cfg-producto" list="lista-prods" value="' + esc(cfg.producto) + '" oninput="previewAviso()"/>' +
             '<datalist id="lista-prods">' +
-              stock.map(function (s) { return '<option value="' + esc(s.nombre) + '">'; }).join('') +
+              productos().map(function (p) { return '<option value="' + esc(p.nombre) + '">'; }).join('') +
             '</datalist>' +
           '</div>' +
 
@@ -52,6 +51,7 @@ registrarPagina({
         '</div>' +
       '</details>' +
 
+      tarjetaProductos() +
       tarjetaRutas() +
       tarjetaAlias() +
       tarjetaMensaje() +
@@ -67,7 +67,7 @@ registrarPagina({
           '</div>' +
           '<button class="btn btn-secundario" onclick="invalidarCache();pintarRuta();toast(\'Datos actualizados\')">' +
             ic('refresh', 15) + ' Volver a leer la base</button> ' +
-          '<button class="btn btn-secundario" onclick="salir()">' + ic('undo', 15) + ' Cerrar sesión</button>' +
+          (PEDIR_LOGIN ? '<button class="btn btn-secundario" onclick="salir()">' + ic('undo', 15) + ' Cerrar sesión</button>' : '') +
         '</div>' +
       '</div>';
 
@@ -269,41 +269,90 @@ async function guardarMensaje() {
 }
 
 
-/* ── Plan semanal de hojas de ruta ───────────────────────── */
-function tarjetaRutas() {
-  var plan = planRutas();
-  var cargadas = Object.keys(plan).filter(function (d) { return plan[d]; }).length;
+/* ── Productos y precios ─────────────────────────────────── */
+function tarjetaProductos() {
   return '<details class="tarjeta">' +
-    '<summary class="tarjeta-cab" style="cursor:pointer">' + ic('map', 16) + ' Hojas de ruta' +
+    '<summary class="tarjeta-cab" style="cursor:pointer">' + ic('tag', 16) + ' Productos y precios' +
       '<span style="margin-left:auto"><span class="pin pin-neutro">' +
-        (cargadas ? plural(cargadas, 'día') + ' con ruta' : 'sin cargar') + '</span></span>' +
+        plural(productos().length, 'producto') + '</span></span>' +
     '</summary>' +
     '<div class="tarjeta-cuerpo">' +
       '<div class="campo-ayuda" style="margin-bottom:12px">' +
-        'Qué ruta recorrés cada día. Con esto el inicio te dice qué toca hoy y mañana, ' +
-        'cuántos exhibidores preparar y si hay pedidos que caen en esa zona. Dejá vacío el día que no salís.' +
+        'Uno por línea, con el precio después de una barra vertical. Es la lista que aparece al cargar un remito.' +
       '</div>' +
-      [1, 2, 3, 4, 5, 6, 0].map(function (d) {
-        return '<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">' +
-          '<span style="width:90px;font-size:13px;color:var(--text2)">' + capitalizar(DIAS[d]) + '</span>' +
-          '<input class="campo-input plan-dia" data-dia="' + d + '" type="number" min="0" ' +
-                 'style="max-width:110px" placeholder="—" value="' + esc(plan[String(d)] || '') + '"/>' +
-        '</div>';
-      }).join('') +
-      '<button class="btn btn-primario btn-bloque" style="margin-top:8px" onclick="guardarPlanRutas()">Guardar</button>' +
+      '<div class="campo"><div class="campo-etiq">Productos</div>' +
+        '<textarea class="campo-input" id="cfg-productos" rows="5" style="resize:vertical;font-family:ui-monospace,monospace;font-size:13px">' +
+          esc(productos().map(function (p) { return p.nombre + ' | ' + p.precio; }).join('\n')) +
+        '</textarea></div>' +
+      '<button class="btn btn-primario btn-bloque" onclick="guardarProductos()">Guardar</button>' +
     '</div>' +
   '</details>';
 }
 
-async function guardarPlanRutas() {
-  var plan = {};
-  $$('.plan-dia').forEach(function (el) {
-    var v = (el.value || '').trim();
-    if (v) plan[el.dataset.dia] = v;
-  });
+async function guardarProductos() {
+  var lineas = (porId('cfg-productos').value || '').split('\n')
+    .map(function (l) { return l.trim(); }).filter(Boolean);
+  var malas = lineas.filter(function (l) { return l.indexOf('|') === -1; });
+  if (malas.length) { toast('Falta el precio en: ' + malas[0], 'error'); return; }
   try {
-    await guardarConfig('plan_rutas', JSON.stringify(plan));
-    toast('Plan de rutas guardado');
+    await guardarConfig('productos', lineas.map(function (l) {
+      var p = l.split('|');
+      return p[0].trim() + '|' + (+p[1].trim() || 0);
+    }).join(', '));
+    toast('Productos guardados');
     pintarRuta();
+  } catch (e) { toast(e.message, 'error'); }
+}
+
+/* ── Agenda de rutas ─────────────────────────────────────────
+   Con 56 hojas que no se repiten semana a semana no hay plan
+   fijo: se anota qué ruta toca cada fecha.
+   ────────────────────────────────────────────────────────── */
+function tarjetaRutas() {
+  var agenda = agendaRutas();
+  var proximas = Object.keys(agenda).filter(function (k) { return k >= hoyISO(); }).length;
+
+  return '<details class="tarjeta">' +
+    '<summary class="tarjeta-cab" style="cursor:pointer">' + ic('map', 16) + ' Agenda de rutas' +
+      '<span style="margin-left:auto"><span class="pin pin-neutro">' +
+        (proximas ? plural(proximas, 'día') + ' anotado' + (proximas === 1 ? '' : 's') : 'sin anotar') + '</span></span>' +
+    '</summary>' +
+    '<div class="tarjeta-cuerpo">' +
+      '<div class="campo-ayuda" style="margin-bottom:12px">' +
+        'Anotá qué hoja de ruta hacés cada día. Con los próximos dos o tres alcanza: ' +
+        'el inicio usa el de hoy y el de mañana para avisarte qué preparar.' +
+      '</div>' +
+      '<div id="agenda-dias">' + filasAgenda() + '</div>' +
+    '</div>' +
+  '</details>';
+}
+
+function filasAgenda() {
+  var agenda = agendaRutas();
+  var filas = '';
+  for (var i = 0; i < 10; i++) {
+    var d = sumarDias(i);
+    var iso = isoDe(d);
+    var etiqueta = i === 0 ? 'Hoy' : i === 1 ? 'Mañana' : capitalizar(DIAS[d.getDay()]) + ' ' + d.getDate();
+    filas += '<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">' +
+      '<span style="width:110px;font-size:13px;color:' + (i < 2 ? 'var(--text)' : 'var(--text2)') + ';font-weight:' + (i < 2 ? '600' : '400') + '">' +
+        esc(etiqueta) + '</span>' +
+      '<input class="campo-input" type="number" min="0" style="max-width:110px" placeholder="—" ' +
+             'value="' + esc(agenda[iso] || '') + '" ' +
+             'onchange="guardarDiaAgenda(\'' + iso + '\',this.value)"/>' +
+      '<span class="campo-ayuda" id="ag-' + iso + '"></span>' +
+    '</div>';
+  }
+  return filas;
+}
+
+async function guardarDiaAgenda(iso, ruta) {
+  try {
+    await anotarRuta(iso, (ruta || '').trim());
+    var clientes = await traerCacheado('clientes');
+    var n = clientesDeRuta(clientes, ruta).length;
+    var el = porId('ag-' + iso);
+    if (el) el.textContent = ruta ? plural(n, 'cliente') : '';
+    toast(ruta ? 'Ruta ' + ruta + ' anotada' : 'Día liberado');
   } catch (e) { toast(e.message, 'error'); }
 }
