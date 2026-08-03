@@ -83,7 +83,7 @@ function pintarMetricas() {
   }).join('');
 
   porId('met-rango').innerHTML = P.modo === 'rango'
-    ? '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">' +
+    ? '<div class="grilla-fechas">' +
         '<div class="campo" style="margin:0"><div class="campo-etiq">Desde</div>' +
           '<input class="campo-input" type="date" value="' + esc(P.desde) + '" onchange="setFechaP(\'desde\',this.value)"/></div>' +
         '<div class="campo" style="margin:0"><div class="campo-etiq">Hasta</div>' +

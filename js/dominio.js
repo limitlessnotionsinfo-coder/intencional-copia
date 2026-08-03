@@ -170,22 +170,57 @@ function esProductoEnAumento(nombre) {
   return n === obj || n.indexOf(obj) !== -1 || obj.indexOf(n) !== -1;
 }
 
-/* ── Productos y precios ─────────────────────────────────────
-   Viven en la configuración, no en una tabla aparte: son cinco
-   o seis y cambian de precio, no hace falta más que eso.
-   Formato: "Esmalte en Gel|2200, Crema de Ordeñe|6900"
+/* ── Productos, precios y ganancia ───────────────────────────
+   Viven en la configuración: son pocos y cambian de precio.
+   Formato: "nombre|costo|venta", separados por punto y coma.
+   Se acepta el formato viejo de dos campos (nombre|venta).
    ────────────────────────────────────────────────────────── */
+var PRODUCTOS_DEFAULT = 'Esmalte en Gel|1217|2200; Crema de Ordeñe|4200|6900';
+
 function productos() {
-  var crudo = leerConfig('productos', 'Esmalte en Gel|2200, Crema de Ordeñe|6900');
-  return String(crudo).split(',').map(function (t) {
-    var p = t.split('|');
-    return { nombre: (p[0] || '').trim(), precio: +(p[1] || 0) || 0 };
+  var crudo = leerConfig('productos', PRODUCTOS_DEFAULT);
+  /* El formato viejo separaba con coma; el nuevo con punto y coma */
+  var partes = String(crudo).indexOf(';') !== -1 ? String(crudo).split(';') : String(crudo).split(',');
+  return partes.map(function (t) {
+    var c = t.split('|');
+    var nombre = (c[0] || '').trim();
+    if (c.length >= 3) return { nombre: nombre, costo: +c[1] || 0, precio: +c[2] || 0 };
+    return { nombre: nombre, costo: 0, precio: +(c[1] || 0) || 0 };   // formato viejo
   }).filter(function (p) { return p.nombre; });
 }
 
+function guardarProductosConfig(lista) {
+  return guardarConfig('productos', lista.map(function (p) {
+    return p.nombre + '|' + (+p.costo || 0) + '|' + (+p.precio || 0);
+  }).join('; '));
+}
+
+function buscarProducto(nombre) {
+  return productos().find(function (p) { return normalizar(p.nombre) === normalizar(nombre); }) || null;
+}
+
 function precioDeLista(nombre) {
-  var item = productos().find(function (p) { return normalizar(p.nombre) === normalizar(nombre); });
-  return item ? item.precio : 0;
+  var p = buscarProducto(nombre);
+  return p ? p.precio : 0;
+}
+
+function costoDeLista(nombre) {
+  var p = buscarProducto(nombre);
+  return p ? p.costo : 0;
+}
+
+/* Cuánto queda por unidad y qué porcentaje representa */
+function ganancia(producto) {
+  var costo = +producto.costo || 0;
+  var venta = +producto.precio || 0;
+  var g = venta - costo;
+  return {
+    monto: g,
+    /* Sobre el costo: cuánto se multiplica lo que pusiste */
+    margenSobreCosto: costo > 0 ? (g / costo) * 100 : null,
+    /* Sobre la venta: qué parte de lo que cobrás es ganancia */
+    margenSobreVenta: venta > 0 ? (g / venta) * 100 : null
+  };
 }
 
 /* ── Última reposición ───────────────────────────────────── */
@@ -329,16 +364,42 @@ function textoPagoPendiente(alias) {
 
 var RUBROS = ['Perfumería', 'Farmacia', 'Supermercado', 'Almacén', 'Kiosco', 'Química', 'Otro'];
 
-/* ── Agenda de rutas ─────────────────────────────────────────
-   Son 56 hojas y no se repiten semana a semana, así que no hay
-   plan fijo: se anota qué ruta toca cada fecha concreta.
-   Formato: { "2026-08-03": "14", "2026-08-04": "12" }
-   ────────────────────────────────────────────────────────── */
-function agendaRutas() {
-  try {
-    var a = JSON.parse(leerConfig('agenda_rutas', '{}'));
-    return (a && typeof a === 'object') ? a : {};
-  } catch (e) { return {}; }
+/* ═══════════════════════════════════════════════════════════
+   CALENDARIO DE RUTAS
+   Son 56 hojas que no se repiten semana a semana, así que no hay
+   plan fijo: hay una cola ordenada y la app la reparte sobre los
+   días hábiles. Sábados, domingos y feriados se saltean solos.
+   Si un día no se salió, todo corre un lugar; si se adelanta una
+   ruta, el resto se reacomoda atrás.
+   ═══════════════════════════════════════════════════════════ */
+
+var FERIADOS = {};        // { "2026-05-01": "Día del Trabajador" }
+var _feriadosCargados = false;
+
+/* ── Días hábiles ────────────────────────────────────────── */
+function fechaDeIso(iso) {
+  /* El mediodía evita que el navegador la corra un día por zona horaria */
+  return new Date(String(iso) + 'T12:00:00');
+}
+
+function esFinDeSemana(iso) {
+  var d = fechaDeIso(iso).getDay();
+  return d === 0 || d === 6;
+}
+
+function esFeriado(iso) { return !!FERIADOS[iso]; }
+function nombreFeriado(iso) { return FERIADOS[iso] || ''; }
+
+function esHabil(iso) { return !esFinDeSemana(iso) && !esFeriado(iso); }
+
+/* El primer día hábil desde una fecha, incluyéndola */
+function proximoHabil(iso) {
+  var d = fechaDeIso(iso);
+  for (var i = 0; i < 400; i++) {
+    if (esHabil(isoDe(d))) return isoDe(d);
+    d.setDate(d.getDate() + 1);
+  }
+  return iso;
 }
 
 function isoDe(fecha) {
@@ -352,8 +413,91 @@ function sumarDias(dias, desde) {
   return d;
 }
 
+/* ── Feriados ────────────────────────────────────────────────
+   Se bajan de la API pública de ArgentinaDatos y quedan
+   guardados. Si no hay internet o el año todavía no está
+   publicado, se usan los que estén cargados a mano.
+   ────────────────────────────────────────────────────────── */
+function feriadosManuales() {
+  return String(leerConfig('feriados_extra', '')).split(',')
+    .map(function (f) { return f.trim(); })
+    .filter(function (f) { return /^\d{4}-\d{2}-\d{2}$/.test(f); });
+}
+
+function aplicarFeriados(lista, manuales) {
+  FERIADOS = {};
+  (lista || []).forEach(function (f) {
+    if (f && f.fecha) FERIADOS[f.fecha] = f.nombre || 'Feriado';
+  });
+  (manuales || feriadosManuales()).forEach(function (f) {
+    FERIADOS[f] = FERIADOS[f] || 'Feriado propio';
+  });
+}
+
+async function cargarFeriados() {
+  if (_feriadosCargados) return FERIADOS;
+
+  var anios = [new Date().getFullYear(), new Date().getFullYear() + 1];
+  var guardados = [];
+  try { guardados = JSON.parse(localStorage.getItem('intencional_feriados') || '[]'); } catch (e) {}
+  aplicarFeriados(guardados);
+
+  var traidos = [];
+  for (var i = 0; i < anios.length; i++) {
+    try {
+      var r = await fetch('https://api.argentinadatos.com/v1/feriados/' + anios[i]);
+      if (r.ok) {
+        var d = await r.json();
+        if (Array.isArray(d)) traidos = traidos.concat(d);
+      }
+    } catch (e) { /* sin internet: quedan los guardados */ }
+  }
+
+  if (traidos.length) {
+    try { localStorage.setItem('intencional_feriados', JSON.stringify(traidos)); } catch (e) {}
+    aplicarFeriados(traidos);
+  }
+  _feriadosCargados = true;
+  return FERIADOS;
+}
+
+/* ── La cola ─────────────────────────────────────────────── */
+function colaRutas() {
+  return String(leerConfig('cola_rutas', '')).split(',')
+    .map(function (r) { return r.trim(); })
+    .filter(Boolean);
+}
+
+function inicioCola() {
+  var g = leerConfig('cola_inicio', '');
+  var hoy = hoyISO();
+  return proximoHabil(!g || g < hoy ? hoy : g);
+}
+
+async function guardarCola(cola, inicio) {
+  await guardarConfig('cola_rutas', cola.join(', '));
+  if (inicio) await guardarConfig('cola_inicio', inicio);
+}
+
+/* Reparte la cola sobre los días hábiles: esto es el calendario */
+function calendarioRutas(cuantas) {
+  var cola = colaRutas();
+  var tope = Math.min(cola.length, cuantas || cola.length);
+  var cal = [];
+  var d = fechaDeIso(inicioCola());
+
+  for (var i = 0; i < tope; i++) {
+    while (!esHabil(isoDe(d))) d.setDate(d.getDate() + 1);
+    cal.push({ iso: isoDe(d), ruta: cola[i], indice: i });
+    d.setDate(d.getDate() + 1);
+  }
+  return cal;
+}
+
 function rutaDelDia(fecha) {
-  return agendaRutas()[isoDe(fecha)] || '';
+  var iso = isoDe(fecha || new Date());
+  var e = calendarioRutas().find(function (x) { return x.iso === iso; });
+  return e ? e.ruta : '';
 }
 
 function rutaDeManana() {
@@ -361,21 +505,41 @@ function rutaDeManana() {
   return { ruta: rutaDelDia(m), fecha: m, iso: isoDe(m) };
 }
 
-async function anotarRuta(iso, ruta) {
-  var a = agendaRutas();
-  if (ruta) a[iso] = String(ruta); else delete a[iso];
-  await guardarConfig('agenda_rutas', JSON.stringify(a));
+/* ── Reorganizar ─────────────────────────────────────────────
+   Todas devuelven la cola nueva, no tocan nada por su cuenta.
+   ────────────────────────────────────────────────────────── */
+
+/* No se salió: todo corre un día hábil hacia adelante */
+function colaAtrasada() {
+  var siguiente = proximoHabil(isoDe(sumarDias(1, fechaDeIso(inicioCola()))));
+  return { cola: colaRutas(), inicio: siguiente };
 }
 
-/* Las rutas que ya usaste alguna vez, para ofrecerlas de nuevo */
-function rutasConocidas(clientes) {
-  var r = {};
-  (clientes || []).forEach(function (c) {
-    var n = rutaDe(c);
-    if (n) r[n] = (r[n] || 0) + 1;
-  });
-  return Object.keys(r).sort(function (a, b) { return (+a || 0) - (+b || 0); })
-    .map(function (n) { return { ruta: n, clientes: r[n] }; });
+/* La primera ya se hizo: sale de la cola y el resto arranca mañana */
+function colaAvanzada() {
+  var cola = colaRutas().slice(1);
+  var siguiente = proximoHabil(isoDe(sumarDias(1, fechaDeIso(inicioCola()))));
+  return { cola: cola, inicio: siguiente };
+}
+
+/* Adelantar una ruta: se pone primera y las demás corren atrás */
+function colaConAdelanto(ruta) {
+  var cola = colaRutas();
+  var i = cola.indexOf(String(ruta));
+  if (i <= 0) return { cola: cola, inicio: inicioCola() };
+  cola.splice(i, 1);
+  cola.unshift(String(ruta));
+  return { cola: cola, inicio: inicioCola() };
+}
+
+/* Posponer una ruta un lugar */
+function colaConAtraso(ruta) {
+  var cola = colaRutas();
+  var i = cola.indexOf(String(ruta));
+  if (i === -1 || i === cola.length - 1) return { cola: cola, inicio: inicioCola() };
+  cola.splice(i, 1);
+  cola.splice(i + 1, 0, String(ruta));
+  return { cola: cola, inicio: inicioCola() };
 }
 
 function clientesDeRuta(clientes, ruta) {
@@ -426,12 +590,122 @@ function pedidosAbiertos(pendientes, clientes) {
     });
 }
 
-/* Cruce: pedidos que caen en la ruta de mañana, o al menos en su zona */
-function pedidosParaRuta(pendientes, clientes, ruta) {
+/* ═══════════════════════════════════════════════════════════
+   GASTOS — categorías, de dónde salió la plata y el reparto
+   ═══════════════════════════════════════════════════════════ */
+
+var CATEGORIAS_GASTO = [
+  { id: 'combustible',   etiqueta: 'Combustible', icono: 'fuel',    compartido: true },
+  { id: 'empleado',      etiqueta: 'Empleado',    icono: 'user',    compartido: false },
+  { id: 'impuestos',     etiqueta: 'Impuestos',   icono: 'file',    compartido: false },
+  { id: 'insumos',       etiqueta: 'Insumos',     icono: 'box',     compartido: false },
+  { id: 'mantenimiento', etiqueta: 'Mantenimiento', icono: 'tool',  compartido: true },
+  { id: 'otro',          etiqueta: 'Otro',        icono: 'tag',     compartido: false }
+];
+
+function categoriaGasto(id) {
+  return CATEGORIAS_GASTO.find(function (c) { return c.id === id; }) || CATEGORIAS_GASTO[CATEGORIAS_GASTO.length - 1];
+}
+
+/* Quién puso la plata */
+var QUIEN_PAGA = {
+  empresa:  'La empresa',
+  personal: 'De mi bolsillo'
+};
+
+/* ── Reparto de un gasto compartido ──────────────────────────
+   La nafta del auto la pagan a medias entre la empresa y vos.
+   El porcentaje se configura y el monto sale de ahí.
+   ────────────────────────────────────────────────────────── */
+function porcentajeEmpresa() {
+  var p = +leerConfig('reparto_empresa', 50);
+  return isNaN(p) ? 50 : Math.max(0, Math.min(100, p));
+}
+
+function repartirGasto(monto, porcentaje) {
+  var total = +monto || 0;
+  var pct = porcentaje === undefined || porcentaje === null ? porcentajeEmpresa() : +porcentaje;
+  var empresa = Math.round(total * pct) / 100;
+  return { empresa: empresa, personal: Math.round((total - empresa) * 100) / 100, porcentaje: pct };
+}
+
+/* Cuánto te tiene que devolver la empresa por un gasto, o vos a ella.
+   Positivo = la empresa te debe. Negativo = le debés vos. */
+function saldoDeGasto(g) {
+  var total = +g.monto || 0;
+  var empresa = (g.parte_empresa === null || g.parte_empresa === undefined) ? total : +g.parte_empresa;
+  var personal = (g.parte_personal === null || g.parte_personal === undefined) ? 0 : +g.parte_personal;
+
+  if (g.pagado_por === 'personal') return empresa;    // pusiste vos: te deben la parte de la empresa
+  if (g.pagado_por === 'empresa')  return -personal;  // puso la empresa: le debés tu parte
+  return 0;                                           // sin dato: no se cuenta
+}
+
+/* Balance de un conjunto de gastos: qué se lleva al final de la semana */
+function balanceGastos(gastos) {
+  var b = { aCobrar: 0, aDevolver: 0, neto: 0, items: [] };
+  (gastos || []).forEach(function (g) {
+    var s = saldoDeGasto(g);
+    if (!s) return;
+    if (s > 0) b.aCobrar += s; else b.aDevolver += -s;
+    b.items.push({ gasto: g, saldo: s });
+  });
+  b.neto = b.aCobrar - b.aDevolver;
+  return b;
+}
+
+/* Partes de pago de un gasto: mismo formato que los remitos */
+function partesGasto(g) {
+  if (!g) return [];
+  if (g.pagos_detalle) {
+    try {
+      var arr = typeof g.pagos_detalle === 'string' ? JSON.parse(g.pagos_detalle) : g.pagos_detalle;
+      if (Array.isArray(arr) && arr.length) return arr;
+    } catch (e) {}
+  }
+  return [{ tipo: g.medio || 'efectivo', monto: +g.monto || 0, alias: g.alias || null }];
+}
+
+/* ── Empleado ────────────────────────────────────────────── */
+function empleadoConfig() {
+  return {
+    nombre: leerConfig('empleado_nombre', ''),
+    sueldo: +leerConfig('empleado_sueldo', 0) || 0,
+    frecuencia: leerConfig('empleado_frecuencia', 'mensual')   // semanal · quincenal · mensual
+  };
+}
+
+/* ── Pendientes con cliente o zona ───────────────────────────
+   Un pedido o un retiro puede ser de un cliente de la base o de
+   uno nuevo que todavía no está cargado; en ese caso se anota
+   la zona a mano.
+   ────────────────────────────────────────────────────────── */
+function pendienteEsDeClienteNuevo(t, clientes) {
+  if (!t.cliente_nombre) return false;
+  return !(clientes || []).some(function (c) { return normalizar(c.local) === normalizar(t.cliente_nombre); });
+}
+
+/* Pendientes de pedido o retiro que caen en una ruta o en su zona */
+function pendientesParaRuta(pendientes, clientes, ruta) {
   var zonas = zonasDeRuta(clientes, ruta);
-  return pedidosAbiertos(pendientes, clientes).map(function (x) {
-    var enRuta = ruta && String(x.ruta) === String(ruta);
-    var enZona = !enRuta && x.loc && zonas[normalizar(x.loc)];
-    return Object.assign({}, x, { enRuta: !!enRuta, enZona: !!enZona });
-  }).filter(function (x) { return x.enRuta || x.enZona; });
+  var porNombre = {};
+  (clientes || []).forEach(function (c) { porNombre[normalizar(c.local)] = c; });
+
+  return (pendientes || [])
+    .filter(function (t) { return !bool(t.hecha) && (t.tipo === 'pedido' || t.tipo === 'retirar'); })
+    .map(function (t) {
+      var c = t.cliente_nombre ? porNombre[normalizar(t.cliente_nombre)] : null;
+      var loc = (c && c.loc) || t.loc || '';
+      var rutaT = c ? rutaDe(c) : '';
+      return {
+        pendiente: t,
+        cliente: c || null,
+        esNuevo: !!t.cliente_nombre && !c,
+        loc: loc,
+        ruta: rutaT,
+        enRuta: !!(ruta && rutaT && String(rutaT) === String(ruta)),
+        enZona: !!(loc && zonas[normalizar(loc)] && !(rutaT && String(rutaT) === String(ruta)))
+      };
+    })
+    .filter(function (x) { return x.enRuta || x.enZona; });
 }

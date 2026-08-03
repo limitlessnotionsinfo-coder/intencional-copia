@@ -23,6 +23,8 @@ registrarPagina({
     _clientes = await traerCacheado('clientes');
 
     cont.innerHTML =
+      '<button class="btn btn-primario btn-bloque" style="margin-bottom:14px" onclick="nuevoCliente()">' +
+        ic('plus', 16) + ' Nuevo cliente</button>' +
       '<div class="buscador" style="margin-bottom:14px">' +
         '<span class="ic-lupa">' + ic('search', 16) + '</span>' +
         '<input class="campo-input" id="q-clientes" type="search" autocomplete="off" ' +
@@ -191,11 +193,10 @@ function porHojaDeRuta(lista) {
     return (+a || 0) - (+b || 0);
   });
 
-  /* Si alguna de estas rutas está anotada en la agenda, se marca */
-  var agenda = agendaRutas();
+  /* Cuándo le toca a cada ruta, según el calendario */
   var proximaDe = {};
-  Object.keys(agenda).sort().forEach(function (iso) {
-    if (iso >= hoyISO() && !proximaDe[agenda[iso]]) proximaDe[agenda[iso]] = iso;
+  calendarioRutas().forEach(function (e) {
+    if (!proximaDe[e.ruta]) proximaDe[e.ruta] = e.iso;
   });
   var hoy = rutaDelDia();
 

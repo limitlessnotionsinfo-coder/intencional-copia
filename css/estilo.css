@@ -312,3 +312,31 @@ html{touch-action:manipulation}
   .atajos{grid-template-columns:1fr 1fr}
   .grilla-stats{grid-template-columns:1fr 1fr}
 }
+
+/* ── Editor de productos ─────────────────────────────────── */
+.prod-editor{
+  display:grid;grid-template-columns:minmax(120px,1fr) 110px 110px 30px;
+  gap:8px;align-items:end;padding:10px 0;border-bottom:1px solid var(--border);
+}
+.prod-editor .campo-etiq{margin-bottom:4px}
+.prod-ganancia{grid-column:1/-1;font-size:12px;margin-top:2px}
+@media (max-width:620px){
+  .prod-editor{grid-template-columns:1fr 1fr 30px}
+  .prod-editor .prod-nombre{grid-column:1/-1}
+}
+
+/* ── Campos de fecha: sin desbordar la grilla ────────────── */
+.campo{min-width:0}
+.campo-input{max-width:100%}
+input[type="date"]{
+  min-width:0;width:100%;
+  -webkit-appearance:none;appearance:none;
+}
+
+/* ── Grillas con campos de fecha ─────────────────────────── */
+.grilla-fechas{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:12px}
+.grilla-filtros{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px}
+.grilla-fechas > *,.grilla-filtros > *{min-width:0}
+@media (max-width:420px){
+  .grilla-fechas,.grilla-filtros{grid-template-columns:1fr}
+}

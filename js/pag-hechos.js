@@ -61,7 +61,7 @@ function panelFiltros() {
       '<span style="margin-left:auto" id="chip-filtros"></span>' +
     '</summary>' +
     '<div class="tarjeta-cuerpo">' +
-      '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px">' +
+      '<div class="grilla-filtros">' +
         '<div class="campo" style="margin:0"><div class="campo-etiq">Medio de pago</div>' +
           '<select class="campo-input" onchange="setF(\'pago\',this.value)">' +
             opcionesPago.map(function (o) {

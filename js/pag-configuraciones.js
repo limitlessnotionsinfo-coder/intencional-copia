@@ -11,7 +11,9 @@ registrarPagina({
   subtitulo: 'Precios, aviso de aumento y datos de la cuenta',
 
   async montar(cont) {
+    _prods = null;
     await cargarConfig().catch(function () {});
+    await cargarFeriados().catch(function () {});
     var cfg = aumentoConfig();
 
     cont.innerHTML =
@@ -29,8 +31,8 @@ registrarPagina({
           '</label>' +
 
           '<div class="campo"><div class="campo-etiq">Producto que aumenta</div>' +
-            '<input class="campo-input" id="cfg-producto" list="lista-prods" value="' + esc(cfg.producto) + '" oninput="previewAviso()"/>' +
-            '<datalist id="lista-prods">' +
+            '<input class="campo-input" id="cfg-producto" list="opciones-prod" value="' + esc(cfg.producto) + '" oninput="previewAviso()"/>' +
+            '<datalist id="opciones-prod">' +
               productos().map(function (p) { return '<option value="' + esc(p.nombre) + '">'; }).join('') +
             '</datalist>' +
           '</div>' +
@@ -51,8 +53,10 @@ registrarPagina({
         '</div>' +
       '</details>' +
 
+      tarjetaEmpleado() +
       tarjetaProductos() +
       tarjetaRutas() +
+      tarjetaFeriados() +
       tarjetaAlias() +
       tarjetaMensaje() +
 
@@ -72,6 +76,7 @@ registrarPagina({
       '</div>';
 
     previewAviso();
+    previewCalendario();
     previewMensaje();
     previewDeuda();
     ['cfg-alias', 'cfg-tel', 'cfg-horas'].forEach(function (id) {
@@ -269,90 +274,237 @@ async function guardarMensaje() {
 }
 
 
-/* ── Productos y precios ─────────────────────────────────── */
+/* ── Productos, precios y ganancia ───────────────────────── */
+var _prods = null;   // se edita en memoria y se guarda de una
+
 function tarjetaProductos() {
+  if (!_prods) _prods = productos().map(function (p) { return { nombre: p.nombre, costo: p.costo, precio: p.precio }; });
   return '<details class="tarjeta">' +
     '<summary class="tarjeta-cab" style="cursor:pointer">' + ic('tag', 16) + ' Productos y precios' +
       '<span style="margin-left:auto"><span class="pin pin-neutro">' +
-        plural(productos().length, 'producto') + '</span></span>' +
+        plural(_prods.length, 'producto') + '</span></span>' +
     '</summary>' +
     '<div class="tarjeta-cuerpo">' +
       '<div class="campo-ayuda" style="margin-bottom:12px">' +
-        'Uno por línea, con el precio después de una barra vertical. Es la lista que aparece al cargar un remito.' +
+        'Lo que te cuesta cada unidad y a cuánto se la vendés al cliente. ' +
+        'La ganancia se calcula sola.' +
       '</div>' +
-      '<div class="campo"><div class="campo-etiq">Productos</div>' +
-        '<textarea class="campo-input" id="cfg-productos" rows="5" style="resize:vertical;font-family:ui-monospace,monospace;font-size:13px">' +
-          esc(productos().map(function (p) { return p.nombre + ' | ' + p.precio; }).join('\n')) +
-        '</textarea></div>' +
-      '<button class="btn btn-primario btn-bloque" onclick="guardarProductos()">Guardar</button>' +
+      '<div id="lista-prods">' + _prods.map(filaProductoConfig).join('') + '</div>' +
+      '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px">' +
+        '<button class="btn btn-secundario" onclick="agregarProducto()">' + ic('plus', 15) + ' Agregar producto</button>' +
+        '<button class="btn btn-primario" style="flex:1;min-width:160px" onclick="guardarProductos()">Guardar</button>' +
+      '</div>' +
     '</div>' +
   '</details>';
 }
 
+function filaProductoConfig(p, i) {
+  var g = ganancia(p);
+  return '<div class="prod-editor">' +
+    '<div class="prod-nombre">' +
+      '<div class="campo-etiq">Producto</div>' +
+      '<input class="campo-input" value="' + esc(p.nombre) + '" placeholder="Nombre" ' +
+             'oninput="editarProducto(' + i + ',\'nombre\',this.value)"/>' +
+    '</div>' +
+    '<div>' +
+      '<div class="campo-etiq">Nos cuesta</div>' +
+      '<input class="campo-input" type="number" min="0" inputmode="decimal" value="' + (+p.costo || 0) + '" ' +
+             'oninput="editarProducto(' + i + ',\'costo\',this.value)"/>' +
+    '</div>' +
+    '<div>' +
+      '<div class="campo-etiq">Lo cobramos</div>' +
+      '<input class="campo-input" type="number" min="0" inputmode="decimal" value="' + (+p.precio || 0) + '" ' +
+             'oninput="editarProducto(' + i + ',\'precio\',this.value)"/>' +
+    '</div>' +
+    '<button class="btn btn-fantasma" style="padding:4px;align-self:end;margin-bottom:6px" ' +
+            'aria-label="Quitar" onclick="quitarProducto(' + i + ')">✕</button>' +
+    '<div class="prod-ganancia" id="gan-' + i + '">' + textoGanancia(g) + '</div>' +
+  '</div>';
+}
+
+function textoGanancia(g) {
+  if (!g.monto && g.margenSobreCosto === null) return '<span style="color:var(--muted)">Cargá el costo para ver la ganancia</span>';
+  var color = g.monto > 0 ? 'var(--ok)' : g.monto < 0 ? 'var(--danger)' : 'var(--muted)';
+  return '<span style="color:' + color + ';font-weight:600">Ganancia ' + plata(g.monto) + '</span>' +
+    (g.margenSobreCosto !== null
+      ? ' <span style="color:var(--muted)">· ' + Math.round(g.margenSobreCosto) + '% sobre el costo' +
+        (g.margenSobreVenta !== null ? ' · ' + Math.round(g.margenSobreVenta) + '% de lo que cobrás' : '') + '</span>'
+      : '');
+}
+
+function editarProducto(i, campo, valor) {
+  _prods[i][campo] = campo === 'nombre' ? valor : (+valor || 0);
+  var el = porId('gan-' + i);
+  if (el) el.innerHTML = textoGanancia(ganancia(_prods[i]));
+}
+
+function agregarProducto() {
+  _prods.push({ nombre: '', costo: 0, precio: 0 });
+  porId('lista-prods').innerHTML = _prods.map(filaProductoConfig).join('');
+}
+
+function quitarProducto(i) {
+  _prods.splice(i, 1);
+  porId('lista-prods').innerHTML = _prods.map(filaProductoConfig).join('');
+}
+
 async function guardarProductos() {
-  var lineas = (porId('cfg-productos').value || '').split('\n')
-    .map(function (l) { return l.trim(); }).filter(Boolean);
-  var malas = lineas.filter(function (l) { return l.indexOf('|') === -1; });
-  if (malas.length) { toast('Falta el precio en: ' + malas[0], 'error'); return; }
+  var limpios = _prods.filter(function (p) { return (p.nombre || '').trim(); });
+  if (!limpios.length) { toast('Cargá al menos un producto', 'error'); return; }
+  var sinPrecio = limpios.filter(function (p) { return !(+p.precio); });
+  if (sinPrecio.length) { toast('Falta el precio de venta de ' + sinPrecio[0].nombre, 'error'); return; }
   try {
-    await guardarConfig('productos', lineas.map(function (l) {
-      var p = l.split('|');
-      return p[0].trim() + '|' + (+p[1].trim() || 0);
-    }).join(', '));
+    await guardarProductosConfig(limpios);
+    _prods = null;
     toast('Productos guardados');
     pintarRuta();
   } catch (e) { toast(e.message, 'error'); }
 }
 
-/* ── Agenda de rutas ─────────────────────────────────────────
-   Con 56 hojas que no se repiten semana a semana no hay plan
-   fijo: se anota qué ruta toca cada fecha.
-   ────────────────────────────────────────────────────────── */
+/* ── Calendario de rutas ─────────────────────────────────── */
 function tarjetaRutas() {
-  var agenda = agendaRutas();
-  var proximas = Object.keys(agenda).filter(function (k) { return k >= hoyISO(); }).length;
-
+  var cola = colaRutas();
   return '<details class="tarjeta">' +
-    '<summary class="tarjeta-cab" style="cursor:pointer">' + ic('map', 16) + ' Agenda de rutas' +
+    '<summary class="tarjeta-cab" style="cursor:pointer">' + ic('map', 16) + ' Calendario de rutas' +
       '<span style="margin-left:auto"><span class="pin pin-neutro">' +
-        (proximas ? plural(proximas, 'día') + ' anotado' + (proximas === 1 ? '' : 's') : 'sin anotar') + '</span></span>' +
+        (cola.length ? plural(cola.length, 'ruta') + ' en cola' : 'sin cargar') + '</span></span>' +
     '</summary>' +
     '<div class="tarjeta-cuerpo">' +
       '<div class="campo-ayuda" style="margin-bottom:12px">' +
-        'Anotá qué hoja de ruta hacés cada día. Con los próximos dos o tres alcanza: ' +
-        'el inicio usa el de hoy y el de mañana para avisarte qué preparar.' +
+        'El orden en que vas a recorrer las hojas, una por día hábil. ' +
+        'La app saltea sábados, domingos y feriados sola. Si un día no salís, ' +
+        'todo corre un lugar desde el inicio.' +
       '</div>' +
-      '<div id="agenda-dias">' + filasAgenda() + '</div>' +
+      '<div class="campo"><div class="campo-etiq">Orden de las hojas</div>' +
+        '<textarea class="campo-input" id="cfg-cola" rows="4" style="resize:vertical;font-family:ui-monospace,monospace;font-size:13px" ' +
+          'placeholder="14, 12, 5, 8">' + esc(cola.join(', ')) + '</textarea>' +
+        '<div class="campo-ayuda">Separadas por coma, en el orden en que las hacés.</div>' +
+      '</div>' +
+      '<div class="campo"><div class="campo-etiq">Arranca el</div>' +
+        '<input class="campo-input" type="date" id="cfg-inicio" value="' + esc(inicioCola()) + '"/></div>' +
+      '<button class="btn btn-primario btn-bloque" onclick="guardarColaRutas()">Guardar</button>' +
+      '<div id="preview-cal" style="margin-top:14px"></div>' +
     '</div>' +
   '</details>';
 }
 
-function filasAgenda() {
-  var agenda = agendaRutas();
-  var filas = '';
-  for (var i = 0; i < 10; i++) {
-    var d = sumarDias(i);
-    var iso = isoDe(d);
-    var etiqueta = i === 0 ? 'Hoy' : i === 1 ? 'Mañana' : capitalizar(DIAS[d.getDay()]) + ' ' + d.getDate();
-    filas += '<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">' +
-      '<span style="width:110px;font-size:13px;color:' + (i < 2 ? 'var(--text)' : 'var(--text2)') + ';font-weight:' + (i < 2 ? '600' : '400') + '">' +
-        esc(etiqueta) + '</span>' +
-      '<input class="campo-input" type="number" min="0" style="max-width:110px" placeholder="—" ' +
-             'value="' + esc(agenda[iso] || '') + '" ' +
-             'onchange="guardarDiaAgenda(\'' + iso + '\',this.value)"/>' +
-      '<span class="campo-ayuda" id="ag-' + iso + '"></span>' +
-    '</div>';
-  }
-  return filas;
+function previewCalendario() {
+  var el = porId('preview-cal');
+  if (!el) return;
+  var cal = calendarioRutas(10);
+  if (!cal.length) { el.innerHTML = '<div class="campo-ayuda">Cargá el orden de las hojas para ver el calendario.</div>'; return; }
+  el.innerHTML = '<div class="campo-ayuda" style="margin-bottom:6px">Así quedan los próximos días:</div>' +
+    '<div class="lista">' + cal.map(function (e) {
+      var d = fechaDeIso(e.iso);
+      return '<div class="fila" style="cursor:default;padding:8px 14px">' +
+        '<div class="fila-principal">' +
+          '<div class="fila-titulo">Ruta ' + esc(e.ruta) + '</div>' +
+          '<div class="fila-sub">' + capitalizar(DIAS[d.getDay()]) + ' ' + esc(fechaCorta(e.iso)) + '</div>' +
+        '</div></div>';
+    }).join('') + '</div>';
 }
 
-async function guardarDiaAgenda(iso, ruta) {
+async function guardarColaRutas() {
+  var cola = (porId('cfg-cola').value || '').split(',')
+    .map(function (r) { return r.trim(); }).filter(Boolean);
+  var inicio = porId('cfg-inicio').value || hoyISO();
   try {
-    await anotarRuta(iso, (ruta || '').trim());
-    var clientes = await traerCacheado('clientes');
-    var n = clientesDeRuta(clientes, ruta).length;
-    var el = porId('ag-' + iso);
-    if (el) el.textContent = ruta ? plural(n, 'cliente') : '';
-    toast(ruta ? 'Ruta ' + ruta + ' anotada' : 'Día liberado');
+    await guardarCola(cola, inicio);
+    toast('Calendario guardado');
+    pintarRuta();
+  } catch (e) { toast(e.message, 'error'); }
+}
+
+/* ── Feriados ────────────────────────────────────────────── */
+function tarjetaFeriados() {
+  var deEsteAnio = Object.keys(FERIADOS)
+    .filter(function (f) { return f >= hoyISO(); }).sort().slice(0, 8);
+
+  return '<details class="tarjeta">' +
+    '<summary class="tarjeta-cab" style="cursor:pointer">' + ic('calendar', 16) + ' Feriados' +
+      '<span style="margin-left:auto"><span class="pin pin-neutro">' +
+        Object.keys(FERIADOS).length + ' cargados</span></span>' +
+    '</summary>' +
+    '<div class="tarjeta-cuerpo">' +
+      '<div class="campo-ayuda" style="margin-bottom:12px">' +
+        'Se bajan solos de la API pública de feriados de Argentina y quedan guardados ' +
+        'para funcionar sin internet. Acá podés sumar los tuyos: vacaciones, días que no salís.' +
+      '</div>' +
+      (deEsteAnio.length
+        ? '<div class="campo-ayuda" style="margin-bottom:10px">Próximos: ' +
+          deEsteAnio.map(function (f) { return fechaCorta(f) + ' ' + esc(nombreFeriado(f)); }).join(' · ') + '</div>'
+        : '<div class="campo-ayuda" style="margin-bottom:10px">Todavía no se bajaron los feriados.</div>') +
+      '<div class="campo"><div class="campo-etiq">Días propios</div>' +
+        '<textarea class="campo-input" id="cfg-feriados" rows="3" style="resize:vertical;font-family:ui-monospace,monospace;font-size:13px" ' +
+          'placeholder="2026-12-24, 2026-12-31">' + esc(feriadosManuales().join(', ')) + '</textarea>' +
+        '<div class="campo-ayuda">Formato aaaa-mm-dd, separados por coma.</div>' +
+      '</div>' +
+      '<button class="btn btn-primario btn-bloque" onclick="guardarFeriados()">Guardar</button>' +
+    '</div>' +
+  '</details>';
+}
+
+async function guardarFeriados() {
+  var lista = (porId('cfg-feriados').value || '').split(',')
+    .map(function (f) { return f.trim(); }).filter(Boolean);
+  var malas = lista.filter(function (f) { return !/^\d{4}-\d{2}-\d{2}$/.test(f); });
+  if (malas.length) { toast('Fecha mal escrita: ' + malas[0], 'error'); return; }
+  try {
+    await guardarConfig('feriados_extra', lista.join(', '));
+    aplicarFeriados(JSON.parse(localStorage.getItem('intencional_feriados') || '[]'), lista);
+    toast('Feriados guardados');
+    pintarRuta();
+  } catch (e) { toast(e.message, 'error'); }
+}
+
+
+/* ── Empleado y reparto de gastos ────────────────────────── */
+function tarjetaEmpleado() {
+  var e = empleadoConfig();
+  return '<details class="tarjeta">' +
+    '<summary class="tarjeta-cab" style="cursor:pointer">' + ic('user', 16) + ' Empleado y gastos compartidos' +
+      '<span style="margin-left:auto"><span class="pin pin-neutro">' +
+        (e.sueldo ? plata(e.sueldo) : 'sin cargar') + '</span></span>' +
+    '</summary>' +
+    '<div class="tarjeta-cuerpo">' +
+      '<div class="campo"><div class="campo-etiq">Nombre</div>' +
+        '<input class="campo-input" id="cfg-emp-nombre" value="' + esc(e.nombre) + '" placeholder="Opcional"/></div>' +
+      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">' +
+        '<div class="campo"><div class="campo-etiq">Sueldo</div>' +
+          '<input class="campo-input" id="cfg-emp-sueldo" type="number" min="0" inputmode="decimal" value="' + (e.sueldo || '') + '"/></div>' +
+        '<div class="campo"><div class="campo-etiq">Cada cuánto</div>' +
+          '<select class="campo-input" id="cfg-emp-frec">' +
+            ['semanal', 'quincenal', 'mensual'].map(function (f) {
+              return '<option value="' + f + '"' + (e.frecuencia === f ? ' selected' : '') + '>' + capitalizar(f) + '</option>';
+            }).join('') +
+          '</select></div>' +
+      '</div>' +
+      '<div class="campo-ayuda" style="margin-bottom:14px">' +
+        'Con el sueldo cargado, en Gastos aparece un botón para registrarlo con un toque.' +
+      '</div>' +
+
+      '<div class="campo"><div class="campo-etiq">Gastos compartidos: paga la empresa</div>' +
+        '<div style="display:flex;align-items:center;gap:10px">' +
+          '<input type="range" id="cfg-reparto" min="0" max="100" step="5" value="' + porcentajeEmpresa() + '" ' +
+                 'style="flex:1" oninput="porId(\'cfg-reparto-val\').textContent=this.value+\'%\'"/>' +
+          '<span id="cfg-reparto-val" style="min-width:44px;text-align:right;font-weight:700">' + porcentajeEmpresa() + '%</span>' +
+        '</div>' +
+        '<div class="campo-ayuda">Es el reparto que se propone por defecto en la nafta y el mantenimiento del auto. ' +
+          'En cada gasto se puede cambiar.</div>' +
+      '</div>' +
+
+      '<button class="btn btn-primario btn-bloque" onclick="guardarEmpleado()">Guardar</button>' +
+    '</div>' +
+  '</details>';
+}
+
+async function guardarEmpleado() {
+  try {
+    await guardarConfig('empleado_nombre', (porId('cfg-emp-nombre').value || '').trim());
+    await guardarConfig('empleado_sueldo', +porId('cfg-emp-sueldo').value || 0);
+    await guardarConfig('empleado_frecuencia', porId('cfg-emp-frec').value);
+    await guardarConfig('reparto_empresa', +porId('cfg-reparto').value || 50);
+    toast('Guardado');
+    pintarRuta();
   } catch (e) { toast(e.message, 'error'); }
 }

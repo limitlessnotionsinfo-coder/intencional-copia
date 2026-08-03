@@ -17,6 +17,7 @@ registrarPagina({
 
   async montar(cont) {
     await cargarConfig().catch(function () {});
+    await cargarFeriados().catch(function () {});
     var datos = await Promise.all([
       traerCacheado('remitos'),
       traerCacheado('tareas').catch(function () { return []; }),
@@ -36,6 +37,7 @@ registrarPagina({
     var res = resumirRemitos(visitas);
 
     cont.innerHTML =
+      bloqueRuta(clientes, _pendientes) +
       bloquePendientes() +
 
       '<div class="eyebrow" style="margin-top:18px">' + ic('calendar', 13) + ' Métricas de hoy</div>' +
@@ -56,6 +58,7 @@ registrarPagina({
         atajo('clipboard', 'Remitos hechos', "irA('hechos')", 'violeta') +
         atajo('user', 'Nuevo cliente', 'nuevoCliente()', 'rosa') +
         atajo('wallet', 'Gastos', "irA('gastos')", 'rojo') +
+        atajo('cart', 'Nueva compra', 'nuevaCompraDesdeInicio()', 'neutro') +
         atajo('settings', 'Configuraciones', "irA('configuraciones')", 'neutro') +
       '</div>' +
 
@@ -106,13 +109,26 @@ function bloquePendientes() {
       '</div>' +
       '<div id="pend-cliente-wrap" style="display:none;margin-bottom:12px">' +
         '<div class="campo-etiq">¿De qué cliente es el pedido?</div>' +
-        '<input class="campo-input" id="pend-cliente" list="lista-clientes" placeholder="Nombre del local"/>' +
-        '<datalist id="lista-clientes">' +
-          _clientesInicio.filter(clienteActivo).slice(0, 400).map(function (c) {
-            return '<option value="' + esc(c.local) + '">';
-          }).join('') +
-        '</datalist>' +
-        '<div class="campo-ayuda">Sirve para avisarte cuando su ruta o su zona caiga al día siguiente.</div>' +
+        '<div class="buscador">' +
+          '<span class="ic-lupa">' + ic('search', 15) + '</span>' +
+          '<input class="campo-input" id="pend-cliente" autocomplete="off" ' +
+                 'placeholder="Número, nombre o zona" oninput="buscarClientePendiente(this.value)"/>' +
+        '</div>' +
+        '<div id="pend-cliente-res"></div>' +
+        '<div id="pend-cliente-elegido"></div>' +
+        '<button class="btn btn-fantasma" style="padding:4px 0;font-size:12px;text-decoration:underline" ' +
+                'onclick="abrirClienteNuevo()">Es un cliente que todavía no está cargado</button>' +
+        '<div id="pend-nuevo-wrap" style="display:none">' +
+          '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">' +
+            '<div class="campo" style="margin:0"><div class="campo-etiq">Nombre</div>' +
+              '<input class="campo-input" id="pend-nuevo-nombre" placeholder="Nombre del local"/></div>' +
+            '<div class="campo" style="margin:0"><div class="campo-etiq">Zona</div>' +
+              '<input class="campo-input" id="pend-nuevo-loc" list="zonas-conocidas" placeholder="Localidad"/></div>' +
+          '</div>' +
+          '<datalist id="zonas-conocidas"></datalist>' +
+          '<div class="campo-ayuda">Igual te va a avisar cuando la ruta pase por esa zona.</div>' +
+        '</div>' +
+        '<div class="campo-ayuda">Con esto la app sabe su ruta y su zona, y te avisa cuando toque.</div>' +
       '</div>' +
 
       (abiertos.length
@@ -133,6 +149,8 @@ function filaPendiente(t, hecha) {
     ? _clientesInicio.find(function (c) { return normalizar(c.local) === normalizar(t.cliente_nombre); })
     : null;
   var ruta = cli ? rutaDe(cli) : '';
+  var esNuevo = !!t.cliente_nombre && !cli;
+  var zona = (cli && cli.loc) || t.loc || '';
 
   return '<div class="fila" style="cursor:default;border-left:3px solid ' + (hecha ? 'var(--border)' : d.color) + '">' +
     '<input type="checkbox"' + (hecha ? ' checked' : '') +
@@ -143,6 +161,8 @@ function filaPendiente(t, hecha) {
       (hecha ? '' :
         '<div class="fila-sub"><span class="pin ' + d.clase + '">' + ic(d.icono, 12) + ' ' + esc(d.etiqueta) + '</span>' +
         (t.cliente_nombre ? ' ' + esc(t.cliente_nombre) : '') +
+        (esNuevo ? ' <span class="pin pin-ok">cliente nuevo</span>' : '') +
+        (zona ? ' <span class="pin pin-neutro">' + esc(zona) + '</span>' : '') +
         (ruta ? ' <span class="pin pin-neutro">Ruta ' + esc(ruta) + '</span>' : '') +
         '</div>') +
     '</div>' +
@@ -150,9 +170,72 @@ function filaPendiente(t, hecha) {
   '</div>';
 }
 
+var _clientePedido = null;
+
+/* Los pedidos y los retiros necesitan saber de qué cliente son:
+   con eso la app puede avisarte cuando su zona caiga en la ruta. */
+function necesitaCliente(tipo) { return tipo === 'pedido' || tipo === 'retirar'; }
+
 function alternarClientePendiente() {
   var wrap = porId('pend-cliente-wrap');
-  if (wrap) wrap.style.display = porId('pend-tipo').value === 'pedido' ? '' : 'none';
+  if (wrap) wrap.style.display = necesitaCliente(porId('pend-tipo').value) ? '' : 'none';
+}
+
+function buscarClientePendiente(q) {
+  var cont = porId('pend-cliente-res');
+  if (!cont) return;
+  if (!q || q.length < 2) { cont.innerHTML = ''; return; }
+  var res = _clientesInicio.filter(clienteActivo)
+    .filter(function (c) { return coincideCliente(c, q); }).slice(0, 6);
+
+  cont.innerHTML = res.length
+    ? '<div class="lista" style="margin-top:8px">' + res.map(function (c) {
+        return '<button class="fila" onclick="elegirClientePedido(\'' + esc(c.num) + '\')">' +
+          '<span class="num-cliente">' + esc(c.num_str || c.num) + '</span>' +
+          '<div class="fila-principal">' +
+            '<div class="fila-titulo">' + esc(c.local) + '</div>' +
+            '<div class="fila-sub">' + [c.loc, rutaDe(c) ? 'Ruta ' + rutaDe(c) : ''].filter(Boolean).map(esc).join(' · ') + '</div>' +
+          '</div></button>';
+      }).join('') + '</div>'
+    : '<div class="campo-ayuda" style="margin-top:8px">Ningún cliente coincide con “' + esc(q) + '”.</div>';
+}
+
+function elegirClientePedido(num) {
+  var c = _clientesInicio.find(function (x) { return String(x.num) === String(num); });
+  if (!c) return;
+  _clientePedido = c;
+  porId('pend-cliente').value = '';
+  porId('pend-cliente-res').innerHTML = '';
+  var ruta = rutaDe(c);
+  var cal = calendarioRutas().find(function (e) { return String(e.ruta) === String(ruta); });
+
+  porId('pend-cliente-elegido').innerHTML =
+    '<div class="aviso aviso-ok" style="margin-top:8px">' + ic('check', 15) +
+      '<div><strong>' + esc(c.local) + '</strong>' +
+        (c.loc ? ' · ' + esc(c.loc) : '') +
+        (ruta ? ' · Ruta ' + esc(ruta) : ' · sin hoja de ruta') +
+        (cal ? '<br>Le toca el ' + esc(fechaCorta(cal.iso)) : '') +
+        ' <button class="btn btn-fantasma" style="padding:0 4px;text-decoration:underline" onclick="soltarClientePedido()">cambiar</button>' +
+      '</div>' +
+    '</div>';
+}
+
+function soltarClientePedido() {
+  _clientePedido = null;
+  porId('pend-cliente-elegido').innerHTML = '';
+}
+
+/* Cliente que todavía no está en la base: alcanza con nombre y zona */
+function abrirClienteNuevo() {
+  soltarClientePedido();
+  var wrap = porId('pend-nuevo-wrap');
+  if (!wrap) return;
+  wrap.style.display = wrap.style.display === 'none' ? '' : 'none';
+
+  var zonas = {};
+  _clientesInicio.forEach(function (c) { if (c.loc) zonas[c.loc] = 1; });
+  porId('zonas-conocidas').innerHTML = Object.keys(zonas).sort()
+    .map(function (z) { return '<option value="' + esc(z) + '">'; }).join('');
 }
 
 async function agregarPendiente() {
@@ -160,14 +243,29 @@ async function agregarPendiente() {
   var texto = (inp.value || '').trim();
   if (!texto) { toast('Escribí el pendiente', 'error'); return; }
   var tipo = porId('pend-tipo').value;
-  var cliente = (porId('pend-cliente') || {}).value || '';
+  var nuevoNombre = ((porId('pend-nuevo-nombre') || {}).value || '').trim();
+  var nuevaLoc = ((porId('pend-nuevo-loc') || {}).value || '').trim();
+  var esNuevo = !!nuevoNombre;
+
+  if (necesitaCliente(tipo) && !_clientePedido && !esNuevo) {
+    toast('Elegí el cliente o cargalo como nuevo', 'error');
+    return;
+  }
+  if (esNuevo && !nuevaLoc) {
+    toast('Poné la zona del cliente nuevo', 'error');
+    return;
+  }
+
   try {
     await crear('tareas', {
       texto: texto, hecha: false, tipo: tipo,
-      cliente_nombre: (tipo === 'pedido' && cliente.trim()) ? cliente.trim() : null
+      cliente_nombre: esNuevo ? nuevoNombre : (_clientePedido ? _clientePedido.local : null),
+      loc: esNuevo ? nuevaLoc : (_clientePedido ? _clientePedido.loc : null)
     });
     inp.value = '';
-    if (porId('pend-cliente')) porId('pend-cliente').value = '';
+    _clientePedido = null;
+    if (porId('pend-nuevo-nombre')) porId('pend-nuevo-nombre').value = '';
+    if (porId('pend-nuevo-loc')) porId('pend-nuevo-loc').value = '';
     toast('Pendiente agregado');
     pintarRuta();
   } catch (e) { toast(e.message, 'error'); }
@@ -228,76 +326,159 @@ function filaRemitoHoy(r) {
   '</button>';
 }
 
+/* La compra se carga desde el inicio con el mismo formulario
+   que la sección Compras: una sola implementación. */
+function nuevaCompraDesdeInicio() {
+  if (typeof nuevaCompra === 'function') nuevaCompra();
+  else irA('compras');
+}
+
 function capitalizar(s) { return String(s || '').charAt(0).toUpperCase() + String(s || '').slice(1); }
 
 
 /* ── Hojas de ruta: hoy, mañana y lo que hay que preparar ─── */
 function bloqueRuta(clientes, pendientes) {
+  var cola = colaRutas();
+  if (!cola.length) {
+    return avisoHTML('warn',
+      'Todavía no cargaste el orden de las hojas de ruta. Se arma en ' +
+      '<a href="#/configuraciones">Configuraciones</a>: con eso el inicio te dice qué toca cada día, ' +
+      'salteando fines de semana y feriados.', 'map');
+  }
+
+  var hoyIso = hoyISO();
   var hoy = rutaDelDia();
   var man = rutaDeManana();
   var deHoy = clientesDeRuta(clientes, hoy);
   var deManana = clientesDeRuta(clientes, man.ruta);
   var exhibidores = exhibidoresDeRuta(clientes, man.ruta);
   var avisar = avisosAnticipados(clientes, man.ruta, 1);
-  var pedidosMan = man.ruta ? pedidosParaRuta(pendientes, clientes, man.ruta) : [];
+  var pendMan = man.ruta ? pendientesParaRuta(pendientes, clientes, man.ruta) : [];
+  var proximos = calendarioRutas(6);
 
-  var html = '<div class="eyebrow">' + ic('map', 13) + ' Hojas de ruta</div>' +
-    '<div class="grilla-stats" style="margin-bottom:12px">' +
+  var html = '<div class="eyebrow">' + ic('map', 13) + ' Hojas de ruta</div>';
+
+  /* Hoy no es hábil: se dice y listo */
+  if (!esHabil(hoyIso)) {
+    html += avisoHTML('ok',
+      esFeriado(hoyIso)
+        ? 'Hoy es feriado (' + esc(nombreFeriado(hoyIso)) + '), así que no cuenta como día de ruta.'
+        : 'Fin de semana: las rutas siguen el lunes.', 'calendar');
+  }
+
+  html += '<div class="grilla-stats" style="margin-bottom:12px">' +
       '<div class="stat">' +
         '<div class="stat-etiq">' + ic('truck', 14) + 'Hoy</div>' +
         '<div class="stat-val" style="color:var(--rose)">' + (hoy ? 'Ruta ' + esc(hoy) : '—') + '</div>' +
-        '<div class="stat-sub">' + (hoy ? plural(deHoy.length, 'cliente') : 'sin anotar') + '</div>' +
+        '<div class="stat-sub">' + (hoy ? plural(deHoy.length, 'cliente') : 'sin ruta asignada') + '</div>' +
       '</div>' +
       '<div class="stat">' +
-        '<div class="stat-etiq">' + ic('calendar', 14) + 'Mañana</div>' +
+        '<div class="stat-etiq">' + ic('calendar', 14) + 'Próxima' +
+        '</div>' +
         '<div class="stat-val" style="color:var(--violet)">' + (man.ruta ? 'Ruta ' + esc(man.ruta) : '—') + '</div>' +
-        '<div class="stat-sub">' + capitalizar(DIAS[man.fecha.getDay()]) +
-          (man.ruta ? ' · ' + plural(deManana.length, 'cliente') : ' · sin anotar') + '</div>' +
+        '<div class="stat-sub">' + (man.ruta
+          ? capitalizar(DIAS[man.fecha.getDay()]) + ' · ' + plural(deManana.length, 'cliente')
+          : (proximos[0] ? 'Ruta ' + esc(proximos[0].ruta) + ' el ' + esc(fechaCorta(proximos[0].iso)) : 'sin cola')) + '</div>' +
       '</div>' +
       (man.ruta
-        ? stat('box', 'Exhibidores', String(exhibidores), 'para la ruta de mañana', 'var(--info)')
+        ? stat('box', 'Exhibidores', String(exhibidores), 'para la próxima salida', 'var(--info)')
         : '') +
-    '</div>' +
-
-    /* Anotar la ruta sin salir del inicio */
-    '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:14px">' +
-      '<span class="campo-ayuda">Anotar ruta:</span>' +
-      '<input class="campo-input" id="ruta-hoy" type="number" min="0" style="max-width:92px" ' +
-             'placeholder="hoy" value="' + esc(hoy) + '" onchange="anotarDesdeInicio(\'' + isoDe() + '\',this.value)"/>' +
-      '<input class="campo-input" id="ruta-man" type="number" min="0" style="max-width:110px" ' +
-             'placeholder="mañana" value="' + esc(man.ruta) + '" onchange="anotarDesdeInicio(\'' + man.iso + '\',this.value)"/>' +
     '</div>';
+
+  /* Reorganizar sin salir del inicio */
+  if (hoy) {
+    html += '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">' +
+      '<button class="btn btn-primario" onclick="rutaHecha()">' + ic('check', 15) + ' Ruta ' + esc(hoy) + ' hecha</button>' +
+      '<button class="btn btn-secundario" onclick="rutaNoSalio()">' + ic('clock', 15) + ' Hoy no salí</button>' +
+      '<button class="btn btn-secundario" onclick="abrirAdelantar()">' + ic('shuffle', 15) + ' Adelantar otra</button>' +
+    '</div>';
+  }
+
+  /* Las que vienen */
+  html += '<details class="tarjeta" style="margin-bottom:12px">' +
+    '<summary class="tarjeta-cab" style="cursor:pointer">' + ic('clipboard', 16) + ' Próximas salidas' +
+      '<span style="margin-left:auto"><span class="pin pin-neutro">' + plural(cola.length, 'ruta') + ' en cola</span></span>' +
+    '</summary>' +
+    '<div class="tarjeta-cuerpo" style="padding:0">' +
+      '<div class="lista" style="border:none;border-radius:0">' +
+        proximos.map(function (e) {
+          var d = fechaDeIso(e.iso);
+          var n = clientesDeRuta(clientes, e.ruta).length;
+          return '<div class="fila" style="cursor:default">' +
+            '<div class="fila-principal">' +
+              '<div class="fila-titulo">Ruta ' + esc(e.ruta) + '</div>' +
+              '<div class="fila-sub">' + capitalizar(DIAS[d.getDay()]) + ' ' + esc(fechaCorta(e.iso)) +
+                ' · ' + plural(n, 'cliente') + '</div>' +
+            '</div>' +
+            (e.indice > 0
+              ? '<button class="btn btn-fantasma" style="padding:4px 8px;font-size:11px" ' +
+                'onclick="adelantar(\'' + esc(e.ruta) + '\')">Adelantar</button>'
+              : '') +
+          '</div>';
+        }).join('') +
+      '</div>' +
+    '</div>' +
+  '</details>';
 
   if (avisar.length) {
     html += avisoHTML('warn',
       '<strong>Avisar con anticipación:</strong> ' +
       avisar.map(function (c) { return esc(c.local) + ' (' + plural(+c.avisar_antes, 'día') + ')'; }).join(' · ') +
-      '. Mañana toca su ruta.', 'phone');
+      '. Pronto toca su ruta.', 'phone');
   }
 
-  var enRuta = pedidosMan.filter(function (p) { return p.enRuta; });
-  var enZona = pedidosMan.filter(function (p) { return p.enZona; });
+  var enRuta = pendMan.filter(function (p) { return p.enRuta; });
+  var enZona = pendMan.filter(function (p) { return p.enZona; });
+
+  function describir(p) {
+    var d = tipoPendiente(p.pendiente);
+    return ic(d.icono, 12) + ' ' + esc(p.pendiente.texto) +
+      (p.pendiente.cliente_nombre ? ' — ' + esc(p.pendiente.cliente_nombre) : '') +
+      (p.esNuevo ? ' (cliente nuevo)' : '');
+  }
 
   if (enRuta.length) {
     html += avisoHTML('ok',
-      '<strong>' + plural(enRuta.length, 'pedido') + ' para llevar mañana:</strong> ' +
-      enRuta.map(function (p) { return esc(p.pedido.texto); }).join(' · '), 'bag');
+      '<strong>Para la próxima salida:</strong><br>' +
+      enRuta.map(describir).join('<br>'), 'bag');
   }
 
   if (enZona.length) {
     html += avisoHTML('warn',
-      '<strong>Están en la zona de mañana</strong> pero son de otra ruta: ' +
-      enZona.map(function (p) {
-        return esc(p.pedido.texto) + ' (' + esc(p.loc) + ')';
-      }).join(' · ') + '. Fijate si conviene llevarlos igual.', 'map');
+      '<strong>Caen en la zona de la próxima salida</strong> pero son de otra ruta:<br>' +
+      enZona.map(function (p) { return describir(p) + ' (' + esc(p.loc) + ')'; }).join('<br>') +
+      '<br>Fijate si conviene pasar igual.', 'map');
   }
 
   return html;
 }
 
-async function anotarDesdeInicio(iso, ruta) {
+/* ── Reorganizar la cola ─────────────────────────────────── */
+async function aplicarCola(nueva, mensaje) {
   try {
-    await anotarRuta(iso, (ruta || '').trim());
+    await guardarCola(nueva.cola, nueva.inicio);
+    toast(mensaje);
     pintarRuta();
   } catch (e) { toast(e.message, 'error'); }
+}
+
+function rutaHecha()   { aplicarCola(colaAvanzada(), 'Ruta marcada como hecha'); }
+function rutaNoSalio() { aplicarCola(colaAtrasada(), 'Todo corrió un día hábil'); }
+function adelantar(r)  { aplicarCola(colaConAdelanto(r), 'Ruta ' + r + ' pasa a ser la próxima'); }
+
+function abrirAdelantar() {
+  var cola = colaRutas();
+  abrirModal('Adelantar una hoja de ruta',
+    '<div class="campo-ayuda" style="margin-bottom:12px">' +
+      'La que elijas pasa a ser la próxima y el resto se corre un lugar hacia atrás.</div>' +
+    '<div class="lista">' +
+      cola.slice(1, 25).map(function (r) {
+        var n = clientesDeRuta(_clientesInicio, r).length;
+        return '<button class="fila" onclick="cerrarModal();adelantar(\'' + esc(r) + '\')">' +
+          '<div class="fila-principal">' +
+            '<div class="fila-titulo">Ruta ' + esc(r) + '</div>' +
+            '<div class="fila-sub">' + plural(n, 'cliente') + '</div>' +
+          '</div></button>';
+      }).join('') +
+    '</div>');
 }
