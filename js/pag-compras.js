@@ -20,10 +20,11 @@ registrarPagina({
     _compras = (await traerCacheado('compras')).slice().reverse();
     if (!_mesCompra) _mesCompra = claveMes(hoyTexto());
     cont.innerHTML =
+      '<button class="btn btn-primario btn-bloque" style="margin-bottom:14px" onclick="nuevaCompra()">' +
+        ic('plus', 16) + ' Nuevo pedido</button>' +
       '<div style="display:flex;gap:8px;align-items:center;margin-bottom:14px;flex-wrap:wrap">' +
         selectorMes('_mesCompra', _compras, 'pintarCompras') +
-        '<button class="btn btn-primario" style="margin-left:auto" onclick="nuevaCompra()">' +
-          ic('plus', 15) + ' Nuevo pedido</button>' +
+        '<span class="campo-ayuda" style="margin-left:auto">Tocá un pedido para verlo, editarlo o borrarlo</span>' +
       '</div>' +
       '<div id="cont-compras"></div>';
     pintarCompras();
@@ -56,7 +57,10 @@ function pintarCompras() {
                 plural(+c.total_unidades || 0, 'unidad', 'unidades') +
                 (c.notas ? '<br>' + esc(c.notas) : '') + '</div>' +
             '</div>' +
-            '<div class="fila-derecha"><div class="fila-titulo">' + plata(costoCompra(c)) + '</div></div>' +
+            '<div class="fila-derecha">' +
+              '<div class="fila-titulo">' + plata(costoCompra(c)) + '</div>' +
+              '<div class="campo-ayuda">ver detalle →</div>' +
+            '</div>' +
           '</button>';
         }).join('') + '</div>'
       : vacio('cart', 'Sin pedidos este mes', 'Cargá uno y lo podés mandar por WhatsApp.'));

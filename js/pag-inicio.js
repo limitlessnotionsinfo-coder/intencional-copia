@@ -58,7 +58,7 @@ registrarPagina({
         atajo('clipboard', 'Remitos hechos', "irA('hechos')", 'violeta') +
         atajo('user', 'Nuevo cliente', 'nuevoCliente()', 'rosa') +
         atajo('wallet', 'Gastos', "irA('gastos')", 'rojo') +
-        atajo('cart', 'Nueva compra', 'nuevaCompraDesdeInicio()', 'neutro') +
+        atajo('cart', 'Compras', "irA('compras')", 'neutro') +
         atajo('settings', 'Configuraciones', "irA('configuraciones')", 'neutro') +
       '</div>' +
 
@@ -324,13 +324,6 @@ function filaRemitoHoy(r) {
       (cerrado ? '' : '<div style="margin-top:4px">' + pagoHTML(r) + '</div>') +
     '</div>' +
   '</button>';
-}
-
-/* La compra se carga desde el inicio con el mismo formulario
-   que la sección Compras: una sola implementación. */
-function nuevaCompraDesdeInicio() {
-  if (typeof nuevaCompra === 'function') nuevaCompra();
-  else irA('compras');
 }
 
 function capitalizar(s) { return String(s || '').charAt(0).toUpperCase() + String(s || '').slice(1); }

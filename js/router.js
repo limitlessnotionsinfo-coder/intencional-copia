@@ -60,54 +60,6 @@ function marcarMenu(id) {
     if (b.dataset.pagina === id) b.setAttribute('aria-current', 'page');
     else b.removeAttribute('aria-current');
   });
-  /* Si la pantalla activa vive dentro de "Más", se marca ese botón */
-  var mas = porId('tab-mas');
-  if (mas) {
-    if (TABS_INFERIORES.indexOf(id) === -1) mas.setAttribute('aria-current', 'page');
-    else mas.removeAttribute('aria-current');
-  }
-}
-
-/* En el celular no hay menú lateral: la barra inferior es toda la
-   navegación. Las cuatro pantallas de todos los días van fijas y
-   el resto entra en "Más", para que nada quede sin acceso. */
-var TABS_INFERIORES = ['inicio', 'remito', 'hechos', 'clientes'];
-
-function construirBarraInferior() {
-  var cont = porId('barra-inferior');
-  if (!cont) return;
-
-  var tabs = TABS_INFERIORES.map(function (id) {
-    var p = PAGINAS[id];
-    if (!p) return '';
-    return '<button class="tab-inferior" data-pagina="' + id + '" onclick="irA(\'' + id + '\')">' +
-      ic(p.icono, 20) + '<span>' + esc(p.menu) + '</span></button>';
-  }).join('');
-
-  cont.innerHTML = tabs +
-    '<button class="tab-inferior" id="tab-mas" onclick="abrirMas()">' +
-      ic('menu', 20) + '<span>Más</span></button>';
-}
-
-/* Las secciones que no entran en la barra */
-function paginasRestantes() {
-  return Object.keys(PAGINAS)
-    .filter(function (id) { return PAGINAS[id].menu && TABS_INFERIORES.indexOf(id) === -1; })
-    .map(function (id) { return PAGINAS[id]; });
-}
-
-function abrirMas() {
-  abrirModal('Más secciones',
-    '<div class="lista">' +
-      paginasRestantes().map(function (p) {
-        return '<button class="fila" onclick="cerrarModal();irA(\'' + p.id + '\')">' +
-          '<span class="nav-ic">' + ic(p.icono, 18) + '</span>' +
-          '<div class="fila-principal">' +
-            '<div class="fila-titulo">' + esc(p.menu) + '</div>' +
-            (p.subtitulo ? '<div class="fila-sub">' + esc(p.subtitulo) + '</div>' : '') +
-          '</div></button>';
-      }).join('') +
-    '</div>');
 }
 
 function construirMenu() {
@@ -127,6 +79,21 @@ function construirMenu() {
     });
   });
   porId('nav').innerHTML = html;
+}
+
+/* En el celular no hay menú lateral: estas cinco quedan siempre
+   a un toque. Al resto se llega por los atajos del inicio. */
+var TABS_INFERIORES = ['inicio', 'remito', 'hechos', 'clientes', 'metricas'];
+
+function construirBarraInferior() {
+  var cont = porId('barra-inferior');
+  if (!cont) return;
+  cont.innerHTML = TABS_INFERIORES.map(function (id) {
+    var p = PAGINAS[id];
+    if (!p) return '';
+    return '<button class="tab-inferior" data-pagina="' + id + '" onclick="irA(\'' + id + '\')">' +
+      ic(p.icono, 20) + '<span>' + esc(p.menu) + '</span></button>';
+  }).join('');
 }
 
 window.addEventListener('hashchange', pintarRuta);
