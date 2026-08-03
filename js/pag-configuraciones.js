@@ -462,16 +462,33 @@ async function guardarFeriados() {
 function tarjetaEmpleado() {
   var e = empleadoConfig();
   return '<details class="tarjeta">' +
-    '<summary class="tarjeta-cab" style="cursor:pointer">' + ic('user', 16) + ' Empleado y gastos compartidos' +
+    '<summary class="tarjeta-cab" style="cursor:pointer">' + ic('user', 16) + ' Dueños, empleado y gastos compartidos' +
       '<span style="margin-left:auto"><span class="pin pin-neutro">' +
         (e.sueldo ? plata(e.sueldo) : 'sin cargar') + '</span></span>' +
     '</summary>' +
     '<div class="tarjeta-cuerpo">' +
-      '<div class="campo"><div class="campo-etiq">Nombre</div>' +
+      '<div class="campo"><div class="campo-etiq">Dueños</div>' +
+        '<input class="campo-input" id="cfg-socios" value="' + esc(socios().join(', ')) + '" placeholder="Franco, Augusto"/>' +
+        '<div class="campo-ayuda">Separados por coma. Son las opciones de “quién puso la plata”.</div></div>' +
+      '<div class="campo"><div class="campo-etiq">Sueldo de cada dueño</div>' +
+        '<input class="campo-input" id="cfg-sueldos-socios" placeholder="Franco|400000, Augusto|400000" ' +
+               'value="' + esc(Object.keys(sueldosSocios()).map(function (k) { return k + '|' + sueldosSocios()[k]; }).join(', ')) + '"/>' +
+        '<div class="campo-ayuda">Cada uno tiene su botón rápido en Gastos.</div></div>' +
+      '<div class="campo"><div class="campo-etiq">Monto del botón “Deuda”</div>' +
+        inputMonto('cfg-deuda', +leerConfig('monto_deuda', 0) || 0) +
+        '<div class="campo-ayuda">Al usarlo se puede cambiar.</div></div>' +
+      '<div class="campo"><div class="campo-etiq">Devolución de esmaltes</div>' +
+        '<div style="display:flex;align-items:center;gap:10px">' +
+          '<input type="range" id="cfg-devolucion" min="0" max="50" step="5" value="' + (+leerConfig('devolucion_pct', 30) || 30) + '" ' +
+                 'style="flex:1" oninput="porId(\'cfg-dev-val\').textContent=this.value+\'%\'"/>' +
+          '<span id="cfg-dev-val" style="min-width:44px;text-align:right;font-weight:700">' + (+leerConfig('devolucion_pct', 30) || 30) + '%</span>' +
+        '</div>' +
+        '<div class="campo-ayuda">Cuánto del pedido de esmaltes se puede devolver.</div></div>' +
+      '<div class="campo"><div class="campo-etiq">Nombre del empleado</div>' +
         '<input class="campo-input" id="cfg-emp-nombre" value="' + esc(e.nombre) + '" placeholder="Opcional"/></div>' +
       '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">' +
-        '<div class="campo"><div class="campo-etiq">Sueldo</div>' +
-          '<input class="campo-input" id="cfg-emp-sueldo" type="number" min="0" inputmode="decimal" value="' + (e.sueldo || '') + '"/></div>' +
+        '<div class="campo"><div class="campo-etiq">Sueldo del empleado</div>' +
+          inputMonto('cfg-emp-sueldo', e.sueldo) + '</div>' +
         '<div class="campo"><div class="campo-etiq">Cada cuánto</div>' +
           '<select class="campo-input" id="cfg-emp-frec">' +
             ['semanal', 'quincenal', 'mensual'].map(function (f) {
@@ -500,8 +517,12 @@ function tarjetaEmpleado() {
 
 async function guardarEmpleado() {
   try {
+    await guardarConfig('socios', (porId('cfg-socios').value || '').trim() || 'Franco, Augusto');
+    await guardarConfig('sueldos_socios', (porId('cfg-sueldos-socios').value || '').trim());
+    await guardarConfig('monto_deuda', leerMonto('cfg-deuda'));
+    await guardarConfig('devolucion_pct', +porId('cfg-devolucion').value || 30);
     await guardarConfig('empleado_nombre', (porId('cfg-emp-nombre').value || '').trim());
-    await guardarConfig('empleado_sueldo', +porId('cfg-emp-sueldo').value || 0);
+    await guardarConfig('empleado_sueldo', leerMonto('cfg-emp-sueldo'));
     await guardarConfig('empleado_frecuencia', porId('cfg-emp-frec').value);
     await guardarConfig('reparto_empresa', +porId('cfg-reparto').value || 50);
     toast('Guardado');

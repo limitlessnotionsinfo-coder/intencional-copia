@@ -19,23 +19,91 @@ registrarPagina({
     _gastos = (await traerCacheado('gastos')).slice().reverse();
 
     cont.innerHTML =
-      '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px" id="g-chips"></div>' +
-      '<div id="g-rango"></div>' +
-      '<div id="g-categorias" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px"></div>' +
+      '<details class="tarjeta" id="det-filtros-gastos">' +
+        '<summary class="tarjeta-cab" style="cursor:pointer">' + ic('shuffle', 16) + ' Filtros' +
+          '<span style="margin-left:auto" id="g-chip-filtro"></span>' +
+        '</summary>' +
+        '<div class="tarjeta-cuerpo">' +
+          '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px" id="g-chips"></div>' +
+          '<div id="g-rango"></div>' +
+          '<div id="g-categorias" style="display:flex;gap:6px;flex-wrap:wrap"></div>' +
+        '</div>' +
+      '</details>' +
       '<div id="g-balance"></div>' +
       '<div id="g-resumen"></div>' +
-      '<div style="display:flex;gap:8px;flex-wrap:wrap;margin:14px 0">' +
-        '<button class="btn btn-primario" style="flex:1;min-width:180px" onclick="nuevoGasto()">' +
-          ic('plus', 15) + ' Cargar gasto</button>' +
-        (empleadoConfig().sueldo
-          ? '<button class="btn btn-secundario" onclick="pagarSueldo()">' + ic('user', 15) + ' Pagar sueldo</button>'
-          : '') +
-      '</div>' +
+      '<div class="atajos" style="margin:14px 0">' + botonesRapidos() + '</div>' +
       '<div id="g-lista"></div>';
 
     pintarGastos();
   }
 });
+
+/* ── Botones rápidos ─────────────────────────────────────────
+   Los gastos que se repiten siempre iguales: un toque y queda
+   el formulario prellenado, listo para ajustar el monto.
+   ────────────────────────────────────────────────────────── */
+function botonesRapidos() {
+  var e = empleadoConfig();
+  var sueldos = sueldosSocios();
+  var deuda = +leerConfig('monto_deuda', 0) || 0;
+
+  var botones = [
+    '<button class="atajo atajo-grad" onclick="nuevoGasto()">' + ic('plus', 17) + '<span>Cargar gasto</span></button>',
+    '<button class="atajo atajo-neutro" onclick="gastoNafta()">' + ic('fuel', 17) + '<span>Nafta Etios</span></button>'
+  ];
+
+  if (e.sueldo) {
+    botones.push('<button class="atajo atajo-neutro" onclick="pagarSueldo()">' + ic('user', 17) +
+      '<span>Sueldo' + (e.nombre ? ' ' + esc(e.nombre) : ' empleado') + '</span></button>');
+  }
+
+  socios().forEach(function (s2) {
+    botones.push('<button class="atajo atajo-neutro" onclick="sueldoSocio(\'' + esc(s2).replace(/'/g, "\\'") + '\')">' +
+      ic('wallet', 17) + '<span>Sueldo ' + esc(s2) + '</span></button>');
+  });
+
+  botones.push('<button class="atajo atajo-rojo" onclick="gastoDeuda()">' + ic('clock', 17) +
+    '<span>Deuda' + (deuda ? ' · ' + plata(deuda) : '') + '</span></button>');
+
+  return botones.join('');
+}
+
+function gastoNafta() {
+  nuevoGasto({ descripcion: 'Nafta Etios', categoria: 'combustible', compartir: true });
+}
+
+/* El sueldo del empleado lo ponen los dos dueños */
+function pagarSueldo() {
+  var e = empleadoConfig();
+  nuevoGasto({
+    descripcion: 'Sueldo' + (e.nombre ? ' de ' + e.nombre : ''),
+    monto: e.sueldo,
+    categoria: 'empleado',
+    compartir: true,
+    entreSocios: true,
+    pagadoPor: socios()[0] || 'empresa'
+  });
+}
+
+function sueldoSocio(nombre) {
+  nuevoGasto({
+    descripcion: 'Sueldo ' + nombre,
+    monto: sueldosSocios()[nombre] || 0,
+    categoria: 'empleado',
+    compartir: false,
+    pagadoPor: 'empresa'
+  });
+}
+
+function gastoDeuda() {
+  nuevoGasto({
+    descripcion: 'Pago de deuda',
+    monto: +leerConfig('monto_deuda', 0) || 0,
+    categoria: 'otro',
+    compartir: false,
+    pagadoPor: 'empresa'
+  });
+}
 
 /* ── Período ─────────────────────────────────────────────── */
 function rangoGastos() {
@@ -93,25 +161,35 @@ function pintarGastos() {
   var total = lista.reduce(function (s, g) { return s + (+g.monto || 0); }, 0);
   var r = rangoGastos();
 
-  /* Balance: qué te tiene que devolver la empresa */
-  var b = balanceGastos(lista);
-  porId('g-balance').innerHTML = b.items.length
-    ? '<div class="tarjeta" style="border-color:' + (b.neto >= 0 ? 'var(--ok-border)' : 'var(--warn-border)') + '">' +
-        '<div class="tarjeta-cuerpo">' +
-          '<div class="campo-etiq" style="margin:0">Al cerrar ' + esc(r.etiqueta.toLowerCase()) + '</div>' +
-          '<div class="stat-val" style="font-size:24px;margin:4px 0;color:' +
-            (b.neto >= 0 ? 'var(--ok)' : 'var(--warn)') + '">' + plata(Math.abs(b.neto)) + '</div>' +
-          '<div class="campo-ayuda">' +
-            (b.neto > 0 ? 'Te los tiene que devolver la empresa'
-             : b.neto < 0 ? 'Se los tenés que devolver a la empresa'
-             : 'Están a mano') +
-            (b.aCobrar && b.aDevolver
-              ? ' · pusiste ' + plata(b.aCobrar) + ', te cubrieron ' + plata(b.aDevolver)
-              : '') +
-          '</div>' +
-        '</div>' +
-      '</div>'
+  /* Balance: cuánto le corresponde a cada uno al cerrar */
+  var balances = balancesTodos(lista);
+  porId('g-balance').innerHTML = balances.length
+    ? '<div class="tarjeta"><div class="tarjeta-cuerpo">' +
+        '<div class="campo-etiq" style="margin-bottom:8px">Al cerrar ' + esc(r.etiqueta.toLowerCase()) + '</div>' +
+        balances.map(function (x) {
+          var b = x.balance;
+          return '<div style="display:flex;justify-content:space-between;align-items:baseline;padding:5px 0">' +
+            '<div>' +
+              '<strong>' + esc(x.quien) + '</strong>' +
+              '<div class="campo-ayuda">' +
+                (b.neto > 0 ? 'puso de más' : b.neto < 0 ? 'le cubrieron de más' : 'está a mano') +
+                (b.aCobrar && b.aDevolver ? ' · puso ' + plata(b.aCobrar) + ', le tocaba ' + plata(b.aDevolver) : '') +
+              '</div>' +
+            '</div>' +
+            '<span style="font-weight:700;font-size:17px;color:' +
+              (b.neto > 0 ? 'var(--ok)' : b.neto < 0 ? 'var(--warn)' : 'var(--muted)') + '">' +
+              (b.neto > 0 ? '+' : '') + plata(b.neto) + '</span>' +
+          '</div>';
+        }).join('') +
+        '<div class="campo-ayuda" style="margin-top:8px">Positivo: hay que devolverle. Negativo: tiene que poner.</div>' +
+      '</div></div>'
     : '';
+
+  var chipF = porId('g-chip-filtro');
+  if (chipF) {
+    chipF.innerHTML = '<span class="pin pin-neutro">' + esc(r.etiqueta) +
+      (G.categoria ? ' · ' + esc(categoriaGasto(G.categoria).etiqueta) : '') + '</span>';
+  }
 
   var porCat = {};
   lista.forEach(function (g) {
@@ -138,7 +216,7 @@ function pintarGastos() {
 function filaGasto(g) {
   var cat = categoriaGasto(g.categoria);
   var partes = partesGasto(g).filter(function (p) { return +p.monto > 0; });
-  var saldo = saldoDeGasto(g);
+  var saldo = g.pagado_por && g.pagado_por !== 'empresa' ? saldoDeGasto(g, g.pagado_por) : 0;
 
   return '<div class="fila" style="cursor:default;align-items:flex-start">' +
     '<div class="fila-principal">' +
@@ -152,9 +230,10 @@ function filaGasto(g) {
           : '') +
         (g.notas ? '<br>' + esc(g.notas) : '') +
       '</div>' +
-      (saldo
-        ? '<div style="margin-top:4px"><span class="pin ' + (saldo > 0 ? 'pin-ok' : 'pin-warn') + '">' +
-          (saldo > 0 ? 'te deben ' : 'debés ') + plata(Math.abs(saldo)) + '</span></div>'
+      (g.pagado_por
+        ? '<div style="margin-top:4px"><span class="pin pin-neutro">puso ' + esc(g.pagado_por === 'empresa' ? 'la empresa' : g.pagado_por) + '</span>' +
+          (saldo > 0 ? ' <span class="pin pin-ok">le deben ' + plata(saldo) + '</span>' : '') +
+          '</div>'
         : '') +
     '</div>' +
     '<div class="fila-derecha">' +
@@ -186,7 +265,9 @@ function nuevoGasto(prellenado) {
   NG = Object.assign({
     descripcion: '', monto: 0, categoria: 'combustible', fecha: hoyTexto(), notas: '',
     medio1: 'efectivo', alias1: '', medio2: '', monto2: 0, alias2: '',
-    pagadoPor: 'empresa', porcentaje: porcentajeEmpresa(), compartir: false
+    pagadoPor: 'empresa', porcentaje: porcentajeEmpresa(),
+    compartir: false,      // se reparte entre la empresa y quien lo pagó
+    entreSocios: false     // se reparte entre los dueños, sin la empresa
   }, prellenado || {});
 
   abrirModal('Cargar gasto', cuerpoGasto(),
@@ -212,8 +293,7 @@ function cuerpoGasto() {
 
     '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">' +
       '<div class="campo"><div class="campo-etiq">Monto total</div>' +
-        '<input class="campo-input" id="ng-monto" type="number" min="0" inputmode="decimal" ' +
-               'value="' + (NG.monto || '') + '" oninput="NG.monto=+this.value||0;refrescarGasto()"/></div>' +
+        inputMonto('ng-monto', NG.monto, 'NG.monto=leerMonto(this);refrescarReparto()') + '</div>' +
       '<div class="campo"><div class="campo-etiq">Fecha</div>' +
         '<input class="campo-input" id="ng-fecha" value="' + esc(NG.fecha) + '" oninput="NG.fecha=this.value"/></div>' +
     '</div>' +
@@ -230,8 +310,7 @@ function cuerpoGasto() {
         botonesMedio(2) +
         (NG.medio2
           ? '<div class="campo" style="margin-top:8px"><div class="campo-etiq">Monto del segundo medio</div>' +
-            '<input class="campo-input" type="number" min="0" inputmode="decimal" value="' + (NG.monto2 || '') + '" ' +
-                   'oninput="NG.monto2=+this.value||0;refrescarGasto()"/>' +
+            inputMonto('ng-monto2', NG.monto2, 'NG.monto2=leerMonto(this);refrescarReparto()') +
             '<div class="campo-ayuda">Con el primero quedan ' + plata(Math.max(0, (+NG.monto || 0) - (+NG.monto2 || 0))) + '.</div>' +
             '</div>' + aliasGasto(2)
           : '') +
@@ -241,40 +320,106 @@ function cuerpoGasto() {
     /* ── Quién puso la plata ── */
     '<div class="campo-etiq">¿Quién puso la plata?</div>' +
     '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">' +
-      Object.keys(QUIEN_PAGA).map(function (k) {
-        return '<button class="btn ' + (NG.pagadoPor === k ? 'btn-primario' : 'btn-secundario') + '" ' +
-          'onclick="setPagadoPor(\'' + k + '\')">' + esc(QUIEN_PAGA[k]) + '</button>';
+      quienesPagan().map(function (q) {
+        return '<button class="btn ' + (NG.pagadoPor === q.id ? 'btn-primario' : 'btn-secundario') + '" ' +
+          'onclick="setPagadoPor(\'' + esc(q.id).replace(/'/g, "\\'") + '\')">' + esc(q.etiqueta) + '</button>';
       }).join('') +
     '</div>' +
 
     /* ── Reparto ── */
-    '<label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;margin-bottom:8px">' +
-      '<input type="checkbox" id="ng-compartir"' + (NG.compartir ? ' checked' : '') + ' onchange="setCompartir(this.checked)"/> ' +
-      'Se reparte entre la empresa y vos' +
-      (cat.compartido && !NG.compartir ? ' <span class="pin pin-warn">suele repartirse</span>' : '') +
-    '</label>' +
+    '<div class="campo-etiq">¿Cómo se reparte el costo?</div>' +
+    '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">' +
+      [['solo', 'Lo cubre entero quien lo pagó'],
+       ['empresa', 'Entre la empresa y ' + esc(NG.pagadoPor === 'empresa' ? 'un socio' : NG.pagadoPor)],
+       ['socios', 'Entre los dueños']].map(function (o) {
+        var activo = (o[0] === 'solo' && !NG.compartir && !NG.entreSocios) ||
+                     (o[0] === 'empresa' && NG.compartir && !NG.entreSocios) ||
+                     (o[0] === 'socios' && NG.entreSocios);
+        return '<button class="btn ' + (activo ? 'btn-primario' : 'btn-secundario') + '" ' +
+          'style="padding:6px 12px;font-size:12px" onclick="setModoReparto(\'' + o[0] + '\')">' + o[1] + '</button>';
+      }).join('') +
+      (cat.compartido && !NG.compartir && !NG.entreSocios ? ' <span class="pin pin-warn">suele repartirse</span>' : '') +
+    '</div>' +
 
-    (NG.compartir
+    (NG.compartir && !NG.entreSocios
       ? '<div class="campo"><div class="campo-etiq">Paga la empresa</div>' +
           '<div style="display:flex;align-items:center;gap:10px">' +
             '<input type="range" min="0" max="100" step="5" value="' + rep.porcentaje + '" ' +
-                   'style="flex:1" oninput="NG.porcentaje=+this.value;refrescarGasto()"/>' +
-            '<span style="min-width:44px;text-align:right;font-weight:700">' + rep.porcentaje + '%</span>' +
+                   'style="flex:1" oninput="NG.porcentaje=+this.value;refrescarReparto()"/>' +
+            '<span style="min-width:44px;text-align:right;font-weight:700" id="ng-pct">' + rep.porcentaje + '%</span>' +
           '</div>' +
-        '</div>' +
-        '<div class="aviso aviso-ok">' + ic('scale', 15) +
-          '<div>Empresa <strong>' + plata(rep.empresa) + '</strong> · vos <strong>' + plata(rep.personal) + '</strong>' +
-          '<br>' + esc(textoSaldo(rep)) + '</div>' +
         '</div>'
       : '') +
+
+    '<div id="ng-reparto">' + bloqueReparto() + '</div>' +
 
     '<div class="campo" style="margin:0"><div class="campo-etiq">Nota (opcional)</div>' +
       '<input class="campo-input" id="ng-notas" value="' + esc(NG.notas) + '" oninput="NG.notas=this.value"/></div>';
 }
 
-function textoSaldo(rep) {
-  if (NG.pagadoPor === 'personal') return 'Como lo pusiste vos, la empresa te debe ' + plata(rep.empresa) + '.';
-  return 'Como lo puso la empresa, le debés ' + plata(rep.personal) + '.';
+/* Cómo queda repartido el gasto, en plata */
+function repartoActual() {
+  var total = +NG.monto || 0;
+  var r = {};
+
+  if (NG.entreSocios) {
+    var lista = socios();
+    var cada = Math.floor(total / (lista.length || 1));
+    lista.forEach(function (s2, i) {
+      r[s2] = i === lista.length - 1 ? total - cada * (lista.length - 1) : cada;
+    });
+    return r;
+  }
+
+  if (NG.compartir) {
+    var rep = repartirGasto(total, NG.porcentaje);
+    r.empresa = rep.empresa;
+    r[NG.pagadoPor === 'empresa' ? (socios()[0] || 'Socio') : NG.pagadoPor] = rep.personal;
+    return r;
+  }
+
+  r[NG.pagadoPor] = total;
+  return r;
+}
+
+function bloqueReparto() {
+  var r = repartoActual();
+  var claves = Object.keys(r).filter(function (k) { return r[k]; });
+  if (claves.length < 2) return '';
+
+  var puso = NG.pagadoPor;
+  var deben = claves.filter(function (k) { return k !== puso; })
+    .map(function (k) { return esc(k === 'empresa' ? 'la empresa' : k) + ' ' + plata(r[k]); });
+
+  return '<div class="aviso aviso-ok">' + ic('scale', 15) +
+    '<div>' + claves.map(function (k) {
+      return '<strong>' + esc(k === 'empresa' ? 'Empresa' : k) + '</strong> ' + plata(r[k]);
+    }).join(' · ') +
+    (deben.length && puso
+      ? '<br>Lo puso ' + esc(puso === 'empresa' ? 'la empresa' : puso) + ', así que le deben: ' + deben.join(' · ')
+      : '') +
+    '</div></div>';
+}
+
+/* Refresca solo la parte del reparto: así no se pierde el foco
+   ni el cursor mientras se escribe el monto. */
+function refrescarReparto() {
+  var el = porId('ng-reparto');
+  if (el) el.innerHTML = bloqueReparto();
+  var pct = porId('ng-pct');
+  if (pct) pct.textContent = repartirGasto(NG.monto, NG.porcentaje).porcentaje + '%';
+  var resto = document.querySelector('#ng-monto2');
+  if (resto) {
+    var ayuda = resto.parentNode.querySelector('.campo-ayuda');
+    if (ayuda) ayuda.textContent = 'Con el primero quedan ' +
+      plata(Math.max(0, (+NG.monto || 0) - (+NG.monto2 || 0))) + '.';
+  }
+}
+
+function setModoReparto(modo) {
+  NG.compartir = modo === 'empresa';
+  NG.entreSocios = modo === 'socios';
+  refrescarGasto();
 }
 
 function botonesMedio(cual) {
@@ -332,7 +477,7 @@ function setMedioGasto(cual, t) {
 }
 function setAliasGasto(cual, a) { if (cual === 1) NG.alias1 = a; else NG.alias2 = a; refrescarGasto(); }
 function setPagadoPor(k) { NG.pagadoPor = k; refrescarGasto(); }
-function setCompartir(v) { NG.compartir = v; refrescarGasto(); }
+
 
 async function guardarGasto() {
   if (!NG.descripcion.trim()) { toast('Escribí de qué es el gasto', 'error'); return; }
@@ -343,7 +488,7 @@ async function guardarGasto() {
   var partes = [{ tipo: NG.medio1, monto: NG.medio2 && m2 > 0 ? total - m2 : total, alias: NG.alias1 || null }];
   if (NG.medio2 && m2 > 0) partes.push({ tipo: NG.medio2, monto: m2, alias: NG.alias2 || null });
 
-  var rep = NG.compartir ? repartirGasto(total, NG.porcentaje) : { empresa: total, personal: 0 };
+  var reparto = repartoActual();
 
   try {
     await crear('gastos', {
@@ -354,8 +499,9 @@ async function guardarGasto() {
       notas: NG.notas.trim() || null,
       pagos_detalle: JSON.stringify(partes),
       pagado_por: NG.pagadoPor,
-      parte_empresa: rep.empresa,
-      parte_personal: rep.personal,
+      reparto: JSON.stringify(reparto),
+      parte_empresa: +reparto.empresa || 0,
+      parte_personal: total - (+reparto.empresa || 0),
       created_at: new Date().toISOString()
     });
     cerrarModal();
@@ -365,14 +511,4 @@ async function guardarGasto() {
   } catch (e) { toast(e.message, 'error'); }
 }
 
-/* ── Sueldo del empleado ─────────────────────────────────── */
-function pagarSueldo() {
-  var e = empleadoConfig();
-  nuevoGasto({
-    descripcion: 'Sueldo' + (e.nombre ? ' de ' + e.nombre : ''),
-    monto: e.sueldo,
-    categoria: 'empleado',
-    compartir: false,
-    pagadoPor: 'empresa'
-  });
-}
+

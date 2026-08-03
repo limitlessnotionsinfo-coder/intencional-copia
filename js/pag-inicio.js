@@ -339,12 +339,7 @@ function capitalizar(s) { return String(s || '').charAt(0).toUpperCase() + Strin
 /* ── Hojas de ruta: hoy, mañana y lo que hay que preparar ─── */
 function bloqueRuta(clientes, pendientes) {
   var cola = colaRutas();
-  if (!cola.length) {
-    return avisoHTML('warn',
-      'Todavía no cargaste el orden de las hojas de ruta. Se arma en ' +
-      '<a href="#/configuraciones">Configuraciones</a>: con eso el inicio te dice qué toca cada día, ' +
-      'salteando fines de semana y feriados.', 'map');
-  }
+  if (!cola.length) return '';   // sin cola cargada, el bloque no aparece
 
   var hoyIso = hoyISO();
   var hoy = rutaDelDia();

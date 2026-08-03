@@ -81,6 +81,49 @@ function diasEntre(desde, hasta) {
   return Math.round(ms / 86400000);
 }
 
+/* ── Montos con separador de miles ───────────────────────────
+   Los inputs de plata son de texto, no de tipo number: así se
+   pueden mostrar los puntos mientras se escribe.
+   ────────────────────────────────────────────────────────── */
+function soloDigitos(v) { return String(v == null ? '' : v).replace(/[^0-9]/g, ''); }
+
+function conMiles(v) {
+  var d = soloDigitos(v);
+  if (!d) return '';
+  return d.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+}
+
+/* Formatea mientras se escribe sin que salte el cursor al final */
+function fmtMonto(input) {
+  var antes = input.value;
+  var pos = input.selectionStart;
+  var digitosAntes = soloDigitos(antes.slice(0, pos)).length;
+
+  var formateado = conMiles(antes);
+  input.value = formateado;
+
+  /* Reubica el cursor contando dígitos, no caracteres */
+  var i = 0, vistos = 0;
+  while (i < formateado.length && vistos < digitosAntes) {
+    if (/[0-9]/.test(formateado[i])) vistos++;
+    i++;
+  }
+  try { input.setSelectionRange(i, i); } catch (e) {}
+  return formateado;
+}
+
+/* Devuelve el número que hay adentro de un input formateado */
+function leerMonto(id) {
+  var el = typeof id === 'string' ? porId(id) : id;
+  return el ? (+soloDigitos(el.value) || 0) : 0;
+}
+
+/* Input de plata listo para usar */
+function inputMonto(id, valor, extra) {
+  return '<input class="campo-input" id="' + id + '" type="text" inputmode="numeric" ' +
+    'value="' + conMiles(valor || '') + '" oninput="fmtMonto(this)' + (extra ? ';' + extra : '') + '"/>';
+}
+
 /* ── Texto ───────────────────────────────────────────────── */
 /* Normaliza para buscar: sin tildes, sin mayúsculas, sin dobles espacios */
 function normalizar(s) {
@@ -158,3 +201,20 @@ function cerrarModal() {
 document.addEventListener('keydown', function (e) {
   if (e.key === 'Escape') cerrarModal();
 });
+
+/* Selector de mes, compartido por las pantallas de plata */
+function selectorMes(nombreVar, filas, alCambiar) {
+  var meses = {};
+  (filas || []).forEach(function (f) {
+    var m = claveMes(f.fecha || f.created_at);
+    if (m) meses[m] = 1;
+  });
+  meses[claveMes(hoyTexto())] = 1;
+  return '<select class="campo-input" style="width:auto" onchange="' + nombreVar + '=this.value;' + alCambiar + '()">' +
+    Object.keys(meses).sort().reverse().map(function (m) {
+      var p = m.split('-');
+      var sel = window[nombreVar] === m ? ' selected' : '';
+      return '<option value="' + m + '"' + sel + '>' +
+        MESES[+p[1] - 1].charAt(0).toUpperCase() + MESES[+p[1] - 1].slice(1) + ' ' + p[0] + '</option>';
+    }).join('') + '</select>';
+}

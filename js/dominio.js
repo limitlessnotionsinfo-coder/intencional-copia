@@ -607,11 +607,32 @@ function categoriaGasto(id) {
   return CATEGORIAS_GASTO.find(function (c) { return c.id === id; }) || CATEGORIAS_GASTO[CATEGORIAS_GASTO.length - 1];
 }
 
-/* Quién puso la plata */
-var QUIEN_PAGA = {
-  empresa:  'La empresa',
-  personal: 'De mi bolsillo'
-};
+/* ── Socios ──────────────────────────────────────────────────
+   La plata de un gasto puede salir de la empresa o del bolsillo
+   de cualquiera de los dueños. El sueldo del empleado, por
+   ejemplo, lo ponen los dos.
+   ────────────────────────────────────────────────────────── */
+function socios() {
+  return String(leerConfig('socios', 'Franco, Augusto')).split(',')
+    .map(function (s2) { return s2.trim(); }).filter(Boolean);
+}
+
+function quienesPagan() {
+  var lista = [{ id: 'empresa', etiqueta: 'La empresa' }];
+  socios().forEach(function (s2) { lista.push({ id: s2, etiqueta: s2 }); });
+  return lista;
+}
+
+/* Sueldo de cada socio: "Franco|400000, Augusto|400000" */
+function sueldosSocios() {
+  var r = {};
+  String(leerConfig('sueldos_socios', '')).split(',').forEach(function (t) {
+    var p = t.split('|');
+    var n = (p[0] || '').trim();
+    if (n) r[n] = +(p[1] || 0) || 0;
+  });
+  return r;
+}
 
 /* ── Reparto de un gasto compartido ──────────────────────────
    La nafta del auto la pagan a medias entre la empresa y vos.
@@ -629,29 +650,51 @@ function repartirGasto(monto, porcentaje) {
   return { empresa: empresa, personal: Math.round((total - empresa) * 100) / 100, porcentaje: pct };
 }
 
-/* Cuánto te tiene que devolver la empresa por un gasto, o vos a ella.
-   Positivo = la empresa te debe. Negativo = le debés vos. */
-function saldoDeGasto(g) {
+/* Cómo se reparte el costo de un gasto entre la empresa y los socios.
+   Formato: { empresa: 12000, Augusto: 8000 } */
+function repartoDeGasto(g) {
+  if (g.reparto) {
+    try {
+      var r = typeof g.reparto === 'string' ? JSON.parse(g.reparto) : g.reparto;
+      if (r && typeof r === 'object') return r;
+    } catch (e) {}
+  }
+  /* Gastos viejos, con las dos columnas de antes */
   var total = +g.monto || 0;
-  var empresa = (g.parte_empresa === null || g.parte_empresa === undefined) ? total : +g.parte_empresa;
-  var personal = (g.parte_personal === null || g.parte_personal === undefined) ? 0 : +g.parte_personal;
-
-  if (g.pagado_por === 'personal') return empresa;    // pusiste vos: te deben la parte de la empresa
-  if (g.pagado_por === 'empresa')  return -personal;  // puso la empresa: le debés tu parte
-  return 0;                                           // sin dato: no se cuenta
+  var emp = (g.parte_empresa === null || g.parte_empresa === undefined) ? total : +g.parte_empresa;
+  var per = +g.parte_personal || 0;
+  var r2 = { empresa: emp };
+  if (per) r2[socios()[socios().length - 1] || 'Augusto'] = per;
+  return r2;
 }
 
-/* Balance de un conjunto de gastos: qué se lleva al final de la semana */
-function balanceGastos(gastos) {
+/* Saldo de un gasto para una persona.
+   Positivo = le deben. Negativo = debe. */
+function saldoDeGasto(g, quien) {
+  var puso = (g.pagado_por === quien) ? (+g.monto || 0) : 0;
+  var leToca = +repartoDeGasto(g)[quien] || 0;
+  return puso - leToca;
+}
+
+/* Balance de un conjunto de gastos, persona por persona */
+function balanceGastos(gastos, quien) {
   var b = { aCobrar: 0, aDevolver: 0, neto: 0, items: [] };
   (gastos || []).forEach(function (g) {
-    var s = saldoDeGasto(g);
+    if (!g.pagado_por) return;                 // sin ese dato no se puede saber
+    var s = saldoDeGasto(g, quien);
     if (!s) return;
     if (s > 0) b.aCobrar += s; else b.aDevolver += -s;
     b.items.push({ gasto: g, saldo: s });
   });
   b.neto = b.aCobrar - b.aDevolver;
   return b;
+}
+
+/* Balance de todos los que participan */
+function balancesTodos(gastos) {
+  return socios().map(function (s2) {
+    return { quien: s2, balance: balanceGastos(gastos, s2) };
+  }).filter(function (x) { return x.balance.items.length; });
 }
 
 /* Partes de pago de un gasto: mismo formato que los remitos */
