@@ -215,6 +215,78 @@ async function guardarEditarCliente() {
 }
 
 /* ── Cliente cerrado: queda registrado como un remito más ── */
+/* ── Retiro del exhibidor ────────────────────────────────────
+   Se deja constancia en el remito y el cliente queda inactivo:
+   no se borra, así el historial sigue estando.
+   ────────────────────────────────────────────────────────── */
+function marcarRetiro() {
+  var nombre = (R.cliente && R.cliente.local) || R.nombre.trim();
+  if (!nombre) { toast('Elegí el cliente o escribí su nombre', 'error'); return; }
+
+  var total = totalRemito();
+  abrirModal('Retirar el exhibidor',
+    '<p style="font-size:13px;color:var(--text2);line-height:1.6">' +
+      'Se guarda el remito de <strong>' + esc(nombre) + '</strong> dejando constancia de que ' +
+      'se retiró el exhibidor' + (total > 0 ? ', junto con los ' + plata(total) + ' cargados' : '') + '.</p>' +
+    avisoHTML('warn',
+      '<strong>' + esc(nombre) + '</strong> queda dado de baja y deja de aparecer en las listas y en su hoja de ruta. ' +
+      'Se puede reactivar desde su ficha en Clientes.', 'alert') +
+    '<div class="campo" style="margin:0"><div class="campo-etiq">Motivo (opcional)</div>' +
+      '<input class="campo-input" id="retiro-nota" placeholder="Ej: cerró el local, no vendía"/></div>',
+    '<button class="btn btn-primario btn-bloque" id="btn-retiro" onclick="confirmarRetiro()">' +
+      ic('check', 16) + ' Confirmar el retiro</button>');
+}
+
+async function confirmarRetiro() {
+  var c = R.cliente;
+  var nombre = (c && c.local) || R.nombre.trim();
+  if (!nombre) return;
+
+  var nota = (porId('retiro-nota').value || '').trim();
+  var btn = porId('btn-retiro');
+  if (btn) { btn.disabled = true; btn.textContent = 'Guardando…'; }
+
+  var total = totalRemito();
+  var partes = partesDelFormulario();
+
+  try {
+    var remito = {
+      fecha: hoyTexto(),
+      cliente_nombre: nombre,
+      cliente_dir: (c && c.dir) || R.dir || null,
+      cliente_loc: (c && c.loc) || R.loc || null,
+      cliente_tel: (c && c.tel) || R.tel || null,
+      total: total,
+      unidades: unidadesRemito(),
+      productos: JSON.stringify(R.filas.filter(function (f) { return f.prod && f.cant > 0; })),
+      pago: R.pago1 || null,
+      alias: aliasDeDeuda() || null,
+      pagos_detalle: JSON.stringify(partes),
+      notas: ['Se retiró el exhibidor', nota].filter(Boolean).join(' · '),
+      motivo: 'retiro_exhibidor',
+      created_at: new Date().toISOString()
+    };
+
+    await crear('remitos', remito);
+
+    /* El cliente queda inactivo y sin exhibidores asignados */
+    if (c) {
+      await actualizar('clientes', c.num, { activo: false, exhibidores: 0 });
+      c.activo = false; c.exhibidores = 0;
+      invalidarCache('clientes');
+    }
+
+    cerrarModal();
+    toast('Exhibidor retirado · ' + nombre + ' quedó dado de baja');
+    await compartirRemito(remito);
+    R = remitoVacio();
+    irA('inicio');
+  } catch (e) {
+    if (btn) { btn.disabled = false; btn.textContent = 'Confirmar el retiro'; }
+    toast(e.message, 'error');
+  }
+}
+
 function marcarCerrado() {
   var nombre = (R.cliente && R.cliente.local) || R.nombre.trim();
   if (!nombre) { toast('Elegí el cliente o escribí su nombre', 'error'); return; }
@@ -365,6 +437,7 @@ function pintarRemito() {
         ic('check', 16) + ' Confirmar y compartir' +
       '</button>' +
       '<button class="btn btn-secundario" onclick="marcarCerrado()">' + ic('ban', 15) + ' Estaba cerrado</button>' +
+      '<button class="btn btn-secundario" onclick="marcarRetiro()">' + ic('box', 15) + ' Retiré el exhibidor</button>' +
     '</div>';
 
   pintarDesglose();
@@ -705,6 +778,11 @@ function remitoParaImagen(r) {
         '</tr>';
       }).join('') +
     '</tbody></table>' +
+
+    (r.motivo === 'retiro_exhibidor'
+      ? '<div style="margin-top:14px;border:1px solid #ead8e4;background:#fbf2f7;border-radius:10px;padding:10px 12px;font-size:13px;color:#8a2f68;text-align:center">' +
+        '<strong>Se retiró el exhibidor</strong></div>'
+      : '') +
 
     (r.notas
       ? '<div style="margin-top:14px;background:#fbf2f7;border-radius:10px;padding:10px 12px;font-size:12.5px;color:#5a4e4c">' +

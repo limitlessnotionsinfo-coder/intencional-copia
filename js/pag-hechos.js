@@ -145,6 +145,7 @@ function hechosFiltrados() {
     if (F.estado === 'deuda'   && !tieneDeuda(r)) return false;
     if (F.estado === 'cobrado' && !bool(r.saldado)) return false;
     if (F.estado === 'cerrado' && r.motivo !== 'cerrado') return false;
+    if (F.estado === 'retiro'  && r.motivo !== 'retiro_exhibidor') return false;
 
     if (F.pago && !partesPago(r).some(function (p) { return p.tipo === F.pago && p.monto > 0; })) return false;
     if (F.loc && normalizar(r.cliente_loc).indexOf(normalizar(F.loc)) === -1) return false;
@@ -200,12 +201,14 @@ function pintarHechos() {
 function filaHecho(r) {
   var c = _porNombre[normalizar(r.cliente_nombre)];
   var cerrado = r.motivo === 'cerrado';
+  var retiro = r.motivo === 'retiro_exhibidor';
   var demora = demoraDePago(r);
   return '<button class="fila" onclick="verRemito(' + r.id + ')">' +
     (c ? '<span class="num-cliente">' + esc(c.num_str || c.num) + '</span>' : '') +
     '<div class="fila-principal">' +
       '<div class="fila-titulo">' + esc(r.cliente_nombre || 'Sin cliente') +
-        (cerrado ? ' <span class="pin pin-neutro">' + ic('ban', 12) + ' Cerrado</span>' : '') + '</div>' +
+        (cerrado ? ' <span class="pin pin-neutro">' + ic('ban', 12) + ' Cerrado</span>' : '') +
+        (retiro ? ' <span class="pin pin-warn">' + ic('box', 12) + ' Exhibidor retirado</span>' : '') + '</div>' +
       '<div class="fila-sub">' + [fechaCorta(r.fecha), r.cliente_loc, r.cliente_dir].filter(Boolean).map(esc).join(' · ') + '</div>' +
     '</div>' +
     '<div class="fila-derecha">' +

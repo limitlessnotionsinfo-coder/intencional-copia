@@ -350,6 +350,9 @@ function abrirFicha(num) {
       '<button class="btn btn-primario" style="flex:1;min-width:150px" onclick="guardarFicha()">Guardar cambios</button>' +
       '<button class="btn btn-secundario" onclick="cerrarModal();irA(\'remito\',\'cliente=' + esc(c.num) + '\')">' +
         ic('receipt', 15) + ' Remito</button>' +
+      '<button class="btn btn-secundario" onclick="alternarBaja()">' +
+        ic(clienteActivo(c) ? 'ban' : 'undo', 15) + ' ' + (clienteActivo(c) ? 'Dar de baja' : 'Reactivar') + '</button>' +
+      '<button class="btn btn-peligro" onclick="confirmarBorrarCliente()">' + ic('trash', 15) + ' Borrar</button>' +
     '</div>');
 
   cargarRemitosDeFicha(c);
@@ -511,6 +514,47 @@ function refrescarProxima() {
   var el = porId('fc-proxima');
   if (!el) return;
   el.innerHTML = textoProxima(calendarioRutas().find(function (e) { return String(e.ruta) === String(FC.ruta); }));
+}
+
+/* Dar de baja no borra nada: el cliente deja de aparecer en las
+   listas pero sus remitos y su historial quedan intactos. */
+async function alternarBaja() {
+  var c = FC.original;
+  var nuevo = !clienteActivo(c);
+  try {
+    await actualizar('clientes', c.num, { activo: nuevo });
+    c.activo = nuevo;
+    invalidarCache('clientes');
+    cerrarModal();
+    toast(nuevo ? 'Cliente reactivado' : 'Cliente dado de baja');
+    pintarRuta();
+  } catch (e) { toast(e.message, 'error'); }
+}
+
+function confirmarBorrarCliente() {
+  var c = FC.original;
+  abrirModal('Borrar ' + (c.local || 'el cliente'),
+    '<p style="font-size:13px;color:var(--text2);line-height:1.6">' +
+      'Se borra la ficha de <strong>' + esc(c.local) + '</strong> (' + esc(c.num_str || c.num) + '). ' +
+      'No se puede deshacer.</p>' +
+    avisoHTML('warn',
+      'Sus remitos <strong>no</strong> se borran: quedan en el historial con el nombre del local. ' +
+      'Si solo querés que deje de aparecer en las listas, conviene darlo de baja.', 'alert'),
+    '<div style="display:flex;gap:8px;flex-wrap:wrap">' +
+      '<button class="btn btn-peligro" style="flex:1;min-width:140px" onclick="borrarCliente()">Sí, borrarlo</button>' +
+      '<button class="btn btn-secundario" onclick="abrirFicha(\'' + esc(c.num) + '\')">Volver</button>' +
+    '</div>');
+}
+
+async function borrarCliente() {
+  var c = FC.original;
+  try {
+    await borrar('clientes', c.num);
+    invalidarCache('clientes');
+    cerrarModal();
+    toast('Cliente borrado');
+    pintarRuta();
+  } catch (e) { toast(e.message, 'error'); }
 }
 
 async function guardarFicha() {
