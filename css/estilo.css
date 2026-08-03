@@ -407,3 +407,11 @@ input[type="date"]{
   padding:0;width:52px;
   display:flex;align-items:center;justify-content:center;
 }
+
+/* ── Accesos de visita sin reposición ────────────────────── */
+.atajos-visita{
+  display:flex;gap:8px;flex-wrap:wrap;align-items:center;
+  margin-bottom:12px;
+}
+.atajos-visita .campo-ayuda{margin:0;flex:1 1 100%}
+.atajos-visita .btn{flex:1 1 auto;padding:7px 12px;font-size:12.5px}

@@ -21,6 +21,7 @@ var ICONOS = {
   search:     '<circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/>',
   chart:      '<path d="M4 4v15a1 1 0 0 0 1 1h15"/><path d="M8 15l3-4 3 2 4-6"/>',
   plus:       '<path d="M12 5v14M5 12h14"/>',
+  minus:      '<path d="M5 12h14"/>',
   settings:   '<path d="M4 8h8"/><path d="M16 8h4"/><circle cx="14" cy="8" r="2"/><path d="M4 16h4"/><path d="M12 16h8"/><circle cx="10" cy="16" r="2"/>',
   card:       '<rect x="2" y="5" width="20" height="14" rx="2.5"/><path d="M2 10h20"/><path d="M6 15h4"/>',
   droplet:    '<path d="M12 3s6 6 6 10a6 6 0 0 1-12 0c0-4 6-10 6-10z"/>',

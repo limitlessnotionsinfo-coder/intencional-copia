@@ -219,9 +219,25 @@ async function guardarEditarCliente() {
    Se deja constancia en el remito y el cliente queda inactivo:
    no se borra, así el historial sigue estando.
    ────────────────────────────────────────────────────────── */
+/* Qué le falta al remito para poder confirmarse */
+function faltanDatosDelRemito() {
+  var faltan = [];
+  if (!((R.cliente && R.cliente.local) || R.nombre.trim())) faltan.push('el cliente');
+  if (!R.filas.some(function (f) { return f.prod && +f.cant > 0; })) faltan.push('la cantidad de algún producto');
+  if (!R.pago1) faltan.push('el medio de pago');
+  return faltan;
+}
+
 function marcarRetiro() {
+  /* El retiro cierra la cuenta del cliente: el remito tiene que
+     estar completo antes, o queda un cierre a medias. */
+  var faltan = faltanDatosDelRemito();
+  if (faltan.length) {
+    toast('Antes de retirar el exhibidor falta cargar ' + faltan.join(', '), 'error');
+    return;
+  }
+
   var nombre = (R.cliente && R.cliente.local) || R.nombre.trim();
-  if (!nombre) { toast('Elegí el cliente o escribí su nombre', 'error'); return; }
 
   var total = totalRemito();
   abrirModal('Retirar el exhibidor',
@@ -285,6 +301,48 @@ async function confirmarRetiro() {
     if (btn) { btn.disabled = false; btn.textContent = 'Confirmar el retiro'; }
     toast(e.message, 'error');
   }
+}
+
+/* ── El cliente no vendió ────────────────────────────────────
+   Queda el registro de la visita, sin reposición ni plata.
+   ────────────────────────────────────────────────────────── */
+function marcarSinVentas() {
+  var nombre = (R.cliente && R.cliente.local) || R.nombre.trim();
+  if (!nombre) { toast('Elegí el cliente o escribí su nombre', 'error'); return; }
+
+  abrirModal('El cliente no vendió',
+    '<p style="font-size:13px;color:var(--text2);line-height:1.6">' +
+      'Se guarda la visita a <strong>' + esc(nombre) + '</strong> con fecha de hoy y ' + plata(0) + '. ' +
+      'Queda en el historial como visita hecha, pero no suma a lo facturado.</p>' +
+    '<div class="campo" style="margin:0"><div class="campo-etiq">Nota (opcional)</div>' +
+      '<input class="campo-input" id="sinventas-nota" placeholder="Ej: le quedó stock de la vez pasada"/></div>',
+    '<button class="btn btn-primario btn-bloque" onclick="confirmarSinVentas()">Guardar la visita</button>');
+}
+
+async function confirmarSinVentas() {
+  var c = R.cliente;
+  var nombre = (c && c.local) || R.nombre.trim();
+  if (!nombre) return;
+  var nota = (porId('sinventas-nota').value || '').trim();
+
+  try {
+    await crear('remitos', {
+      fecha: hoyTexto(),
+      cliente_nombre: nombre,
+      cliente_dir: (c && c.dir) || R.dir || null,
+      cliente_loc: (c && c.loc) || R.loc || null,
+      cliente_tel: (c && c.tel) || R.tel || null,
+      total: 0, unidades: 0, productos: '[]',
+      pagos_detalle: '[]',
+      notas: ['No vendió', nota].filter(Boolean).join(' · '),
+      motivo: 'sin_ventas',
+      created_at: new Date().toISOString()
+    });
+    cerrarModal();
+    toast('Visita guardada · ' + nombre + ' no vendió');
+    R = remitoVacio();
+    irA('inicio');
+  } catch (e) { toast(e.message, 'error'); }
 }
 
 function marcarCerrado() {
@@ -355,6 +413,14 @@ function pintarRemito() {
   var mostrarAviso = aumentoConfig().activo && !clienteAvisado(R.cliente);
 
   z.innerHTML =
+    /* Los casos en que no se carga nada van arriba: si la visita
+       no dio reposición, no hace falta bajar hasta el final. */
+    '<div class="atajos-visita">' +
+      '<span class="campo-ayuda">Si no hubo reposición:</span>' +
+      '<button class="btn btn-secundario" onclick="marcarCerrado()">' + ic('ban', 14) + ' Estaba cerrado</button>' +
+      '<button class="btn btn-secundario" onclick="marcarSinVentas()">' + ic('minus', 14) + ' No vendió</button>' +
+    '</div>' +
+
     '<div class="tarjeta" id="remito-card">' +
       '<div style="padding:18px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:12px">' +
         '<img src="' + LOGO_INTENCIONAL + '" style="width:44px;height:44px;object-fit:contain" alt=""/>' +
@@ -433,10 +499,9 @@ function pintarRemito() {
     '</div>' +
 
     '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:4px">' +
-      '<button class="btn btn-primario" style="flex:1;min-width:200px" id="btn-confirmar" onclick="confirmarRemito()">' +
+      '<button class="btn btn-primario" style="flex:1;min-width:180px" id="btn-confirmar" onclick="confirmarRemito()">' +
         ic('check', 16) + ' Confirmar y compartir' +
       '</button>' +
-      '<button class="btn btn-secundario" onclick="marcarCerrado()">' + ic('ban', 15) + ' Estaba cerrado</button>' +
       '<button class="btn btn-secundario" onclick="marcarRetiro()">' + ic('box', 15) + ' Retiré el exhibidor</button>' +
     '</div>';
 
@@ -778,6 +843,11 @@ function remitoParaImagen(r) {
         '</tr>';
       }).join('') +
     '</tbody></table>' +
+
+    (r.motivo === 'sin_ventas'
+      ? '<div style="margin-top:14px;border:1px solid #ead8e4;background:#fbf2f7;border-radius:10px;padding:10px 12px;font-size:13px;color:#8a2f68;text-align:center">' +
+        '<strong>Visita sin reposición</strong> — el cliente no vendió</div>'
+      : '') +
 
     (r.motivo === 'retiro_exhibidor'
       ? '<div style="margin-top:14px;border:1px solid #ead8e4;background:#fbf2f7;border-radius:10px;padding:10px 12px;font-size:13px;color:#8a2f68;text-align:center">' +
