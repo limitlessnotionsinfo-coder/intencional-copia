@@ -342,26 +342,25 @@ input[type="date"]{
 }
 
 /* ── Filas de color del pedido ───────────────────────────────
-   Cada color es una tarjetita con sus tres datos etiquetados:
-   en el celular, inputs sueltos sin rótulo no se entienden.
+   Arriba color y cantidad, abajo el total de la línea. Todo con
+   flex: la grilla se descolocaba en pantallas angostas.
    ────────────────────────────────────────────────────────── */
 .fila-color{
-  display:grid;
-  grid-template-columns:minmax(90px,1.4fr) 90px minmax(90px,1fr) 34px;
-  gap:10px;align-items:end;
-  padding:10px;margin-bottom:8px;
+  padding:12px;margin-bottom:10px;
   border:1px solid var(--border);border-radius:var(--radius);background:var(--surface);
 }
+.fila-color .fc-arriba{display:flex;gap:10px;align-items:flex-end}
+.fila-color .fc-campo{min-width:0}
+.fila-color .fc-color{flex:1 1 auto}
+.fila-color .fc-cant{flex:0 0 96px}
 .fila-color .campo-etiq{margin-bottom:4px}
-.fila-color .subtotal{
-  font-weight:700;font-size:15px;font-variant-numeric:tabular-nums;
-  padding:10px 0;white-space:nowrap;
+.fila-color .fc-quitar{flex:0 0 auto;padding:9px 8px;align-self:flex-end}
+.fila-color .fc-abajo{
+  display:flex;align-items:baseline;justify-content:space-between;gap:8px;
+  margin-top:10px;padding-top:8px;border-top:1px dashed var(--border);
 }
-.fila-color .fc-quitar{padding:8px 4px;align-self:end}
-@media (max-width:520px){
-  .fila-color{grid-template-columns:1fr 1fr 34px}
-  .fila-color .fc-total{grid-column:1/3;display:flex;align-items:baseline;gap:8px}
-  .fila-color .fc-total .campo-etiq{margin:0}
-  .fila-color .fc-total .subtotal{padding:0}
-  .fila-color .fc-quitar{grid-row:1/3}
+.fila-color .subtotal{font-size:16px;font-weight:700;font-variant-numeric:tabular-nums}
+@media (max-width:380px){
+  .fila-color .fc-cant{flex:0 0 76px}
+}
 }

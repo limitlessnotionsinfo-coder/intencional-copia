@@ -151,28 +151,32 @@ function cuerpoCompra() {
     '</div>';
 }
 
-/* Cada color es una tarjetita: los tres datos con su etiqueta,
-   para que en el celular no queden inputs sueltos sin contexto. */
+/* Cada color es una tarjetita: arriba los dos datos que se
+   escriben, abajo el total de esa línea. Sin grilla: en el
+   celular las columnas se descolocaban. */
 function filaCompra(f, i) {
   var sub = (+f.cant || 0) * costoUnitario();
   return '<div class="fila-color">' +
-    '<div class="fc-color">' +
-      '<div class="campo-etiq">Color</div>' +
-      '<input class="campo-input" value="' + esc(f.color) + '" placeholder="Ej: 06" ' +
-             'oninput="NC.filas[' + i + '].color=this.value"/>' +
+    '<div class="fc-arriba">' +
+      '<div class="fc-campo fc-color">' +
+        '<div class="campo-etiq">Color</div>' +
+        '<input class="campo-input" value="' + esc(f.color) + '" placeholder="Ej: 06" ' +
+               'oninput="NC.filas[' + i + '].color=this.value"/>' +
+      '</div>' +
+      '<div class="fc-campo fc-cant">' +
+        '<div class="campo-etiq">Cantidad</div>' +
+        '<input class="campo-input" type="number" min="0" inputmode="numeric" value="' + (+f.cant || 0) + '" ' +
+               'oninput="NC.filas[' + i + '].cant=+this.value||0;refrescarTotalesCompra()"/>' +
+      '</div>' +
+      (NC.filas.length > 1
+        ? '<button class="btn btn-fantasma fc-quitar" aria-label="Quitar color" ' +
+          'onclick="quitarFilaCompra(' + i + ')">✕</button>'
+        : '') +
     '</div>' +
-    '<div class="fc-cant">' +
-      '<div class="campo-etiq">Cantidad</div>' +
-      '<input class="campo-input" type="number" min="0" inputmode="numeric" value="' + (+f.cant || 0) + '" ' +
-             'oninput="NC.filas[' + i + '].cant=+this.value||0;refrescarTotalesCompra()"/>' +
+    '<div class="fc-abajo">' +
+      '<span class="campo-etiq" style="margin:0">Total</span>' +
+      '<strong class="subtotal" id="csub-' + i + '">' + plata(sub) + '</strong>' +
     '</div>' +
-    '<div class="fc-total">' +
-      '<div class="campo-etiq">Total</div>' +
-      '<div class="subtotal" id="csub-' + i + '">' + plata(sub) + '</div>' +
-    '</div>' +
-    (NC.filas.length > 1
-      ? '<button class="btn btn-fantasma fc-quitar" aria-label="Quitar color" onclick="quitarFilaCompra(' + i + ')">✕</button>'
-      : '<span class="fc-quitar"></span>') +
   '</div>';
 }
 
