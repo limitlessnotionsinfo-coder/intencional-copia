@@ -458,7 +458,10 @@ function botonesPago(cual) {
 /* Los alias solo aparecen cuando el medio elegido es transferencia */
 function selectorAlias(cual) {
   var tipo = cual === 1 ? R.pago1 : R.pago2;
-  if (tipo !== 'transferencia') return '';
+  /* En deuda también hace falta: es el alias al que va a transferir
+     cuando pague, y el que sale impreso en el aviso del remito. */
+  if (tipo !== 'transferencia' && tipo !== 'deuda') return '';
+  var esDeuda = tipo === 'deuda';
 
   var lista = aliasConfigurados();
   if (!lista.length) {
@@ -471,7 +474,7 @@ function selectorAlias(cual) {
   var totales = totalesPorAlias(_remitosAlias, _pagosAlias);
 
   return '<div style="margin-top:12px">' +
-    '<div class="campo-etiq">Alias para la transferencia</div>' +
+    '<div class="campo-etiq">' + (esDeuda ? 'Alias donde va a pagar' : 'Alias para la transferencia') + '</div>' +
     '<div style="display:flex;gap:8px;flex-wrap:wrap">' +
       lista.map(function (a) {
         var activo = mismoAlias(a, elegido);
@@ -485,6 +488,7 @@ function selectorAlias(cual) {
     '<div class="campo-ayuda" style="margin-top:6px">' +
       lista.map(function (a) { return esc(a) + ': ' + plata(totales[a] || 0); }).join(' · ') +
       (sugerido ? ' — conviene ' + esc(sugerido) + ', que viene recibiendo menos' : '') +
+      (esDeuda ? '<br>Es el que se le imprime en el aviso de pago pendiente.' : '') +
     '</div>' +
   '</div>';
 }
@@ -499,20 +503,27 @@ function hayDeuda() {
   return partesDelFormulario().some(function (p) { return p.tipo === 'deuda' && p.monto > 0; });
 }
 
-/* El alias al que tiene que transferir quien quedó debiendo */
+/* El alias al que tiene que transferir quien quedó debiendo:
+   primero el elegido junto a la parte en deuda, si no el otro. */
 function aliasDeDeuda() {
+  if (R.pago1 === 'deuda' && R.alias1) return R.alias1;
+  if (R.pago2 === 'deuda' && R.alias2) return R.alias2;
   return R.alias1 || R.alias2 || aliasSugerido(_remitosAlias, _pagosAlias) || '';
 }
 
 function setPago(cual, tipo) {
   if (cual === 1) {
     R.pago1 = tipo;                       // elegir el primero no toca el segundo
-    if (tipo === 'transferencia' && !R.alias1) R.alias1 = aliasSugerido(_remitosAlias, _pagosAlias) || '';
-    if (tipo !== 'transferencia') R.alias1 = '';
+    if ((tipo === 'transferencia' || tipo === 'deuda') && !R.alias1) {
+      R.alias1 = aliasSugerido(_remitosAlias, _pagosAlias) || '';
+    }
+    if (tipo !== 'transferencia' && tipo !== 'deuda') R.alias1 = '';
   } else {
     R.pago2 = (R.pago2 === tipo) ? '' : tipo;   // volver a tocarlo lo saca
     if (!R.pago2) { R.monto2 = 0; R.alias2 = ''; }
-    if (R.pago2 === 'transferencia' && !R.alias2) R.alias2 = aliasSugerido(_remitosAlias, _pagosAlias) || '';
+    if ((R.pago2 === 'transferencia' || R.pago2 === 'deuda') && !R.alias2) {
+      R.alias2 = aliasSugerido(_remitosAlias, _pagosAlias) || '';
+    }
   }
   pintarRemito();
 }
@@ -575,7 +586,7 @@ async function confirmarRemito() {
     total: total,
     unidades: unidadesRemito(),
     pago: R.pago1,
-    alias: R.alias1 || null,
+    alias: aliasDeDeuda() || R.alias1 || null,
     notas: R.notas.trim() || null,
     productos: JSON.stringify(R.filas.filter(function (f) { return f.prod; })
       .map(function (f) { return { prod: f.prod, cant: +f.cant || 0, precio: +f.precio || 0 }; })),

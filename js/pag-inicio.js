@@ -139,11 +139,12 @@ function bloqueRuta(clientes, pendientes) {
           var d = fechaDeIso(e.iso);
           var n = clientesDeRuta(clientes, e.ruta).length;
           return '<div class="fila" style="cursor:default">' +
-            '<div class="fila-principal">' +
-              '<div class="fila-titulo">Ruta ' + esc(e.ruta) + '</div>' +
+            '<button class="fila-principal" style="background:none;border:none;text-align:left;padding:0;cursor:pointer" ' +
+                    'onclick="irA(\'clientes\',\'ruta=' + encodeURIComponent(e.ruta) + '\')">' +
+              '<div class="fila-titulo">Ruta ' + esc(e.ruta) + ' →</div>' +
               '<div class="fila-sub">' + capitalizar(DIAS[d.getDay()]) + ' ' + esc(fechaCorta(e.iso)) +
                 ' · ' + plural(n, 'cliente') + '</div>' +
-            '</div>' +
+            '</button>' +
             (e.indice > 0
               ? '<button class="btn btn-fantasma" style="padding:4px 8px;font-size:11px" ' +
                 'onclick="adelantar(\'' + esc(e.ruta) + '\')">Adelantar</button>'
@@ -254,15 +255,18 @@ function bloquePendientes() {
       '</span>' +
     '</summary>' +
     '<div class="tarjeta-cuerpo">' +
-      '<div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">' +
-        '<input class="campo-input" id="pend-texto" style="flex:1;min-width:170px" ' +
+      /* Texto arriba, tipo y botón abajo: en el celular no entran
+         los tres en el mismo renglón y el más quedaba suelto. */
+      '<div class="pend-form">' +
+        '<input class="campo-input pf-texto" id="pend-texto" ' +
                'placeholder="Agregar pendiente…" onkeydown="if(event.key===\'Enter\')agregarPendiente()"/>' +
-        '<select class="campo-input" id="pend-tipo" style="width:auto" onchange="alternarClientePendiente()">' +
+        '<select class="campo-input" id="pend-tipo" onchange="alternarClientePendiente()">' +
           Object.keys(TIPOS_PENDIENTE).map(function (k) {
             return '<option value="' + k + '">' + esc(TIPOS_PENDIENTE[k].etiqueta) + '</option>';
           }).join('') +
         '</select>' +
-        '<button class="btn btn-primario" onclick="agregarPendiente()" aria-label="Agregar">' + ic('plus', 17) + '</button>' +
+        '<button class="btn btn-primario pf-mas" onclick="agregarPendiente()" aria-label="Agregar pendiente">' +
+          ic('plus', 17) + '</button>' +
       '</div>' +
 
       '<div id="pend-cliente-wrap" style="display:none;margin-bottom:12px">' +

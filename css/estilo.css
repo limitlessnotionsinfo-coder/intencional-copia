@@ -393,3 +393,17 @@ input[type="date"]{
   .ruta-mini{height:74px}
   .ruta-mini .rm-val{font-size:19px}
 }
+
+/* ── Alta de pendientes ──────────────────────────────────────
+   El texto ocupa todo el ancho y abajo van el tipo y el botón:
+   los tres juntos no entran en un celular.
+   ────────────────────────────────────────────────────────── */
+.pend-form{
+  display:grid;grid-template-columns:1fr 52px;
+  gap:8px;margin-bottom:12px;
+}
+.pend-form .pf-texto{grid-column:1/-1}
+.pend-form .pf-mas{
+  padding:0;width:52px;
+  display:flex;align-items:center;justify-content:center;
+}

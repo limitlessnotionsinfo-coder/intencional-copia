@@ -8,6 +8,7 @@ var _terminoCliente = '';
 var _mostrarInactivos = false;
 var _topeVisible = 60;   // se pinta de a tandas: son casi mil filas
 var _agrupar = true;     // por hoja de ruta
+var _rutaFiltro = '';    // ver una sola hoja, desde el inicio
 
 registrarPagina({
   id: 'clientes',
@@ -18,11 +19,18 @@ registrarPagina({
   subtitulo: 'Buscá por número, nombre, zona o dirección',
 
   async montar(cont, params) {
+    _rutaFiltro = params.get('ruta') || '';
     _terminoCliente = params.get('q') || '';
     _topeVisible = 60;
     _clientes = await traerCacheado('clientes');
 
     cont.innerHTML =
+      (_rutaFiltro
+        ? '<div class="aviso aviso-ok" style="margin-bottom:14px">' + ic('map', 15) +
+          '<div>Estás viendo la <strong>hoja de ruta ' + esc(_rutaFiltro) + '</strong> ' +
+          '<button class="btn btn-fantasma" style="padding:0 4px;text-decoration:underline" ' +
+                  'onclick="verTodasLasHojas()">ver todas</button></div></div>'
+        : '') +
       '<button class="btn btn-primario btn-bloque" style="margin-bottom:14px" onclick="nuevoCliente()">' +
         ic('plus', 16) + ' Nuevo cliente</button>' +
       '<div class="buscador" style="margin-bottom:14px">' +
@@ -52,6 +60,8 @@ function filtrarClientes(v) {
   pintarClientes();
 }
 
+function verTodasLasHojas() { irA('clientes', 'ruta='); }
+
 function alternarAgrupar(v) {
   _agrupar = v;
   _topeVisible = 60;
@@ -67,6 +77,7 @@ function alternarInactivos(v) {
 function clientesFiltrados() {
   return _clientes.filter(function (c) {
     if (!_mostrarInactivos && !clienteActivo(c)) return false;
+    if (_rutaFiltro && String(rutaDe(c)) !== String(_rutaFiltro)) return false;
     return coincideCliente(c, _terminoCliente);
   });
 }
@@ -157,14 +168,17 @@ async function guardarNuevoCliente() {
   try {
     var todos = await traerCacheado('clientes');
     var siguiente = todos.reduce(function (m, c) { return Math.max(m, +c.num || 0); }, 0) + 1;
+    var ruta = (porId('nc-ruta').value || '').trim();
+    /* El código identifica al cliente dentro de su hoja: R4-0010 */
+    var codigo = ruta ? codigoCliente(ruta, siguienteEnRuta(todos, ruta)) : String(siguiente);
     await crear('clientes', {
       num: siguiente,
-      num_str: String(siguiente),
+      num_str: codigo,
       local: local,
       dir: (porId('nc-dir').value || '').trim() || null,
       loc: (porId('nc-loc').value || '').trim() || null,
       rubro: porId('nc-rubro').value,
-      ruta: JSON.stringify({ orden: (porId('nc-ruta').value || '').trim(), horarios: [], notas: '' }),
+      ruta: JSON.stringify({ orden: ruta, horarios: [], notas: '' }),
       exhibidores: +porId('nc-exhib').value || 0,
       tel: (porId('nc-tel').value || '').trim() || null,
       duenio: (porId('nc-duenio').value || '').trim() || null,
@@ -257,9 +271,17 @@ function editarHoja(ruta) {
       '<div class="campo-ayuda">Si lo cambiás, los ' + plural(g.length, 'cliente') + ' pasan a la hoja nueva.</div>' +
     '</div>' +
 
-    '<div class="campo" style="margin:0"><div class="campo-etiq">Exhibidores para todos</div>' +
+    '<div class="campo"><div class="campo-etiq">Exhibidores para todos</div>' +
       '<input class="campo-input" id="eh-exhib" type="number" min="0" placeholder="dejar como está"/>' +
       '<div class="campo-ayuda">Solo si querés ponerles a todos el mismo número.</div>' +
+    '</div>' +
+
+    '<label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;margin-bottom:6px">' +
+      '<input type="checkbox" id="eh-renumerar"/> Renumerar los códigos de 1 en adelante' +
+    '</label>' +
+    '<div class="campo-ayuda" style="margin-bottom:8px">' +
+      'Quedarían ' + esc(codigoCliente(ruta, 1)) + ' … ' + esc(codigoCliente(ruta, g.length)) + ', ' +
+      'en el orden en que están listados. Sirve cuando quedaron huecos por bajas.' +
     '</div>' +
     '<div id="eh-estado"></div>',
 
@@ -270,10 +292,11 @@ async function guardarHoja(rutaVieja) {
   var nueva = (porId('eh-numero').value || '').trim();
   var exhibTxt = (porId('eh-exhib').value || '').trim();
   var exhib = exhibTxt === '' ? null : (+exhibTxt || 0);
+  var renumerar = porId('eh-renumerar').checked;
   var estado = porId('eh-estado');
 
   if (!nueva) { toast('Poné el número de la hoja', 'error'); return; }
-  if (nueva === String(rutaVieja) && exhib === null) { cerrarModal(); return; }
+  if (nueva === String(rutaVieja) && exhib === null && !renumerar) { cerrarModal(); return; }
 
   var g = _clientes.filter(function (c) { return String(rutaDe(c)) === String(rutaVieja); });
   estado.innerHTML = cargando('Actualizando ' + plural(g.length, 'cliente') + '…');
@@ -290,6 +313,12 @@ async function guardarHoja(rutaVieja) {
       cambios.ruta = JSON.stringify(actual);
     }
     if (exhib !== null) cambios.exhibidores = exhib;
+
+    /* El código sigue a la hoja: cambia el prefijo o se renumera */
+    var codigo = renumerar
+      ? codigoCliente(nueva, i + 1)
+      : codigoCliente(nueva, correlativoDe(c) || i + 1);
+    if (codigo && codigo !== c.num_str) cambios.num_str = codigo;
 
     try {
       await actualizar('clientes', c.num, cambios);
@@ -329,7 +358,12 @@ function abrirFicha(num) {
 function cuerpoFicha(c) {
   var proxima = calendarioRutas().find(function (e) { return String(e.ruta) === String(FC.ruta); });
 
-  return '<div class="campo"><div class="campo-etiq">Nombre del local</div>' +
+  return '<div class="aviso aviso-ok" style="margin-bottom:14px">' + ic('tag', 15) +
+      '<div>Código <strong>' + esc(c.num_str || '—') + '</strong>' +
+      (leerCodigo(c.num_str) ? '' : ' <span class="campo-ayuda">— se arma solo al ponerle una hoja de ruta</span>') +
+      '</div></div>' +
+
+    '<div class="campo"><div class="campo-etiq">Nombre del local</div>' +
       '<input class="campo-input" id="fc-local" value="' + esc(c.local || '') + '"/></div>' +
 
     '<div class="campo"><div class="campo-etiq">Dirección</div>' +
@@ -514,6 +548,8 @@ async function guardarFicha() {
     try { actual = typeof c.ruta === 'string' ? JSON.parse(c.ruta || '{}') : (c.ruta || {}); } catch (e) {}
     actual.orden = rutaNueva;
     cambios.ruta = JSON.stringify(actual);
+    /* Al mudarse de hoja le toca un lugar nuevo en esa hoja */
+    if (rutaNueva) cambios.num_str = codigoParaRutaNueva(_clientes, rutaNueva, c);
   }
 
   if (!Object.keys(cambios).length) { cerrarModal(); return; }

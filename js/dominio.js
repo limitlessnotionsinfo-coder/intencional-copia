@@ -110,6 +110,8 @@ function coincideCliente(c, termino) {
   if (!t) return true;
   return normalizar(c.local).indexOf(t) !== -1 ||
          normalizar(c.num_str).indexOf(t) !== -1 ||
+         /* "r4 10" o "r4-10" también encuentran a R4-0010 */
+         normalizar(c.num_str).replace(/[-0]+/g, '').indexOf(t.replace(/[\s\-0]+/g, '')) !== -1 ||
          String(c.num || '').indexOf(t) !== -1 ||
          normalizar(c.loc).indexOf(t) !== -1 ||
          normalizar(c.dir).indexOf(t) !== -1 ||
@@ -899,4 +901,51 @@ function pendientesParaRuta(pendientes, clientes, ruta) {
       };
     })
     .filter(function (x) { return x.enRuta || x.enZona; });
+}
+
+/* ═══════════════════════════════════════════════════════════
+   CÓDIGO DEL CLIENTE
+   R + número de hoja + guion + su lugar dentro de la hoja, con
+   cuatro dígitos: R1-0001, R4-0010. Vive en la columna num_str.
+   ═══════════════════════════════════════════════════════════ */
+
+function codigoCliente(ruta, correlativo) {
+  var r = String(ruta == null ? '' : ruta).trim();
+  if (!r) return '';
+  return 'R' + r + '-' + String(Math.max(1, +correlativo || 1)).padStart(4, '0');
+}
+
+/* Devuelve { ruta, correlativo } o null si no tiene ese formato */
+function leerCodigo(str) {
+  var m = /^R(\d+)-(\d+)$/i.exec(String(str || '').trim());
+  return m ? { ruta: m[1], correlativo: +m[2] } : null;
+}
+
+function correlativoDe(c) {
+  var p = leerCodigo(c && c.num_str);
+  return p ? p.correlativo : 0;
+}
+
+/* El próximo lugar libre en una hoja */
+function siguienteEnRuta(clientes, ruta) {
+  var usados = (clientes || [])
+    .filter(function (c) { return String(rutaDe(c)) === String(ruta); })
+    .map(correlativoDe);
+  return (usados.length ? Math.max.apply(null, usados) : 0) + 1;
+}
+
+/* Al mover un cliente de hoja hay que darle un lugar en la nueva */
+function codigoParaRutaNueva(clientes, ruta, elMismo) {
+  var otros = (clientes || []).filter(function (c) {
+    return !elMismo || String(c.num) !== String(elMismo.num);
+  });
+  return codigoCliente(ruta, siguienteEnRuta(otros, ruta));
+}
+
+/* Renumera una hoja entera de 1 en adelante, respetando el orden
+   en que vienen los clientes. Devuelve solo los que cambian. */
+function renumerarRuta(clientesDeLaRuta, ruta) {
+  return (clientesDeLaRuta || []).map(function (c, i) {
+    return { cliente: c, codigo: codigoCliente(ruta, i + 1) };
+  }).filter(function (x) { return x.codigo !== x.cliente.num_str; });
 }
