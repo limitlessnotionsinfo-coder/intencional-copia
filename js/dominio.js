@@ -597,6 +597,7 @@ function pedidosAbiertos(pendientes, clientes) {
 var CATEGORIAS_GASTO = [
   { id: 'combustible',   etiqueta: 'Combustible', icono: 'fuel',    compartido: true },
   { id: 'empleado',      etiqueta: 'Empleado',    icono: 'user',    compartido: false },
+  { id: 'deuda',         etiqueta: 'Deuda',       icono: 'clock',   compartido: false },
   { id: 'impuestos',     etiqueta: 'Impuestos',   icono: 'file',    compartido: false },
   { id: 'insumos',       etiqueta: 'Insumos',     icono: 'box',     compartido: false },
   { id: 'mantenimiento', etiqueta: 'Mantenimiento', icono: 'tool',  compartido: true },
@@ -632,6 +633,136 @@ function sueldosSocios() {
     if (n) r[n] = +(p[1] || 0) || 0;
   });
   return r;
+}
+
+/* Quién pone el combustible: lo adelanta uno de los dueños y la
+   empresa le devuelve su parte al cerrar la semana. */
+function quienPagaCombustible() {
+  return leerConfig('combustible_lo_pone', socios()[socios().length - 1] || 'Augusto');
+}
+
+/* ── Cómo se arma cada gasto según de qué sea ────────────────
+   Esto es lo que evita tener que acordarse del reparto cada vez.
+   ────────────────────────────────────────────────────────── */
+function plantillaGasto(tipo, nombre) {
+  var lista = socios();
+  var total;
+
+  if (tipo === 'sueldo_socio') {
+    /* Los sueldos de los dueños los paga la empresa, enteros */
+    return {
+      descripcion: 'Sueldo ' + nombre,
+      monto: sueldosSocios()[nombre] || 0,
+      categoria: 'empleado',
+      pagadoPor: 'empresa',
+      modo: 'solo'
+    };
+  }
+
+  if (tipo === 'sueldo_empleado') {
+    /* El del empleado sale mitad y mitad del sueldo de los dueños */
+    var e = empleadoConfig();
+    return {
+      descripcion: 'Sueldo' + (e.nombre ? ' ' + e.nombre : ''),
+      monto: e.sueldo,
+      categoria: 'empleado',
+      pagadoPor: 'empresa',
+      modo: 'socios'
+    };
+  }
+
+  if (tipo === 'combustible') {
+    /* Lo adelanta un dueño; la empresa le devuelve su parte */
+    return {
+      descripcion: 'Nafta Etios',
+      monto: 0,
+      categoria: 'combustible',
+      pagadoPor: quienPagaCombustible(),
+      modo: 'empresa'
+    };
+  }
+
+  if (tipo === 'deuda') {
+    return {
+      descripcion: 'Pago de deuda',
+      monto: +leerConfig('monto_deuda', 0) || 0,
+      categoria: 'deuda',
+      pagadoPor: 'empresa',
+      modo: 'solo'
+    };
+  }
+
+  return { descripcion: '', monto: 0, categoria: 'otro', pagadoPor: 'empresa', modo: 'solo' };
+}
+
+/* ── Cierre de semana ────────────────────────────────────────
+   Qué hay que pagar, qué entró y si alcanza.
+   Los sueldos son semanales; la deuda, una vez al mes.
+   ────────────────────────────────────────────────────────── */
+function compromisosSemana(hayQuePagarDeuda) {
+  var items = [];
+  var sueldos = sueldosSocios();
+
+  socios().forEach(function (s2) {
+    if (sueldos[s2]) items.push({ concepto: 'Sueldo ' + s2, monto: sueldos[s2], cada: 'semana' });
+  });
+
+  var e = empleadoConfig();
+  if (e.sueldo) {
+    /* Si el empleado cobra por mes, para la semana se prorratea */
+    var monto = e.frecuencia === 'semanal' ? e.sueldo
+              : e.frecuencia === 'quincenal' ? Math.round(e.sueldo / 2)
+              : Math.round(e.sueldo / 4);
+    items.push({
+      concepto: 'Sueldo' + (e.nombre ? ' ' + e.nombre : ' empleado'),
+      monto: monto,
+      cada: e.frecuencia === 'semanal' ? 'semana' : e.frecuencia + ' (prorrateado)'
+    });
+  }
+
+  if (hayQuePagarDeuda) {
+    var d = +leerConfig('monto_deuda', 0) || 0;
+    if (d) items.push({ concepto: 'Deuda', monto: d, cada: 'mes' });
+  }
+
+  return { items: items, total: items.reduce(function (a, i) { return a + i.monto; }, 0) };
+}
+
+/* Lo que entró en el período: lo cobrado de verdad, sin la deuda */
+function cobradoEnRango(remitos, desde, hasta) {
+  var enRango = (remitos || []).filter(function (r) {
+    var k = claveFecha(r.fecha || r.created_at);
+    return k && k >= desde && k <= hasta;
+  });
+  return {
+    remitos: enRango.length,
+    efectivo: sumarTipo(enRango, 'efectivo'),
+    transferencia: sumarTipo(enRango, 'transferencia'),
+    cobrado: sumarTipo(enRango, 'efectivo') + sumarTipo(enRango, 'transferencia'),
+    deuda: sumarTipo(enRango, 'deuda')
+  };
+}
+
+/* El veredicto: ¿alcanza para pagar todo? */
+function cierreSemana(remitos, gastos, desde, hasta, conDeuda) {
+  var entradas = cobradoEnRango(remitos, desde, hasta);
+  var pagados = (gastos || []).filter(function (g) {
+    var k = claveFecha(g.fecha || g.created_at);
+    return k && k >= desde && k <= hasta;
+  });
+  var yaGastado = pagados.reduce(function (a, g) { return a + (+g.monto || 0); }, 0);
+  var comp = compromisosSemana(conDeuda);
+  var disponible = entradas.cobrado - yaGastado;
+
+  return {
+    entradas: entradas,
+    yaGastado: yaGastado,
+    compromisos: comp,
+    disponible: disponible,
+    alcanza: disponible >= comp.total,
+    falta: Math.max(0, comp.total - disponible),
+    sobra: Math.max(0, disponible - comp.total)
+  };
 }
 
 /* ── Reparto de un gasto compartido ──────────────────────────

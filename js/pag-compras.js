@@ -120,9 +120,6 @@ function cuerpoCompra() {
       (t.costo ? '' : ' — cargalo en Configuraciones para que calcule solo') +
     '</div>' +
 
-    '<div class="fila-prod cab-prod">' +
-      '<span>Color o número</span><span>Cant</span><span>Subtotal</span><span></span>' +
-    '</div>' +
     '<div id="filas-compra">' + NC.filas.map(filaCompra).join('') + '</div>' +
     '<button class="btn btn-secundario" style="margin-top:8px" onclick="agregarFilaCompra()">' +
       ic('plus', 15) + ' Agregar color</button>' +
@@ -154,17 +151,28 @@ function cuerpoCompra() {
     '</div>';
 }
 
+/* Cada color es una tarjetita: los tres datos con su etiqueta,
+   para que en el celular no queden inputs sueltos sin contexto. */
 function filaCompra(f, i) {
   var sub = (+f.cant || 0) * costoUnitario();
-  return '<div class="fila-prod">' +
-    '<input class="campo-input prod" value="' + esc(f.color) + '" placeholder="Ej: 11 o Rojo furioso" ' +
-           'aria-label="Color" oninput="NC.filas[' + i + '].color=this.value"/>' +
-    '<input class="campo-input" type="number" min="0" inputmode="numeric" value="' + (+f.cant || 0) + '" ' +
-           'aria-label="Cantidad" oninput="NC.filas[' + i + '].cant=+this.value||0;refrescarTotalesCompra()"/>' +
-    '<div class="subtotal" id="csub-' + i + '">' + plata(sub) + '</div>' +
+  return '<div class="fila-color">' +
+    '<div class="fc-color">' +
+      '<div class="campo-etiq">Color</div>' +
+      '<input class="campo-input" value="' + esc(f.color) + '" placeholder="Ej: 06" ' +
+             'oninput="NC.filas[' + i + '].color=this.value"/>' +
+    '</div>' +
+    '<div class="fc-cant">' +
+      '<div class="campo-etiq">Cantidad</div>' +
+      '<input class="campo-input" type="number" min="0" inputmode="numeric" value="' + (+f.cant || 0) + '" ' +
+             'oninput="NC.filas[' + i + '].cant=+this.value||0;refrescarTotalesCompra()"/>' +
+    '</div>' +
+    '<div class="fc-total">' +
+      '<div class="campo-etiq">Total</div>' +
+      '<div class="subtotal" id="csub-' + i + '">' + plata(sub) + '</div>' +
+    '</div>' +
     (NC.filas.length > 1
-      ? '<button class="btn btn-fantasma" style="padding:4px" aria-label="Quitar" onclick="quitarFilaCompra(' + i + ')">✕</button>'
-      : '<span></span>') +
+      ? '<button class="btn btn-fantasma fc-quitar" aria-label="Quitar color" onclick="quitarFilaCompra(' + i + ')">✕</button>'
+      : '<span class="fc-quitar"></span>') +
   '</div>';
 }
 

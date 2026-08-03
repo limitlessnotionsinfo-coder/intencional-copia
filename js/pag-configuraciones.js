@@ -470,10 +470,21 @@ function tarjetaEmpleado() {
       '<div class="campo"><div class="campo-etiq">Dueños</div>' +
         '<input class="campo-input" id="cfg-socios" value="' + esc(socios().join(', ')) + '" placeholder="Franco, Augusto"/>' +
         '<div class="campo-ayuda">Separados por coma. Son las opciones de “quién puso la plata”.</div></div>' +
-      '<div class="campo"><div class="campo-etiq">Sueldo de cada dueño</div>' +
-        '<input class="campo-input" id="cfg-sueldos-socios" placeholder="Franco|400000, Augusto|400000" ' +
-               'value="' + esc(Object.keys(sueldosSocios()).map(function (k) { return k + '|' + sueldosSocios()[k]; }).join(', ')) + '"/>' +
-        '<div class="campo-ayuda">Cada uno tiene su botón rápido en Gastos.</div></div>' +
+      socios().map(function (s2) {
+        return '<div class="campo"><div class="campo-etiq">Sueldo de ' + esc(s2) + '</div>' +
+          inputMonto('cfg-sueldo-' + normalizar(s2).replace(/\s+/g, '-'), sueldosSocios()[s2] || 0) +
+        '</div>';
+      }).join('') +
+      '<div class="campo-ayuda" style="margin:-6px 0 14px">Los sueldos de los dueños los paga la empresa. ' +
+        'Cada uno tiene su botón rápido en Gastos.</div>' +
+
+      '<div class="campo"><div class="campo-etiq">Quién adelanta el combustible</div>' +
+        '<select class="campo-input" id="cfg-combustible">' +
+          socios().map(function (s2) {
+            return '<option' + (quienPagaCombustible() === s2 ? ' selected' : '') + '>' + esc(s2) + '</option>';
+          }).join('') +
+        '</select>' +
+        '<div class="campo-ayuda">Lo paga de su bolsillo y la empresa le devuelve su parte al cerrar la semana.</div></div>' +
       '<div class="campo"><div class="campo-etiq">Monto del botón “Deuda”</div>' +
         inputMonto('cfg-deuda', +leerConfig('monto_deuda', 0) || 0) +
         '<div class="campo-ayuda">Al usarlo se puede cambiar.</div></div>' +
@@ -484,7 +495,9 @@ function tarjetaEmpleado() {
           '<span id="cfg-dev-val" style="min-width:44px;text-align:right;font-weight:700">' + (+leerConfig('devolucion_pct', 30) || 30) + '%</span>' +
         '</div>' +
         '<div class="campo-ayuda">Cuánto del pedido de esmaltes se puede devolver.</div></div>' +
-      '<div class="campo"><div class="campo-etiq">Nombre del empleado</div>' +
+      '<div class="campo-etiq" style="margin-top:6px">Empleado</div>' +
+      '<div class="campo-ayuda" style="margin-bottom:8px">Su sueldo sale mitad y mitad del de los dueños.</div>' +
+      '<div class="campo"><div class="campo-etiq">Nombre</div>' +
         '<input class="campo-input" id="cfg-emp-nombre" value="' + esc(e.nombre) + '" placeholder="Opcional"/></div>' +
       '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">' +
         '<div class="campo"><div class="campo-etiq">Sueldo del empleado</div>' +
@@ -518,7 +531,10 @@ function tarjetaEmpleado() {
 async function guardarEmpleado() {
   try {
     await guardarConfig('socios', (porId('cfg-socios').value || '').trim() || 'Franco, Augusto');
-    await guardarConfig('sueldos_socios', (porId('cfg-sueldos-socios').value || '').trim());
+    await guardarConfig('sueldos_socios', socios().map(function (s2) {
+      return s2 + '|' + leerMonto('cfg-sueldo-' + normalizar(s2).replace(/\s+/g, '-'));
+    }).join(', '));
+    await guardarConfig('combustible_lo_pone', porId('cfg-combustible').value);
     await guardarConfig('monto_deuda', leerMonto('cfg-deuda'));
     await guardarConfig('devolucion_pct', +porId('cfg-devolucion').value || 30);
     await guardarConfig('empleado_nombre', (porId('cfg-emp-nombre').value || '').trim());

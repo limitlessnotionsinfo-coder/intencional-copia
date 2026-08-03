@@ -29,6 +29,7 @@ registrarPagina({
           '<div id="g-categorias" style="display:flex;gap:6px;flex-wrap:wrap"></div>' +
         '</div>' +
       '</details>' +
+      '<div id="g-cierre"></div>' +
       '<div id="g-balance"></div>' +
       '<div id="g-resumen"></div>' +
       '<div class="atajos" style="margin:14px 0">' + botonesRapidos() + '</div>' +
@@ -68,42 +69,23 @@ function botonesRapidos() {
   return botones.join('');
 }
 
-function gastoNafta() {
-  nuevoGasto({ descripcion: 'Nafta Etios', categoria: 'combustible', compartir: true });
-}
-
-/* El sueldo del empleado lo ponen los dos dueños */
-function pagarSueldo() {
-  var e = empleadoConfig();
+/* Las plantillas viven en dominio.js: acá solo se abren */
+function desdePlantilla(tipo, nombre) {
+  var p = plantillaGasto(tipo, nombre);
   nuevoGasto({
-    descripcion: 'Sueldo' + (e.nombre ? ' de ' + e.nombre : ''),
-    monto: e.sueldo,
-    categoria: 'empleado',
-    compartir: true,
-    entreSocios: true,
-    pagadoPor: socios()[0] || 'empresa'
+    descripcion: p.descripcion,
+    monto: p.monto,
+    categoria: p.categoria,
+    pagadoPor: p.pagadoPor,
+    compartir: p.modo === 'empresa',
+    entreSocios: p.modo === 'socios'
   });
 }
 
-function sueldoSocio(nombre) {
-  nuevoGasto({
-    descripcion: 'Sueldo ' + nombre,
-    monto: sueldosSocios()[nombre] || 0,
-    categoria: 'empleado',
-    compartir: false,
-    pagadoPor: 'empresa'
-  });
-}
-
-function gastoDeuda() {
-  nuevoGasto({
-    descripcion: 'Pago de deuda',
-    monto: +leerConfig('monto_deuda', 0) || 0,
-    categoria: 'otro',
-    compartir: false,
-    pagadoPor: 'empresa'
-  });
-}
+function gastoNafta()        { desdePlantilla('combustible'); }
+function pagarSueldo()       { desdePlantilla('sueldo_empleado'); }
+function sueldoSocio(nombre) { desdePlantilla('sueldo_socio', nombre); }
+function gastoDeuda()        { desdePlantilla('deuda'); }
 
 /* ── Período ─────────────────────────────────────────────── */
 function rangoGastos() {
@@ -161,6 +143,8 @@ function pintarGastos() {
   var total = lista.reduce(function (s, g) { return s + (+g.monto || 0); }, 0);
   var r = rangoGastos();
 
+  pintarCierre(lista, r);
+
   /* Balance: cuánto le corresponde a cada uno al cerrar */
   var balances = balancesTodos(lista);
   porId('g-balance').innerHTML = balances.length
@@ -209,7 +193,7 @@ function pintarGastos() {
     '</div>';
 
   porId('g-lista').innerHTML = lista.length
-    ? '<div class="lista">' + lista.map(filaGasto).join('') + '</div>'
+    ? porGrupo(lista)
     : vacio('wallet', 'Sin gastos en este período', 'Cambiá el filtro o cargá el primero.');
 }
 
@@ -241,6 +225,50 @@ function filaGasto(g) {
       '<button class="btn btn-fantasma" style="padding:2px 6px;font-size:11px" onclick="borrarGasto(' + g.id + ')">Borrar</button>' +
     '</div>' +
   '</div>';
+}
+
+/* Los gastos se agrupan por lo que son: sueldos de los dueños,
+   sueldo del empleado, combustible, deuda y el resto. */
+function grupoDe(g) {
+  var desc = normalizar(g.descripcion);
+  var nombres = socios().map(normalizar);
+
+  if (g.categoria === 'deuda') return 'deuda';
+  if (g.categoria === 'combustible') return 'combustible';
+  if (g.categoria === 'empleado') {
+    var esDueno = nombres.some(function (n) { return desc.indexOf(n) !== -1; });
+    return esDueno ? 'duenos' : 'empleado';
+  }
+  return 'otros';
+}
+
+var GRUPOS = [
+  { id: 'duenos',      etiqueta: 'Sueldos de los dueños', icono: 'wallet' },
+  { id: 'empleado',    etiqueta: 'Sueldo del empleado',   icono: 'user' },
+  { id: 'combustible', etiqueta: 'Combustible',           icono: 'fuel' },
+  { id: 'deuda',       etiqueta: 'Deuda',                 icono: 'clock' },
+  { id: 'otros',       etiqueta: 'Otros gastos',          icono: 'tag' }
+];
+
+function porGrupo(lista) {
+  var grupos = {};
+  lista.forEach(function (g) { (grupos[grupoDe(g)] = grupos[grupoDe(g)] || []).push(g); });
+
+  return GRUPOS.filter(function (gr) { return grupos[gr.id]; }).map(function (gr) {
+    var items = grupos[gr.id];
+    var total = items.reduce(function (a, g) { return a + (+g.monto || 0); }, 0);
+    return '<details class="tarjeta" open>' +
+      '<summary class="tarjeta-cab" style="cursor:pointer">' + ic(gr.icono, 16) + ' ' + esc(gr.etiqueta) +
+        '<span style="margin-left:auto;display:inline-flex;gap:6px;align-items:center">' +
+          '<span class="pin pin-neutro">' + plural(items.length, 'gasto') + '</span>' +
+          '<strong>' + plata(total) + '</strong>' +
+        '</span>' +
+      '</summary>' +
+      '<div class="tarjeta-cuerpo" style="padding:0">' +
+        '<div class="lista" style="border:none;border-radius:0">' + items.map(filaGasto).join('') + '</div>' +
+      '</div>' +
+    '</details>';
+  }).join('');
 }
 
 async function borrarGasto(id) {
@@ -512,3 +540,81 @@ async function guardarGasto() {
 }
 
 
+
+
+/* ═══════════════════════════════════════════════════════════
+   CIERRE DE SEMANA
+   Qué hay que pagar, qué entró y si alcanza. Los sueldos son
+   semanales; la deuda, una vez al mes.
+   ═══════════════════════════════════════════════════════════ */
+var _conDeuda = null;   // null = todavía no lo decidió el usuario
+
+function tocaDeudaEsteMes(gastos) {
+  if (_conDeuda !== null) return _conDeuda;
+  /* Por defecto: se incluye si este mes todavía no se pagó */
+  var mes = claveMes(hoyTexto());
+  return !(gastos || []).some(function (g) {
+    return g.categoria === 'deuda' && claveMes(g.fecha || g.created_at) === mes;
+  });
+}
+
+function alternarDeuda() {
+  _conDeuda = !tocaDeudaEsteMes(_gastos);
+  pintarGastos();
+}
+
+async function pintarCierre(lista, rango) {
+  var cont = porId('g-cierre');
+  if (!cont) return;
+
+  var conDeuda = tocaDeudaEsteMes(_gastos);
+  var remitos = [];
+  try { remitos = await traerCacheado('remitos'); } catch (e) {}
+
+  var c = cierreSemana(remitos, _gastos, rango.desde, rango.hasta, conDeuda);
+  if (!c.compromisos.items.length && !c.entradas.remitos) { cont.innerHTML = ''; return; }
+
+  cont.innerHTML =
+    '<details class="tarjeta">' +
+      '<summary class="tarjeta-cab" style="cursor:pointer">' + ic('scale', 16) + ' Cierre de ' + esc(rango.etiqueta.toLowerCase()) +
+        '<span style="margin-left:auto"><span class="pin ' + (c.alcanza ? 'pin-ok' : 'pin-danger') + '">' +
+          (c.alcanza ? 'alcanza' : 'faltan ' + plata(c.falta)) + '</span></span>' +
+      '</summary>' +
+      '<div class="tarjeta-cuerpo">' +
+
+        '<div class="campo-etiq">Entró</div>' +
+        '<div style="display:flex;justify-content:space-between;padding:4px 0;font-size:13px">' +
+          '<span>Cobrado en ' + plural(c.entradas.remitos, 'remito') + '</span>' +
+          '<strong>' + plata(c.entradas.cobrado) + '</strong></div>' +
+        (c.entradas.deuda
+          ? '<div class="campo-ayuda">Además quedaron ' + plata(c.entradas.deuda) + ' en deuda, que todavía no entraron.</div>'
+          : '') +
+        '<div style="display:flex;justify-content:space-between;padding:4px 0;font-size:13px;color:var(--danger)">' +
+          '<span>Ya se gastó</span><strong>− ' + plata(c.yaGastado) + '</strong></div>' +
+        '<div style="display:flex;justify-content:space-between;padding:6px 0;border-top:1px solid var(--border);font-size:13px">' +
+          '<span>Queda disponible</span>' +
+          '<strong style="color:' + (c.disponible >= 0 ? 'var(--ok)' : 'var(--danger)') + '">' + plata(c.disponible) + '</strong></div>' +
+
+        '<div class="campo-etiq" style="margin-top:14px">Falta pagar</div>' +
+        c.compromisos.items.map(function (i) {
+          return '<div style="display:flex;justify-content:space-between;padding:4px 0;font-size:13px">' +
+            '<span>' + esc(i.concepto) + ' <span class="campo-ayuda">· cada ' + esc(i.cada) + '</span></span>' +
+            '<strong>' + plata(i.monto) + '</strong></div>';
+        }).join('') +
+        '<div style="display:flex;justify-content:space-between;padding:6px 0;border-top:1px solid var(--border);font-size:13px">' +
+          '<span>Total a pagar</span><strong>' + plata(c.compromisos.total) + '</strong></div>' +
+
+        '<label style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted);margin:10px 0;cursor:pointer">' +
+          '<input type="checkbox"' + (conDeuda ? ' checked' : '') + ' onchange="alternarDeuda()"/> ' +
+          'Incluir la deuda de este mes' +
+        '</label>' +
+
+        avisoHTML(c.alcanza ? 'ok' : 'danger',
+          c.alcanza
+            ? '<strong>Alcanza.</strong> Después de pagar todo quedan ' + plata(c.sobra) + '.'
+            : '<strong>No alcanza:</strong> faltan ' + plata(c.falta) + '. ' +
+              (c.entradas.deuda ? 'Cobrar las deudas pendientes cubriría ' + plata(Math.min(c.falta, c.entradas.deuda)) + '.' : ''),
+          c.alcanza ? 'check' : 'alert') +
+      '</div>' +
+    '</details>';
+}
