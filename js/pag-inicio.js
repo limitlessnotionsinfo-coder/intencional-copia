@@ -108,13 +108,12 @@ function bloqueRuta(clientes, pendientes) {
           ? capitalizar(DIAS[man.fecha.getDay()]) + ' · ' + plural(deManana.length, 'cliente')
           : (proximos[0] ? esc(fechaCorta(proximos[0].iso)) : 'sin cola')) + '</span>' +
       '</div>' +
-      (man.ruta
-        ? '<div class="ruta-mini">' +
-            '<span class="rm-etiq">' + ic('box', 13) + ' Exhibidores</span>' +
-            '<span class="rm-val" style="color:var(--info)">' + exhibidores + '</span>' +
-            '<span class="rm-sub">para la salida</span>' +
-          '</div>'
-        : '') +
+      /* La tercera va siempre, para que el renglón quede parejo */
+      '<div class="ruta-mini">' +
+        '<span class="rm-etiq">' + ic('box', 13) + ' Exhibidores</span>' +
+        '<span class="rm-val" style="color:var(--info)">' + (man.ruta ? exhibidores : '—') + '</span>' +
+        '<span class="rm-sub">' + (man.ruta ? 'para la salida' : 'sin ruta') + '</span>' +
+      '</div>' +
     '</div>';
 
   /* Reorganizar sin salir del inicio */
