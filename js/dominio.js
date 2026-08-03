@@ -746,17 +746,28 @@ function cobradoEnRango(remitos, desde, hasta) {
 /* El veredicto: ¿alcanza para pagar todo? */
 function cierreSemana(remitos, gastos, desde, hasta, conDeuda) {
   var entradas = cobradoEnRango(remitos, desde, hasta);
-  var pagados = (gastos || []).filter(function (g) {
+  var delRango = (gastos || []).filter(function (g) {
     var k = claveFecha(g.fecha || g.created_at);
     return k && k >= desde && k <= hasta;
   });
-  var yaGastado = pagados.reduce(function (a, g) { return a + (+g.monto || 0); }, 0);
+
+  /* Lo que ya salió de la caja y lo que todavía se debe */
+  var yaGastado = delRango.filter(gastoPagado)
+    .reduce(function (a, g) { return a + (+g.monto || 0); }, 0);
+  var pendientes = delRango.filter(function (g) { return !gastoPagado(g); });
+
   var comp = compromisosSemana(conDeuda);
+  pendientes.forEach(function (g) {
+    comp.items.push({ concepto: g.descripcion || 'Gasto sin pagar', monto: +g.monto || 0, cada: 'pendiente' });
+    comp.total += (+g.monto || 0);
+  });
+
   var disponible = entradas.cobrado - yaGastado;
 
   return {
     entradas: entradas,
     yaGastado: yaGastado,
+    pendientes: pendientes,
     compromisos: comp,
     disponible: disponible,
     alcanza: disponible >= comp.total,
@@ -826,6 +837,11 @@ function balancesTodos(gastos) {
   return socios().map(function (s2) {
     return { quien: s2, balance: balanceGastos(gastos, s2) };
   }).filter(function (x) { return x.balance.items.length; });
+}
+
+/* Un gasto puede quedar registrado sin pagar todavía */
+function gastoPagado(g) {
+  return g.pagado === undefined || g.pagado === null ? true : bool(g.pagado);
 }
 
 /* Partes de pago de un gasto: mismo formato que los remitos */

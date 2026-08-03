@@ -214,14 +214,22 @@ function filaGasto(g) {
           : '') +
         (g.notas ? '<br>' + esc(g.notas) : '') +
       '</div>' +
-      (g.pagado_por
-        ? '<div style="margin-top:4px"><span class="pin pin-neutro">puso ' + esc(g.pagado_por === 'empresa' ? 'la empresa' : g.pagado_por) + '</span>' +
-          (saldo > 0 ? ' <span class="pin pin-ok">le deben ' + plata(saldo) + '</span>' : '') +
-          '</div>'
-        : '') +
+      '<div style="margin-top:4px">' +
+        (!gastoPagado(g)
+          ? '<span class="pin pin-danger">' + ic('clock', 12) + ' pago pendiente</span> '
+          : '') +
+        (g.pagado_por
+          ? '<span class="pin pin-neutro">puso ' + esc(g.pagado_por === 'empresa' ? 'la empresa' : g.pagado_por) + '</span>'
+          : '') +
+        (saldo > 0 ? ' <span class="pin pin-ok">le deben ' + plata(saldo) + '</span>' : '') +
+      '</div>' +
     '</div>' +
     '<div class="fila-derecha">' +
       '<div class="fila-titulo">' + plata(g.monto) + '</div>' +
+      (!gastoPagado(g)
+        ? '<button class="btn btn-primario" style="padding:4px 10px;font-size:11px;margin-top:4px" ' +
+          'onclick="abrirPago(' + g.id + ')">' + ic('cash', 13) + ' Pagar</button>'
+        : '') +
       '<button class="btn btn-fantasma" style="padding:2px 6px;font-size:11px" onclick="borrarGasto(' + g.id + ')">Borrar</button>' +
     '</div>' +
   '</div>';
@@ -617,4 +625,102 @@ async function pintarCierre(lista, rango) {
           c.alcanza ? 'check' : 'alert') +
       '</div>' +
     '</details>';
+}
+
+
+/* ═══════════════════════════════════════════════════════════
+   PAGAR UN GASTO PENDIENTE
+   ═══════════════════════════════════════════════════════════ */
+var PG = null;
+
+function abrirPago(id) {
+  var g = _gastos.find(function (x) { return String(x.id) === String(id); });
+  if (!g) return;
+  PG = { gasto: g, medio1: 'transferencia', alias1: '', medio2: '', monto2: 0, alias2: '', fecha: hoyISO() };
+  abrirModal('Pagar ' + plata(g.monto), cuerpoPago(),
+    '<button class="btn btn-primario btn-bloque" onclick="confirmarPago()">Registrar el pago</button>');
+}
+
+function cuerpoPago() {
+  var g = PG.gasto;
+  return '<p style="font-size:13px;color:var(--text2);line-height:1.6">' +
+      esc(g.descripcion) + ' · ' + esc(fechaCorta(g.fecha)) + '</p>' +
+
+    '<div class="campo-etiq" style="margin-top:12px">Con qué se pagó</div>' +
+    medioPago(1) + aliasPago(1) +
+
+    '<details class="segundo-pago"' + (PG.medio2 ? ' open' : '') + ' style="margin-top:10px">' +
+      '<summary style="cursor:pointer;font-size:12px;color:var(--rose);font-weight:600;padding:4px 0">' +
+        'Se pagó con dos medios</summary>' +
+      '<div style="margin-top:8px">' +
+        medioPago(2) +
+        (PG.medio2
+          ? '<div class="campo" style="margin-top:8px"><div class="campo-etiq">Monto del segundo medio</div>' +
+            inputMonto('pg-monto2', PG.monto2, 'PG.monto2=leerMonto(this);refrescarPago()') +
+            '<div class="campo-ayuda">Con el primero quedan ' +
+              plata(Math.max(0, (+g.monto || 0) - (+PG.monto2 || 0))) + '.</div></div>' +
+            aliasPago(2)
+          : '') +
+      '</div>' +
+    '</details>' +
+
+    '<div class="campo" style="margin-top:12px"><div class="campo-etiq">Fecha del pago</div>' +
+      '<input class="campo-input" type="date" value="' + esc(PG.fecha) + '" onchange="PG.fecha=this.value"/></div>';
+}
+
+function medioPago(cual) {
+  var actual = cual === 1 ? PG.medio1 : PG.medio2;
+  return '<div style="display:flex;gap:8px;flex-wrap:wrap">' +
+    ['efectivo', 'transferencia'].map(function (t) {
+      var d = TIPOS_PAGO[t];
+      return '<button class="btn ' + (actual === t ? 'btn-primario' : 'btn-secundario') + '" ' +
+        'onclick="setMedioPago(' + cual + ',\'' + t + '\')">' + ic(d.icono, 15) + ' ' + esc(d.corta) + '</button>';
+    }).join('') + '</div>';
+}
+
+function aliasPago(cual) {
+  var medio = cual === 1 ? PG.medio1 : PG.medio2;
+  if (medio !== 'transferencia') return '';
+  var elegido = cual === 1 ? PG.alias1 : PG.alias2;
+  var lista = aliasConfigurados();
+  if (!lista.length) return '';
+  return '<div style="margin-top:8px"><div class="campo-etiq">¿De qué alias salió?</div>' +
+    '<div style="display:flex;gap:8px;flex-wrap:wrap">' +
+      lista.map(function (a) {
+        return '<button class="btn ' + (mismoAlias(a, elegido) ? 'btn-primario' : 'btn-secundario') + '" ' +
+          'onclick="setAliasPago(' + cual + ',\'' + esc(a).replace(/'/g, "\\'") + '\')">' +
+          ic('card', 14) + ' ' + esc(a) + '</button>';
+      }).join('') + '</div></div>';
+}
+
+function setMedioPago(cual, t) {
+  if (cual === 1) { PG.medio1 = t; if (t !== 'transferencia') PG.alias1 = ''; }
+  else { PG.medio2 = (PG.medio2 === t) ? '' : t; if (PG.medio2 !== 'transferencia') PG.alias2 = ''; }
+  refrescarPago();
+}
+function setAliasPago(cual, a) { if (cual === 1) PG.alias1 = a; else PG.alias2 = a; refrescarPago(); }
+
+function refrescarPago() {
+  var caja = document.querySelector('.modal-cuerpo');
+  if (caja) caja.innerHTML = cuerpoPago();
+}
+
+async function confirmarPago() {
+  var g = PG.gasto;
+  var total = +g.monto || 0;
+  var m2 = Math.min(+PG.monto2 || 0, total);
+  var partes = [{ tipo: PG.medio1, monto: PG.medio2 && m2 > 0 ? total - m2 : total, alias: PG.alias1 || null }];
+  if (PG.medio2 && m2 > 0) partes.push({ tipo: PG.medio2, monto: m2, alias: PG.alias2 || null });
+
+  try {
+    await actualizar('gastos', g.id, {
+      pagado: true,
+      pagado_fecha: PG.fecha || hoyISO(),
+      pagos_detalle: JSON.stringify(partes)
+    });
+    cerrarModal();
+    toast('Pago registrado');
+    invalidarCache('gastos');
+    pintarRuta();
+  } catch (e) { toast(e.message, 'error'); }
 }
