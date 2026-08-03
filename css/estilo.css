@@ -202,7 +202,12 @@ button,input,select,textarea{font-family:inherit;font-size:inherit;color:inherit
 @media (max-width:860px){
   /* En el celular no hay menú lateral: se navega con la barra de abajo */
   .barra-lateral{display:none}
-  .contenido{margin-left:0;padding:14px 16px 90px}
+  .contenido{
+    margin-left:0;
+    /* La barra inferior mide ~62px y abajo se le suma el área del
+       indicador de inicio del iPhone: sin eso, el último botón queda tapado. */
+    padding:14px 16px calc(86px + env(safe-area-inset-bottom));
+  }
   .topbar{
     display:flex;align-items:center;gap:10px;position:sticky;top:0;z-index:50;
     background:rgba(255,255,255,.92);backdrop-filter:blur(8px);
@@ -308,7 +313,6 @@ html{touch-action:manipulation}
   }
   .tab-inferior[aria-current="page"]{color:var(--rose)}
   .tab-inferior span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
-  .contenido{padding-bottom:76px}
   .atajos{grid-template-columns:1fr 1fr}
   .grilla-stats{grid-template-columns:1fr 1fr}
 }

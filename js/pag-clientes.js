@@ -5,7 +5,7 @@
 
 var _clientes = [];
 var _terminoCliente = '';
-var _mostrarInactivos = false;
+var _estadoCliente = 'activos';   // activos · inactivos · todos
 var _topeVisible = 60;   // se pinta de a tandas: son casi mil filas
 var _agrupar = true;     // por hoja de ruta
 var _rutaFiltro = '';    // ver una sola hoja, desde el inicio
@@ -44,12 +44,12 @@ registrarPagina({
         '<label style="font-size:12px;color:var(--muted);display:flex;align-items:center;gap:6px;cursor:pointer;margin-left:auto">' +
           '<input type="checkbox" onchange="alternarAgrupar(this.checked)"' + (_agrupar ? ' checked' : '') + '/> Por hoja de ruta' +
         '</label>' +
-        '<label style="font-size:12px;color:var(--muted);display:flex;align-items:center;gap:6px;cursor:pointer">' +
-          '<input type="checkbox" onchange="alternarInactivos(this.checked)"' + (_mostrarInactivos ? ' checked' : '') + '/> Ver inactivos' +
-        '</label>' +
       '</div>' +
+
+      '<div id="chips-clientes" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px"></div>' +
       '<div id="lista-clientes"></div>';
 
+    pintarChipsClientes();
     pintarClientes();
   }
 });
@@ -68,15 +68,35 @@ function alternarAgrupar(v) {
   pintarClientes();
 }
 
-function alternarInactivos(v) {
-  _mostrarInactivos = v;
+/* Los inactivos tienen su propia vista: son los que se dieron de
+   baja o a los que se les retiró el exhibidor. */
+function setEstadoCliente(v) {
+  _estadoCliente = v;
   _topeVisible = 60;
+  pintarChipsClientes();
   pintarClientes();
+}
+
+function pintarChipsClientes() {
+  var cont = porId('chips-clientes');
+  if (!cont) return;
+  var inactivos = _clientes.filter(function (c) { return !clienteActivo(c); }).length;
+
+  cont.innerHTML = [
+    ['activos', 'Activos', _clientes.length - inactivos],
+    ['inactivos', 'Inactivos', inactivos],
+    ['todos', 'Todos', _clientes.length]
+  ].map(function (o) {
+    return '<button class="btn ' + (_estadoCliente === o[0] ? 'btn-primario' : 'btn-secundario') + '" ' +
+      'style="padding:6px 13px;font-size:12.5px" onclick="setEstadoCliente(\'' + o[0] + '\')">' +
+      esc(o[1]) + ' <span class="pin pin-neutro" style="margin-left:2px">' + o[2] + '</span></button>';
+  }).join('');
 }
 
 function clientesFiltrados() {
   return _clientes.filter(function (c) {
-    if (!_mostrarInactivos && !clienteActivo(c)) return false;
+    if (_estadoCliente === 'activos' && !clienteActivo(c)) return false;
+    if (_estadoCliente === 'inactivos' && clienteActivo(c)) return false;
     if (_rutaFiltro && String(rutaDe(c)) !== String(_rutaFiltro)) return false;
     return coincideCliente(c, _terminoCliente);
   });
@@ -101,7 +121,7 @@ function pintarClientes() {
     return;
   }
 
-  if (_agrupar && !_terminoCliente) {
+  if (_agrupar && !_terminoCliente && _estadoCliente !== 'inactivos') {
     cont.innerHTML = porHojaDeRuta(lista);
     return;
   }

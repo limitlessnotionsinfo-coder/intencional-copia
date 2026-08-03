@@ -498,12 +498,12 @@ function pintarRemito() {
       '</div>' +
     '</div>' +
 
-    '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:4px">' +
-      '<button class="btn btn-primario" style="flex:1;min-width:180px" id="btn-confirmar" onclick="confirmarRemito()">' +
-        ic('check', 16) + ' Confirmar y compartir' +
-      '</button>' +
-      '<button class="btn btn-secundario" onclick="marcarRetiro()">' + ic('box', 15) + ' Retiré el exhibidor</button>' +
-    '</div>';
+    '<button class="btn btn-primario btn-bloque" id="btn-confirmar" onclick="confirmarRemito()">' +
+      ic('check', 16) + ' Confirmar y compartir' +
+    '</button>' +
+    '<button class="btn btn-secundario btn-bloque" style="margin-top:8px" onclick="marcarRetiro()">' +
+      ic('box', 15) + ' Retiré el exhibidor' +
+    '</button>';
 
   pintarDesglose();
 }
