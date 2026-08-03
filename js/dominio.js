@@ -655,7 +655,7 @@ function plantillaGasto(tipo, nombre) {
       monto: sueldosSocios()[nombre] || 0,
       categoria: 'empleado',
       pagadoPor: 'empresa',
-      modo: 'solo'
+      modo: 'empresa'
     };
   }
 
@@ -678,7 +678,8 @@ function plantillaGasto(tipo, nombre) {
       monto: 0,
       categoria: 'combustible',
       pagadoPor: quienPagaCombustible(),
-      modo: 'empresa'
+      modo: 'empresa_socio',
+      socio: quienPagaCombustible()
     };
   }
 
@@ -688,11 +689,11 @@ function plantillaGasto(tipo, nombre) {
       monto: +leerConfig('monto_deuda', 0) || 0,
       categoria: 'deuda',
       pagadoPor: 'empresa',
-      modo: 'solo'
+      modo: 'empresa'
     };
   }
 
-  return { descripcion: '', monto: 0, categoria: 'otro', pagadoPor: 'empresa', modo: 'solo' };
+  return { descripcion: '', monto: 0, categoria: 'otro', pagadoPor: 'empresa', modo: 'empresa' };
 }
 
 /* ── Cierre de semana ────────────────────────────────────────

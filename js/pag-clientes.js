@@ -315,12 +315,15 @@ function abrirFicha(num) {
   if (!c) return;
   FC = { ruta: rutaDe(c), original: c };
 
-  abrirModal((c.num_str || c.num) + ' · ' + (c.local || 'Cliente'), cuerpoFicha(c),
+  abrirModal((c.num_str || c.num) + ' · ' + (c.local || 'Cliente'),
+    cuerpoFicha(c) + '<div id="fc-remitos" style="margin-top:16px">' + cargando('Buscando sus remitos…') + '</div>',
     '<div style="display:flex;gap:8px;flex-wrap:wrap">' +
       '<button class="btn btn-primario" style="flex:1;min-width:150px" onclick="guardarFicha()">Guardar cambios</button>' +
       '<button class="btn btn-secundario" onclick="cerrarModal();irA(\'remito\',\'cliente=' + esc(c.num) + '\')">' +
         ic('receipt', 15) + ' Remito</button>' +
     '</div>');
+
+  cargarRemitosDeFicha(c);
 }
 
 function cuerpoFicha(c) {
@@ -372,6 +375,97 @@ function cuerpoFicha(c) {
       'Ya se le avisó del aumento' +
       (c.aviso_aumento_fecha ? ' <span class="campo-ayuda">(' + esc(fechaCorta(c.aviso_aumento_fecha)) + ')</span>' : '') +
     '</label>';
+}
+
+/* Los remitos del cliente se buscan aparte: la ficha se abre al
+   toque y el historial llega un segundo después. */
+async function cargarRemitosDeFicha(c) {
+  var cont = porId('fc-remitos');
+  if (!cont) return;
+  try {
+    var suyos = await traerTodo('remitos', 'cliente_nombre=eq.' + encodeURIComponent(c.local || ''));
+    if (!porId('fc-remitos') || !FC || FC.original.num !== c.num) return;   // cerró o cambió de cliente
+    cont.innerHTML = bloqueRemitosFicha(c, suyos);
+  } catch (e) {
+    cont.innerHTML = '<div class="campo-ayuda">No se pudieron cargar los remitos: ' + esc(e.message) + '</div>';
+  }
+}
+
+function bloqueRemitosFicha(c, suyos) {
+  if (!suyos.length) {
+    return '<div class="campo-ayuda">Todavía no tiene remitos cargados.</div>';
+  }
+
+  /* Los más nuevos primero */
+  var lista = suyos.slice().sort(function (a, b) {
+    return claveFecha(b.fecha || b.created_at).localeCompare(claveFecha(a.fecha || a.created_at));
+  });
+
+  var visitas = lista.filter(function (r) { return r.motivo !== 'cerrado'; });
+  var cerrados = lista.filter(function (r) { return r.motivo === 'cerrado'; });
+  var res = resumirRemitos(visitas);
+  var demora = demoraPromedio(lista);
+  var rep = ultimaReposicion(c.local, lista);
+
+  return '<details class="tarjeta" open style="margin:0">' +
+    '<summary class="tarjeta-cab" style="cursor:pointer">' + ic('clipboard', 16) + ' Remitos' +
+      '<span style="margin-left:auto;display:inline-flex;gap:6px;align-items:center">' +
+        '<span class="pin pin-neutro">' + plural(visitas.length, 'remito') + '</span>' +
+        '<strong>' + plata(res.facturado) + '</strong>' +
+      '</span>' +
+    '</summary>' +
+    '<div class="tarjeta-cuerpo">' +
+
+      '<div class="grilla-stats" style="margin-bottom:12px">' +
+        stat('receipt', 'Facturado', plata(res.facturado), plural(res.unidades, 'unidad', 'unidades'), 'var(--rose)') +
+        (res.deuda > 0
+          ? stat('clock', 'Debe', plata(res.deuda), '', 'var(--warn)')
+          : stat('check', 'Deuda', 'Al día', '', 'var(--ok)')) +
+        (rep
+          ? stat('calendar', 'Última', fechaCorta(rep.fecha),
+                 rep.dias === 0 ? 'hoy' : rep.dias === 1 ? 'ayer' : 'hace ' + plural(rep.dias, 'día'), 'var(--violet)')
+          : '') +
+        (demora
+          ? stat('scale', 'Tarda en pagar', plural(demora.promedio, 'día'),
+                 'promedio de ' + plural(demora.veces, 'deuda') + ' · peor: ' + plural(demora.peor, 'día'), 'var(--text2)')
+          : '') +
+      '</div>' +
+
+      (cerrados.length
+        ? '<div class="campo-ayuda" style="margin-bottom:8px">' +
+          plural(cerrados.length, 'vez', 'veces') + ' estaba cerrado.</div>'
+        : '') +
+
+      '<div class="lista">' +
+        lista.slice(0, 25).map(function (r) {
+          var d = demoraDePago(r);
+          return '<div class="fila" style="cursor:default">' +
+            '<div class="fila-principal">' +
+              '<div class="fila-titulo">' + esc(fechaCorta(r.fecha)) +
+                (r.motivo === 'cerrado' ? ' <span class="pin pin-neutro">cerrado</span>' : '') + '</div>' +
+              '<div class="fila-sub">' +
+                (r.unidades ? plural(+r.unidades, 'unidad', 'unidades') : '—') +
+                (r.notas ? ' · ' + esc(r.notas) : '') + '</div>' +
+            '</div>' +
+            '<div class="fila-derecha">' +
+              '<div class="fila-titulo">' + plata(r.total) + '</div>' +
+              '<div style="margin-top:4px">' + pagoHTML(r) +
+                (d !== null ? ' <span class="pin pin-ok">pagó en ' + plural(d, 'día') + '</span>' : '') +
+              '</div>' +
+            '</div>' +
+          '</div>';
+        }).join('') +
+      '</div>' +
+
+      (lista.length > 25
+        ? '<div class="campo-ayuda" style="margin-top:8px">Se muestran los últimos 25 de ' + lista.length + '.</div>'
+        : '') +
+
+      '<button class="btn btn-secundario btn-bloque" style="margin-top:12px" ' +
+        'onclick="cerrarModal();irA(\'hechos\',\'q=' + encodeURIComponent(c.local || '') + '\')">' +
+        ic('search', 15) + ' Abrirlos en Remitos hechos</button>' +
+    '</div>' +
+  '</details>';
 }
 
 function textoProxima(p) {

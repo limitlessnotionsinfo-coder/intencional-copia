@@ -77,8 +77,8 @@ function desdePlantilla(tipo, nombre) {
     monto: p.monto,
     categoria: p.categoria,
     pagadoPor: p.pagadoPor,
-    compartir: p.modo === 'empresa',
-    entreSocios: p.modo === 'socios'
+    modo: p.modo,
+    socio: p.socio || socios()[socios().length - 1] || ''
   });
 }
 
@@ -303,9 +303,14 @@ function nuevoGasto(prellenado) {
   NG = Object.assign({
     descripcion: '', monto: 0, categoria: 'combustible', fecha: hoyTexto(), notas: '',
     medio1: 'efectivo', alias1: '', medio2: '', monto2: 0, alias2: '',
-    pagadoPor: 'empresa', porcentaje: porcentajeEmpresa(),
-    compartir: false,      // se reparte entre la empresa y quien lo pagó
-    entreSocios: false     // se reparte entre los dueños, sin la empresa
+    pagadoPor: 'empresa',
+    porcentaje: porcentajeEmpresa(),
+    /* Quién se hace cargo del costo:
+       'empresa'       → lo absorbe la empresa
+       'empresa_socio' → una parte la empresa y otra un dueño
+       'socios'        → entre los dueños, sin la empresa */
+    modo: 'empresa',
+    socio: socios()[socios().length - 1] || ''
   }, prellenado || {});
 
   abrirModal('Cargar gasto', cuerpoGasto(),
@@ -365,25 +370,30 @@ function cuerpoGasto() {
     '</div>' +
 
     /* ── Reparto ── */
-    '<div class="campo-etiq">¿Cómo se reparte el costo?</div>' +
+    '<div class="campo-etiq">¿Quién se hace cargo del costo?</div>' +
     '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">' +
-      [['solo', 'Lo cubre entero quien lo pagó'],
-       ['empresa', 'Entre la empresa y ' + esc(NG.pagadoPor === 'empresa' ? 'un socio' : NG.pagadoPor)],
-       ['socios', 'Entre los dueños']].map(function (o) {
-        var activo = (o[0] === 'solo' && !NG.compartir && !NG.entreSocios) ||
-                     (o[0] === 'empresa' && NG.compartir && !NG.entreSocios) ||
-                     (o[0] === 'socios' && NG.entreSocios);
-        return '<button class="btn ' + (activo ? 'btn-primario' : 'btn-secundario') + '" ' +
+      [['empresa', 'La empresa'],
+       ['empresa_socio', 'La empresa y un socio'],
+       ['socios', 'Los socios']].map(function (o) {
+        return '<button class="btn ' + (NG.modo === o[0] ? 'btn-primario' : 'btn-secundario') + '" ' +
           'style="padding:6px 12px;font-size:12px" onclick="setModoReparto(\'' + o[0] + '\')">' + o[1] + '</button>';
       }).join('') +
-      (cat.compartido && !NG.compartir && !NG.entreSocios ? ' <span class="pin pin-warn">suele repartirse</span>' : '') +
+      (cat.compartido && NG.modo === 'empresa' ? ' <span class="pin pin-warn">suele repartirse</span>' : '') +
     '</div>' +
 
-    (NG.compartir && !NG.entreSocios
-      ? '<div class="campo"><div class="campo-etiq">Paga la empresa (%)</div>' +
-          '<input class="campo-input" type="number" min="0" max="100" inputmode="numeric" ' +
-                 'style="max-width:120px" value="' + rep.porcentaje + '" ' +
-                 'oninput="NG.porcentaje=Math.max(0,Math.min(100,+this.value||0));refrescarReparto()"/>' +
+    (NG.modo === 'empresa_socio'
+      ? '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">' +
+          '<div class="campo"><div class="campo-etiq">Qué socio</div>' +
+            '<select class="campo-input" onchange="NG.socio=this.value;refrescarReparto()">' +
+              socios().map(function (s2) {
+                return '<option' + (NG.socio === s2 ? ' selected' : '') + '>' + esc(s2) + '</option>';
+              }).join('') +
+            '</select></div>' +
+          '<div class="campo"><div class="campo-etiq">Paga la empresa (%)</div>' +
+            '<input class="campo-input" type="number" min="0" max="100" inputmode="numeric" ' +
+                   'value="' + rep.porcentaje + '" ' +
+                   'oninput="NG.porcentaje=Math.max(0,Math.min(100,+this.value||0));refrescarReparto()"/>' +
+          '</div>' +
         '</div>'
       : '') +
 
@@ -398,7 +408,7 @@ function repartoActual() {
   var total = +NG.monto || 0;
   var r = {};
 
-  if (NG.entreSocios) {
+  if (NG.modo === 'socios') {
     var lista = socios();
     var cada = Math.floor(total / (lista.length || 1));
     lista.forEach(function (s2, i) {
@@ -407,14 +417,14 @@ function repartoActual() {
     return r;
   }
 
-  if (NG.compartir) {
+  if (NG.modo === 'empresa_socio') {
     var rep = repartirGasto(total, NG.porcentaje);
     r.empresa = rep.empresa;
-    r[NG.pagadoPor === 'empresa' ? (socios()[0] || 'Socio') : NG.pagadoPor] = rep.personal;
+    r[NG.socio || socios()[0] || 'Socio'] = rep.personal;
     return r;
   }
 
-  r[NG.pagadoPor] = total;
+  r.empresa = total;   // 'empresa': lo absorbe entero
   return r;
 }
 
@@ -451,8 +461,8 @@ function refrescarReparto() {
 }
 
 function setModoReparto(modo) {
-  NG.compartir = modo === 'empresa';
-  NG.entreSocios = modo === 'socios';
+  NG.modo = modo;
+  if (modo === 'empresa_socio' && !NG.socio) NG.socio = socios()[socios().length - 1] || '';
   refrescarGasto();
 }
 
@@ -501,7 +511,11 @@ function refrescarGasto() {
 
 function setCatNuevo(c) {
   NG.categoria = c;
-  if (categoriaGasto(c).compartido && !NG.compartir) NG.compartir = true;
+  /* Combustible y mantenimiento se suelen repartir con un socio */
+  if (categoriaGasto(c).compartido && NG.modo === 'empresa') {
+    NG.modo = 'empresa_socio';
+    if (!NG.socio) NG.socio = quienPagaCombustible();
+  }
   refrescarGasto();
 }
 function setMedioGasto(cual, t) {

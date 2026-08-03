@@ -364,3 +364,17 @@ input[type="date"]{
   .fila-color .fc-cant{flex:0 0 76px}
 }
 }
+
+/* ── Rutas del inicio: tarjetas chicas, de una línea ─────── */
+.rutas-mini{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px}
+.ruta-mini{
+  flex:1 1 130px;display:flex;align-items:baseline;gap:7px;
+  padding:8px 12px;border:1px solid var(--border);border-radius:var(--radius);
+  background:var(--bg);box-shadow:var(--sombra);min-width:0;
+}
+.ruta-mini .rm-etiq{font-size:10px;color:var(--muted);font-weight:600;white-space:nowrap}
+.ruta-mini .rm-val{font-family:var(--acento);font-size:19px;font-weight:700;letter-spacing:-.5px}
+.ruta-mini .rm-sub{
+  font-size:10.5px;color:var(--muted);margin-left:auto;text-align:right;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
