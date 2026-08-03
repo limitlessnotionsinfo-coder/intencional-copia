@@ -242,6 +242,7 @@ function grupoDe(g) {
   var nombres = socios().map(normalizar);
 
   if (g.categoria === 'deuda') return 'deuda';
+  if (g.categoria === 'insumos' || g.compra_id) return 'insumos';
   if (g.categoria === 'combustible') return 'combustible';
   if (g.categoria === 'empleado') {
     var esDueno = nombres.some(function (n) { return desc.indexOf(n) !== -1; });
@@ -255,6 +256,7 @@ var GRUPOS = [
   { id: 'empleado',    etiqueta: 'Sueldo del empleado',   icono: 'user' },
   { id: 'combustible', etiqueta: 'Combustible',           icono: 'fuel' },
   { id: 'deuda',       etiqueta: 'Deuda',                 icono: 'clock' },
+  { id: 'insumos',     etiqueta: 'Insumos y pedidos',     icono: 'box' },
   { id: 'otros',       etiqueta: 'Otros gastos',          icono: 'tag' }
 ];
 
@@ -378,12 +380,10 @@ function cuerpoGasto() {
     '</div>' +
 
     (NG.compartir && !NG.entreSocios
-      ? '<div class="campo"><div class="campo-etiq">Paga la empresa</div>' +
-          '<div style="display:flex;align-items:center;gap:10px">' +
-            '<input type="range" min="0" max="100" step="5" value="' + rep.porcentaje + '" ' +
-                   'style="flex:1" oninput="NG.porcentaje=+this.value;refrescarReparto()"/>' +
-            '<span style="min-width:44px;text-align:right;font-weight:700" id="ng-pct">' + rep.porcentaje + '%</span>' +
-          '</div>' +
+      ? '<div class="campo"><div class="campo-etiq">Paga la empresa (%)</div>' +
+          '<input class="campo-input" type="number" min="0" max="100" inputmode="numeric" ' +
+                 'style="max-width:120px" value="' + rep.porcentaje + '" ' +
+                 'oninput="NG.porcentaje=Math.max(0,Math.min(100,+this.value||0));refrescarReparto()"/>' +
         '</div>'
       : '') +
 
@@ -442,8 +442,6 @@ function bloqueReparto() {
 function refrescarReparto() {
   var el = porId('ng-reparto');
   if (el) el.innerHTML = bloqueReparto();
-  var pct = porId('ng-pct');
-  if (pct) pct.textContent = repartirGasto(NG.monto, NG.porcentaje).porcentaje + '%';
   var resto = document.querySelector('#ng-monto2');
   if (resto) {
     var ayuda = resto.parentNode.querySelector('.campo-ayuda');

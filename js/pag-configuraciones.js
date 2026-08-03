@@ -488,12 +488,9 @@ function tarjetaEmpleado() {
       '<div class="campo"><div class="campo-etiq">Monto del botón “Deuda”</div>' +
         inputMonto('cfg-deuda', +leerConfig('monto_deuda', 0) || 0) +
         '<div class="campo-ayuda">Al usarlo se puede cambiar.</div></div>' +
-      '<div class="campo"><div class="campo-etiq">Devolución de esmaltes</div>' +
-        '<div style="display:flex;align-items:center;gap:10px">' +
-          '<input type="range" id="cfg-devolucion" min="0" max="50" step="5" value="' + (+leerConfig('devolucion_pct', 30) || 30) + '" ' +
-                 'style="flex:1" oninput="porId(\'cfg-dev-val\').textContent=this.value+\'%\'"/>' +
-          '<span id="cfg-dev-val" style="min-width:44px;text-align:right;font-weight:700">' + (+leerConfig('devolucion_pct', 30) || 30) + '%</span>' +
-        '</div>' +
+      '<div class="campo"><div class="campo-etiq">Devolución de esmaltes (%)</div>' +
+        '<input class="campo-input" id="cfg-devolucion" type="number" min="0" max="100" inputmode="numeric" ' +
+               'style="max-width:120px" value="' + (+leerConfig('devolucion_pct', 30) || 30) + '"/>' +
         '<div class="campo-ayuda">Cuánto del pedido de esmaltes se puede devolver.</div></div>' +
       '<div class="campo-etiq" style="margin-top:6px">Empleado</div>' +
       '<div class="campo-ayuda" style="margin-bottom:8px">Su sueldo sale mitad y mitad del de los dueños.</div>' +
@@ -513,12 +510,9 @@ function tarjetaEmpleado() {
         'Con el sueldo cargado, en Gastos aparece un botón para registrarlo con un toque.' +
       '</div>' +
 
-      '<div class="campo"><div class="campo-etiq">Gastos compartidos: paga la empresa</div>' +
-        '<div style="display:flex;align-items:center;gap:10px">' +
-          '<input type="range" id="cfg-reparto" min="0" max="100" step="5" value="' + porcentajeEmpresa() + '" ' +
-                 'style="flex:1" oninput="porId(\'cfg-reparto-val\').textContent=this.value+\'%\'"/>' +
-          '<span id="cfg-reparto-val" style="min-width:44px;text-align:right;font-weight:700">' + porcentajeEmpresa() + '%</span>' +
-        '</div>' +
+      '<div class="campo"><div class="campo-etiq">Gastos compartidos: paga la empresa (%)</div>' +
+        '<input class="campo-input" id="cfg-reparto" type="number" min="0" max="100" inputmode="numeric" ' +
+               'style="max-width:120px" value="' + porcentajeEmpresa() + '"/>' +
         '<div class="campo-ayuda">Es el reparto que se propone por defecto en la nafta y el mantenimiento del auto. ' +
           'En cada gasto se puede cambiar.</div>' +
       '</div>' +
