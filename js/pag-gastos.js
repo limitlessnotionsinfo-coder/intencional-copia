@@ -19,8 +19,15 @@ registrarPagina({
     _gastos = (await traerCacheado('gastos')).slice().reverse();
 
     cont.innerHTML =
+      /* Primero la plata: cómo viene la semana y si alcanza.
+         Después con qué cargar. Al final, el detalle y los filtros. */
+      '<div id="g-cierre"></div>' +
+      '<div id="g-resumen"></div>' +
+      '<div class="atajos" style="margin:14px 0">' + botonesRapidos() + '</div>' +
+      '<div id="g-cuentas"></div>' +
+
       '<details class="tarjeta" id="det-filtros-gastos">' +
-        '<summary class="tarjeta-cab" style="cursor:pointer">' + ic('shuffle', 16) + ' Filtros' +
+        '<summary class="tarjeta-cab" style="cursor:pointer">' + ic('shuffle', 16) + ' Período y filtros' +
           '<span style="margin-left:auto" id="g-chip-filtro"></span>' +
         '</summary>' +
         '<div class="tarjeta-cuerpo">' +
@@ -29,12 +36,7 @@ registrarPagina({
           '<div id="g-categorias" style="display:flex;gap:6px;flex-wrap:wrap"></div>' +
         '</div>' +
       '</details>' +
-      '<div id="g-empleado"></div>' +
-      '<div id="g-reintegros"></div>' +
-      '<div id="g-cierre"></div>' +
-      '<div id="g-balance"></div>' +
-      '<div id="g-resumen"></div>' +
-      '<div class="atajos" style="margin:14px 0">' + botonesRapidos() + '</div>' +
+
       '<div id="g-lista"></div>';
 
     pintarGastos();
@@ -148,33 +150,8 @@ function pintarGastos() {
   var deSocios = lista.reduce(function (s, g) { return s + montoDeSocios(g); }, 0);
   var r = rangoGastos();
 
-  pintarEmpleado(lista, r);
-  pintarReintegros();
   pintarCierre(lista, r);
-
-  /* Balance: cuánto le corresponde a cada uno al cerrar */
-  var balances = balancesTodos(lista);
-  porId('g-balance').innerHTML = balances.length
-    ? '<div class="tarjeta"><div class="tarjeta-cuerpo">' +
-        '<div class="campo-etiq" style="margin-bottom:8px">Al cerrar ' + esc(r.etiqueta.toLowerCase()) + '</div>' +
-        balances.map(function (x) {
-          var b = x.balance;
-          return '<div style="display:flex;justify-content:space-between;align-items:baseline;padding:5px 0">' +
-            '<div>' +
-              '<strong>' + esc(x.quien) + '</strong>' +
-              '<div class="campo-ayuda">' +
-                (b.neto > 0 ? 'puso de más' : b.neto < 0 ? 'le cubrieron de más' : 'está a mano') +
-                (b.aCobrar && b.aDevolver ? ' · puso ' + plata(b.aCobrar) + ', le tocaba ' + plata(b.aDevolver) : '') +
-              '</div>' +
-            '</div>' +
-            '<span style="font-weight:700;font-size:17px;color:' +
-              (b.neto > 0 ? 'var(--ok)' : b.neto < 0 ? 'var(--warn)' : 'var(--muted)') + '">' +
-              (b.neto > 0 ? '+' : '') + plata(b.neto) + '</span>' +
-          '</div>';
-        }).join('') +
-        '<div class="campo-ayuda" style="margin-top:8px">Positivo: hay que devolverle. Negativo: tiene que poner.</div>' +
-      '</div></div>'
-    : '';
+  pintarCuentas(lista, r);
 
   var chipF = porId('g-chip-filtro');
   if (chipF) {
@@ -189,13 +166,12 @@ function pintarGastos() {
   });
 
   porId('g-resumen').innerHTML =
-    '<div class="campo-ayuda" style="margin-bottom:8px">' + esc(r.etiqueta) + '</div>' +
-    '<div class="grilla-stats">' +
+    '<div class="grilla-stats" style="margin-top:12px">' +
       stat('wallet', 'Paga la empresa', plata(total), plural(lista.length, 'gasto'), 'var(--danger)') +
       (deSocios > 0
-        ? stat('users', 'Ponen los dueños', plata(deSocios), 'no sale de la empresa', 'var(--violet)')
+        ? stat('users', 'Ponen los dueños', plata(deSocios), 'aparte de la empresa', 'var(--violet)')
         : '') +
-      Object.keys(porCat).sort(function (a, b2) { return porCat[b2] - porCat[a]; }).slice(0, 3)
+      Object.keys(porCat).sort(function (a, b2) { return porCat[b2] - porCat[a]; }).slice(0, 2)
         .map(function (c) {
           var cat = categoriaGasto(c);
           return stat(cat.icono, cat.etiqueta, plata(porCat[c]), '', 'var(--text2)');
@@ -246,7 +222,12 @@ function filaGasto(g) {
         ? '<button class="btn btn-primario" style="padding:4px 10px;font-size:11px;margin-top:4px" ' +
           'onclick="abrirPago(' + g.id + ')">' + ic('cash', 13) + ' Pagar</button>'
         : '') +
-      '<button class="btn btn-fantasma" style="padding:2px 6px;font-size:11px" onclick="borrarGasto(' + g.id + ')">Borrar</button>' +
+      '<div style="display:flex;gap:4px;justify-content:flex-end;margin-top:2px">' +
+        '<button class="btn btn-fantasma" style="padding:2px 6px" aria-label="Editar" onclick="editarGasto(' + g.id + ')">' +
+          ic('edit', 14) + '</button>' +
+        '<button class="btn btn-fantasma" style="padding:2px 6px" aria-label="Borrar" onclick="borrarGasto(' + g.id + ')">' +
+          ic('trash', 14) + '</button>' +
+      '</div>' +
     '</div>' +
   '</div>';
 }
@@ -283,7 +264,7 @@ function porGrupo(lista) {
   return GRUPOS.filter(function (gr) { return grupos[gr.id]; }).map(function (gr) {
     var items = grupos[gr.id];
     var total = items.reduce(function (a, g) { return a + montoEmpresa(g); }, 0);
-    return '<details class="tarjeta" open>' +
+    return '<details class="tarjeta">' +
       '<summary class="tarjeta-cab" style="cursor:pointer">' + ic(gr.icono, 16) + ' ' + esc(gr.etiqueta) +
         '<span style="margin-left:auto;display:inline-flex;gap:6px;align-items:center">' +
           '<span class="pin pin-neutro">' + plural(items.length, 'gasto') + '</span>' +
@@ -620,27 +601,34 @@ async function pintarCierre(lista, rango) {
   if (!c.compromisos.items.length && !c.entradas.remitos) { cont.innerHTML = ''; return; }
 
   cont.innerHTML =
-    '<details class="tarjeta">' +
-      '<summary class="tarjeta-cab" style="cursor:pointer">' + ic('scale', 16) + ' Cierre de ' + esc(rango.etiqueta.toLowerCase()) +
-        '<span style="margin-left:auto"><span class="pin ' + (c.alcanza ? 'pin-ok' : 'pin-danger') + '">' +
-          (c.alcanza ? 'alcanza' : 'faltan ' + plata(c.falta)) + '</span></span>' +
-      '</summary>' +
+    '<div class="tarjeta" style="border-color:' + (c.alcanza ? 'var(--ok-border)' : 'var(--danger-border)') + '">' +
       '<div class="tarjeta-cuerpo">' +
 
-        '<div class="campo-etiq">Entró</div>' +
-        '<div style="display:flex;justify-content:space-between;padding:4px 0;font-size:13px">' +
+        /* El veredicto primero: es lo que se viene a mirar */
+        '<div class="campo-etiq" style="margin:0">Cierre de ' + esc(rango.etiqueta.toLowerCase()) + '</div>' +
+        '<div style="display:flex;align-items:baseline;justify-content:space-between;gap:10px;margin:4px 0 10px">' +
+          '<div class="stat-val" style="font-size:26px;color:' +
+            (c.alcanza ? 'var(--ok)' : 'var(--danger)') + '">' +
+            (c.alcanza ? 'Alcanza' : 'Faltan ' + plata(c.falta)) + '</div>' +
+          '<div class="campo-ayuda" style="margin:0;text-align:right">' +
+            (c.alcanza ? 'sobran ' + plata(c.sobra) : 'para pagar todo') + '</div>' +
+        '</div>' +
+
+        '<div style="display:flex;justify-content:space-between;padding:3px 0;font-size:13px">' +
           '<span>Cobrado en ' + plural(c.entradas.remitos, 'remito') + '</span>' +
           '<strong>' + plata(c.entradas.cobrado) + '</strong></div>' +
-        (c.entradas.deuda
-          ? '<div class="campo-ayuda">Además quedaron ' + plata(c.entradas.deuda) + ' en deuda, que todavía no entraron.</div>'
-          : '') +
-        '<div style="display:flex;justify-content:space-between;padding:4px 0;font-size:13px;color:var(--danger)">' +
+        '<div style="display:flex;justify-content:space-between;padding:3px 0;font-size:13px;color:var(--danger)">' +
           '<span>Ya se gastó</span><strong>− ' + plata(c.yaGastado) + '</strong></div>' +
-        '<div style="display:flex;justify-content:space-between;padding:6px 0;border-top:1px solid var(--border);font-size:13px">' +
-          '<span>Queda disponible</span>' +
+        '<div style="display:flex;justify-content:space-between;padding:5px 0;border-top:1px solid var(--border);font-size:13px">' +
+          '<span>Disponible</span>' +
           '<strong style="color:' + (c.disponible >= 0 ? 'var(--ok)' : 'var(--danger)') + '">' + plata(c.disponible) + '</strong></div>' +
+        (c.entradas.deuda
+          ? '<div class="campo-ayuda">Además hay ' + plata(c.entradas.deuda) + ' en deuda sin cobrar.</div>'
+          : '') +
 
-        '<div class="campo-etiq" style="margin-top:14px">Falta pagar</div>' +
+        '<details style="margin-top:10px">' +
+        '<summary style="cursor:pointer;font-size:12.5px;color:var(--rose);font-weight:600;padding:4px 0">' +
+          'Falta pagar ' + plata(c.compromisos.total) + '</summary>' +
         c.compromisos.items.map(function (i) {
           return '<div style="display:flex;justify-content:space-between;padding:4px 0;font-size:13px' +
             (i.loPonenLosDuenos ? ';color:var(--muted)' : '') + '">' +
@@ -648,22 +636,20 @@ async function pintarCierre(lista, rango) {
               (i.loPonenLosDuenos ? ' · lo ponen los dueños' : '') + '</span></span>' +
             '<strong>' + plata(i.monto) + '</strong></div>';
         }).join('') +
-        '<div style="display:flex;justify-content:space-between;padding:6px 0;border-top:1px solid var(--border);font-size:13px">' +
+        '<div style="display:flex;justify-content:space-between;padding:5px 0;border-top:1px solid var(--border);font-size:13px">' +
           '<span>Sale de la empresa</span><strong>' + plata(c.compromisos.total) + '</strong></div>' +
-
-        '<label style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted);margin:10px 0;cursor:pointer">' +
+        '<label style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted);margin:8px 0 0;cursor:pointer">' +
           '<input type="checkbox"' + (conDeuda ? ' checked' : '') + ' onchange="alternarDeuda()"/> ' +
           'Incluir la deuda de este mes' +
         '</label>' +
+        '</details>' +
 
-        avisoHTML(c.alcanza ? 'ok' : 'danger',
-          c.alcanza
-            ? '<strong>Alcanza.</strong> Después de pagar todo quedan ' + plata(c.sobra) + '.'
-            : '<strong>No alcanza:</strong> faltan ' + plata(c.falta) + '. ' +
-              (c.entradas.deuda ? 'Cobrar las deudas pendientes cubriría ' + plata(Math.min(c.falta, c.entradas.deuda)) + '.' : ''),
-          c.alcanza ? 'check' : 'alert') +
+        (!c.alcanza && c.entradas.deuda
+          ? '<div class="campo-ayuda" style="margin-top:8px">' +
+            'Cobrar las deudas pendientes cubriría ' + plata(Math.min(c.falta, c.entradas.deuda)) + '.</div>'
+          : '') +
       '</div>' +
-    '</details>';
+    '</div>';
 }
 
 
@@ -766,90 +752,94 @@ async function confirmarPago() {
 
 
 /* ═══════════════════════════════════════════════════════════
-   EL EMPLEADO
-   Su sueldo no sale de la empresa: lo ponen los dueños. Va
-   aparte para que se vea cuánto les cuesta.
+   CUENTAS ENTRE NOSOTROS
+   Todo lo que no es plata de la empresa, junto en un solo lugar:
+   lo que se le debe a cada dueño, lo que cuesta el empleado y
+   cómo va el balance entre los socios.
    ═══════════════════════════════════════════════════════════ */
-function pintarEmpleado(lista, rango) {
-  var cont = porId('g-empleado');
+function pintarCuentas(lista, rango) {
+  var cont = porId('g-cuentas');
   if (!cont) return;
 
-  var e = empleadoConfig();
-  var g = gastoEnEmpleado(lista);
-  if (!g.total) { cont.innerHTML = ''; return; }
-
-  var porSocio = Object.keys(g.porSocio);
-
-  cont.innerHTML =
-    '<div class="tarjeta" style="border-color:var(--violet-border, var(--border))">' +
-      '<div class="tarjeta-cab">' + ic('user', 16) + ' ' + esc(e.nombre || 'Empleado') +
-        '<span style="margin-left:auto"><span class="pin pin-neutro">lo pagan los dueños</span></span>' +
-      '</div>' +
-      '<div class="tarjeta-cuerpo">' +
-        '<div style="display:flex;justify-content:space-between;align-items:baseline">' +
-          '<div>' +
-            '<div class="campo-etiq" style="margin:0">' + esc(rango.etiqueta) + '</div>' +
-            '<div class="campo-ayuda">' + plural(g.items.length, 'pago') + '</div>' +
-          '</div>' +
-          '<div class="stat-val" style="font-size:23px;color:var(--violet)">' + plata(g.total) + '</div>' +
-        '</div>' +
-        (porSocio.length
-          ? '<div class="campo-ayuda" style="margin-top:8px">Le tocó a ' +
-            porSocio.map(function (k) { return esc(k) + ' ' + plata(g.porSocio[k]); }).join(' · ') + '</div>'
-          : '') +
-        '<div class="campo-ayuda" style="margin-top:6px">' +
-          'No entra en los gastos de la empresa: sale del bolsillo de los dueños.</div>' +
-      '</div>' +
-    '</div>';
-}
-
-/* ═══════════════════════════════════════════════════════════
-   REINTEGROS
-   La nafta la adelanta un dueño y la empresa le devuelve su parte.
-   ═══════════════════════════════════════════════════════════ */
-function pintarReintegros() {
-  var cont = porId('g-reintegros');
-  if (!cont) return;
-
-  /* Se miran todos los gastos, no solo los del filtro: una deuda
-     de la semana pasada sigue estando aunque mires esta. */
+  /* Los reintegros miran todos los gastos, no solo los del filtro:
+     una nafta de la semana pasada sigue sin devolverse. */
   var grupos = reintegrosPorSocio(_gastos);
-  if (!grupos.length) { cont.innerHTML = ''; return; }
+  var aDevolver = grupos.reduce(function (a, x) { return a + x.total; }, 0);
+  var emp = gastoEnEmpleado(lista);
+  var balances = balancesTodos(lista);
+
+  if (!grupos.length && !emp.total && !balances.length) { cont.innerHTML = ''; return; }
 
   cont.innerHTML =
-    '<details class="tarjeta" open>' +
-      '<summary class="tarjeta-cab" style="cursor:pointer">' + ic('fuel', 16) + ' A devolverle a los dueños' +
-        '<span style="margin-left:auto"><span class="pin pin-warn">' +
-          plata(grupos.reduce(function (a, x) { return a + x.total; }, 0)) + '</span></span>' +
+    '<details class="tarjeta">' +
+      '<summary class="tarjeta-cab" style="cursor:pointer">' + ic('users', 16) + ' Cuentas entre nosotros' +
+        '<span style="margin-left:auto">' +
+          (aDevolver
+            ? '<span class="pin pin-warn">a devolver ' + plata(aDevolver) + '</span>'
+            : '<span class="pin pin-ok">al día</span>') +
+        '</span>' +
       '</summary>' +
       '<div class="tarjeta-cuerpo">' +
-        '<div class="campo-ayuda" style="margin-bottom:10px">' +
-          'Plata que pusieron de su bolsillo por algo que le toca a la empresa. ' +
-          'Al pagarles, marcalo como devuelto y deja de figurar.</div>' +
-        grupos.map(function (x) {
-          return '<div style="padding:10px 0;border-top:1px solid var(--border)">' +
-            '<div style="display:flex;justify-content:space-between;align-items:baseline;gap:10px">' +
-              '<div>' +
-                '<strong>' + esc(x.quien) + '</strong>' +
-                '<div class="campo-ayuda">' + plural(x.items.length, 'gasto') + ' sin devolver</div>' +
-              '</div>' +
-              '<div style="text-align:right">' +
-                '<div style="font-weight:700;font-size:17px;color:var(--warn)">' + plata(x.total) + '</div>' +
-                '<button class="btn btn-primario" style="padding:5px 12px;font-size:12px;margin-top:4px" ' +
-                  'onclick="pagarReintegro(\'' + esc(x.quien).replace(/'/g, "\\'") + '\')">' +
-                  ic('cash', 13) + ' Cobrar</button>' +
-              '</div>' +
-            '</div>' +
-            '<div class="campo-ayuda" style="margin-top:6px">' +
-              x.items.slice(0, 6).map(function (i) {
-                return esc(fechaCorta(i.gasto.fecha)) + ' · ' + esc(i.gasto.descripcion) + ' · ' + plata(i.monto);
-              }).join('<br>') +
-              (x.items.length > 6 ? '<br>y ' + (x.items.length - 6) + ' más' : '') +
-            '</div>' +
-          '</div>';
-        }).join('') +
+
+        (grupos.length ? seccionReintegros(grupos) : '') +
+        (emp.total ? seccionEmpleado(emp, rango) : '') +
+        (balances.length ? seccionBalance(balances, rango) : '') +
+
       '</div>' +
     '</details>';
+}
+
+function seccionReintegros(grupos) {
+  return '<div class="eyebrow">' + ic('fuel', 13) + ' A devolverle a los dueños</div>' +
+    '<div class="campo-ayuda" style="margin-bottom:8px">' +
+      'Plata que pusieron de su bolsillo por algo que le toca a la empresa.</div>' +
+    grupos.map(function (x) {
+      return '<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border)">' +
+        '<div style="min-width:0">' +
+          '<strong>' + esc(x.quien) + '</strong>' +
+          '<div class="campo-ayuda">' + plural(x.items.length, 'gasto') + ' · ' +
+            esc(x.items.slice(0, 2).map(function (i) { return fechaCorta(i.gasto.fecha); }).join(', ')) +
+            (x.items.length > 2 ? '…' : '') + '</div>' +
+        '</div>' +
+        '<div style="text-align:right;white-space:nowrap">' +
+          '<div style="font-weight:700;color:var(--warn)">' + plata(x.total) + '</div>' +
+          '<button class="btn btn-primario" style="padding:4px 11px;font-size:11.5px;margin-top:3px" ' +
+            'onclick="pagarReintegro(\'' + esc(x.quien).replace(/'/g, "\\'") + '\')">' +
+            ic('cash', 12) + ' Cobrar</button>' +
+        '</div>' +
+      '</div>';
+    }).join('');
+}
+
+function seccionEmpleado(emp, rango) {
+  var e = empleadoConfig();
+  var porSocio = Object.keys(emp.porSocio);
+  return '<div class="eyebrow" style="margin-top:14px">' + ic('user', 13) + ' ' + esc(e.nombre || 'Empleado') + '</div>' +
+    '<div style="display:flex;justify-content:space-between;align-items:baseline;padding:4px 0">' +
+      '<div class="campo-ayuda" style="margin:0">' + esc(rango.etiqueta) + ' · ' + plural(emp.items.length, 'pago') + '</div>' +
+      '<strong style="color:var(--violet)">' + plata(emp.total) + '</strong>' +
+    '</div>' +
+    (porSocio.length
+      ? '<div class="campo-ayuda">Puso ' +
+        porSocio.map(function (k) { return esc(k) + ' ' + plata(emp.porSocio[k]); }).join(' · ') +
+        ' — no sale de la empresa.</div>'
+      : '');
+}
+
+function seccionBalance(balances, rango) {
+  return '<div class="eyebrow" style="margin-top:14px">' + ic('scale', 13) + ' Balance de ' + esc(rango.etiqueta.toLowerCase()) + '</div>' +
+    balances.map(function (x) {
+      var b = x.balance;
+      return '<div style="display:flex;justify-content:space-between;align-items:baseline;padding:4px 0">' +
+        '<div>' + esc(x.quien) +
+          '<span class="campo-ayuda"> · ' +
+            (b.neto > 0 ? 'puso de más' : b.neto < 0 ? 'le cubrieron de más' : 'está a mano') + '</span>' +
+        '</div>' +
+        '<strong style="color:' + (b.neto > 0 ? 'var(--ok)' : b.neto < 0 ? 'var(--warn)' : 'var(--muted)') + '">' +
+          (b.neto > 0 ? '+' : '') + plata(b.neto) + '</strong>' +
+      '</div>';
+    }).join('') +
+    '<div class="campo-ayuda">Positivo: hay que devolverle. Negativo: tiene que poner.</div>';
 }
 
 function pagarReintegro(quien) {
@@ -896,4 +886,110 @@ async function confirmarReintegro(quien) {
   cerrarModal();
   toast(fallos ? 'Quedaron ' + fallos + ' sin marcar' : 'Devuelto a ' + quien + ': ' + plata(grupo.total));
   pintarRuta();
+}
+
+
+/* ═══════════════════════════════════════════════════════════
+   EDITAR UN GASTO
+   ═══════════════════════════════════════════════════════════ */
+var EG = null;
+
+function editarGasto(id) {
+  var g = _gastos.find(function (x) { return String(x.id) === String(id); });
+  if (!g) return;
+  EG = g;
+
+  abrirModal('Editar gasto',
+    '<div class="campo"><div class="campo-etiq">Descripción</div>' +
+      '<input class="campo-input" id="eg-desc" value="' + esc(g.descripcion || '') + '"/></div>' +
+
+    '<div class="campo"><div class="campo-etiq">Categoría</div>' +
+      '<select class="campo-input" id="eg-cat">' +
+        CATEGORIAS_GASTO.map(function (c) {
+          return '<option value="' + c.id + '"' + ((g.categoria || 'otro') === c.id ? ' selected' : '') + '>' +
+            esc(c.etiqueta) + '</option>';
+        }).join('') +
+      '</select></div>' +
+
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">' +
+      '<div class="campo"><div class="campo-etiq">Monto</div>' + inputMonto('eg-monto', g.monto) + '</div>' +
+      '<div class="campo"><div class="campo-etiq">Fecha</div>' +
+        '<input class="campo-input" id="eg-fecha" value="' + esc(g.fecha || '') + '"/></div>' +
+    '</div>' +
+
+    '<div class="campo"><div class="campo-etiq">¿Quién puso la plata?</div>' +
+      '<select class="campo-input" id="eg-quien">' +
+        '<option value="">— sin anotar —</option>' +
+        quienesPagan().map(function (q) {
+          return '<option value="' + esc(q.id) + '"' + (g.pagado_por === q.id ? ' selected' : '') + '>' +
+            esc(q.etiqueta) + '</option>';
+        }).join('') +
+      '</select>' +
+      '<div class="campo-ayuda">El reparto del costo no se toca acá: si cambió, conviene borrarlo y cargarlo de nuevo.</div>' +
+    '</div>' +
+
+    '<div class="campo" style="margin:0"><div class="campo-etiq">Nota</div>' +
+      '<input class="campo-input" id="eg-notas" value="' + esc(g.notas || '') + '"/></div>',
+
+    '<div style="display:flex;gap:8px;flex-wrap:wrap">' +
+      '<button class="btn btn-primario" style="flex:1;min-width:150px" onclick="guardarGastoEditado()">Guardar</button>' +
+      '<button class="btn btn-peligro" onclick="cerrarModal();borrarGasto(' + g.id + ')">' +
+        ic('trash', 15) + ' Borrar</button>' +
+    '</div>');
+}
+
+async function guardarGastoEditado() {
+  var g = EG;
+  if (!g) return;
+
+  var desc = (porId('eg-desc').value || '').trim();
+  if (!desc) { toast('El gasto necesita una descripción', 'error'); return; }
+  var monto = leerMonto('eg-monto');
+  if (!monto) { toast('El monto tiene que ser mayor a cero', 'error'); return; }
+
+  var cambios = {};
+  if (desc !== (g.descripcion || '')) cambios.descripcion = desc;
+  if (monto !== (+g.monto || 0)) cambios.monto = monto;
+
+  var cat = porId('eg-cat').value;
+  if (cat !== (g.categoria || 'otro')) cambios.categoria = cat;
+
+  var fecha = (porId('eg-fecha').value || '').trim();
+  if (fecha !== (g.fecha || '')) cambios.fecha = fecha || null;
+
+  var quien = porId('eg-quien').value;
+  if (quien !== (g.pagado_por || '')) cambios.pagado_por = quien || null;
+
+  var notas = (porId('eg-notas').value || '').trim();
+  if (notas !== (g.notas || '')) cambios.notas = notas || null;
+
+  /* Si cambió el monto, el reparto se recalcula con la misma
+     proporción: si no, quedarían partes que no suman el total. */
+  if (cambios.monto) {
+    var rep = repartoDeGasto(g);
+    var viejo = +g.monto || 0;
+    if (viejo > 0 && Object.keys(rep).length) {
+      var nuevo = {};
+      var acumulado = 0;
+      var claves = Object.keys(rep);
+      claves.forEach(function (k, i) {
+        if (i === claves.length - 1) nuevo[k] = monto - acumulado;
+        else { nuevo[k] = Math.round((+rep[k] || 0) * monto / viejo); acumulado += nuevo[k]; }
+      });
+      cambios.reparto = JSON.stringify(nuevo);
+      cambios.parte_empresa = +nuevo.empresa || 0;
+      cambios.parte_personal = monto - (+nuevo.empresa || 0);
+    }
+  }
+
+  if (!Object.keys(cambios).length) { cerrarModal(); return; }
+
+  try {
+    await actualizar('gastos', g.id, cambios);
+    Object.assign(g, cambios);
+    invalidarCache('gastos');
+    cerrarModal();
+    toast('Gasto actualizado');
+    pintarRuta();
+  } catch (e) { toast(e.message, 'error'); }
 }

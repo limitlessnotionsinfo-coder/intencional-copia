@@ -544,6 +544,17 @@ function colaConAtraso(ruta) {
   return { cola: cola, inicio: inicioCola() };
 }
 
+/* Las hojas que ya usás, con cuántos clientes tiene cada una */
+function rutasConocidas(clientes) {
+  var r = {};
+  (clientes || []).forEach(function (c) {
+    var n = rutaDe(c);
+    if (n) r[n] = (r[n] || 0) + 1;
+  });
+  return Object.keys(r).sort(function (a, b) { return (+a || 0) - (+b || 0); })
+    .map(function (n) { return { ruta: n, clientes: r[n] }; });
+}
+
 function clientesDeRuta(clientes, ruta) {
   if (!ruta) return [];
   return (clientes || []).filter(function (c) {

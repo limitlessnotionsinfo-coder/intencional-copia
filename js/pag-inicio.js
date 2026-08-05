@@ -236,6 +236,13 @@ function atajo(icono, texto, accion, estilo) {
    PENDIENTES
    Van arriba de todo: es lo que hay que hacer hoy.
    ═══════════════════════════════════════════════════════════ */
+/* ═══════════════════════════════════════════════════════════
+   PENDIENTES
+   Arriba el alta, después los filtros y la lista.
+   ═══════════════════════════════════════════════════════════ */
+var _filtroPend = '';        // '' = todos
+var _ordenPend = 'tipo';     // tipo · nuevos · viejos
+
 function bloquePendientes() {
   var abiertos = _pendientes.filter(function (t) { return !bool(t.hecha); });
   var hechas = _pendientes.filter(function (t) { return bool(t.hecha); });
@@ -252,6 +259,9 @@ function bloquePendientes() {
       return '<span class="pin ' + d.clase + '">' + ic(d.icono, 12) + ' ' + porTipo[k] + '</span>';
     }).join(' ');
 
+  var visibles = ordenarPendientes(
+    abiertos.filter(function (t) { return !_filtroPend || (t.tipo || 'otro') === _filtroPend; }));
+
   return '<details class="tarjeta">' +
     '<summary class="tarjeta-cab" style="cursor:pointer">' +
       ic('clipboard', 16) + ' Pendientes' +
@@ -263,7 +273,8 @@ function bloquePendientes() {
       '</span>' +
     '</summary>' +
     '<div class="tarjeta-cuerpo">' +
-      /* Primero el tipo: de eso depende qué más hace falta. */
+
+      /* Primero el tipo: de eso depende qué más hace falta */
       '<div class="campo" style="margin-bottom:10px"><div class="campo-etiq">¿Qué tipo de pendiente?</div>' +
         '<select class="campo-input" id="pend-tipo" onchange="alternarClientePendiente()">' +
           Object.keys(TIPOS_PENDIENTE).map(function (k) {
@@ -282,52 +293,26 @@ function bloquePendientes() {
           ic('plus', 17) + '</button>' +
       '</div>' +
 
-      (abiertos.length ? abiertos.length + ' por hacer' : 'todo listo') +
-        '</span>' +
-      '</span>' +
-    '</summary>' +
-    '<div class="tarjeta-cuerpo">' +
-      /* Texto arriba, tipo y botón abajo: en el celular no entran
-         los tres en el mismo renglón y el más quedaba suelto. */
-      '<div class="pend-form">' +
-        '<input class="campo-input pf-texto" id="pend-texto" ' +
-               'placeholder="Agregar pendiente…" onkeydown="if(event.key===\'Enter\')agregarPendiente()"/>' +
-        '<select class="campo-input" id="pend-tipo" onchange="alternarClientePendiente()">' +
-          Object.keys(TIPOS_PENDIENTE).map(function (k) {
-            return '<option value="' + k + '">' + esc(TIPOS_PENDIENTE[k].etiqueta) + '</option>';
-          }).join('') +
-        '</select>' +
-        '<button class="btn btn-primario pf-mas" onclick="agregarPendiente()" aria-label="Agregar pendiente">' +
-          ic('plus', 17) + '</button>' +
-      '</div>' +
+      /* Filtros y orden */
+      (abiertos.length > 1
+        ? '<div style="display:flex;gap:6px;flex-wrap:wrap;margin:14px 0 10px">' +
+            chipPend('', 'Todos', abiertos.length) +
+            Object.keys(TIPOS_PENDIENTE).filter(function (k) { return porTipo[k]; })
+              .map(function (k) { return chipPend(k, TIPOS_PENDIENTE[k].etiqueta, porTipo[k]); }).join('') +
+            '<select class="campo-input" style="width:auto;margin-left:auto;font-size:12px;padding:5px 8px" ' +
+                    'onchange="_ordenPend=this.value;pintarRuta()">' +
+              [['tipo', 'Por tipo'], ['nuevos', 'Más nuevos'], ['viejos', 'Más viejos']].map(function (o) {
+                return '<option value="' + o[0] + '"' + (_ordenPend === o[0] ? ' selected' : '') + '>' + o[1] + '</option>';
+              }).join('') +
+            '</select>' +
+          '</div>'
+        : '') +
 
-      '<div id="pend-cliente-wrap" style="display:none;margin-bottom:12px">' +
-        '<div class="campo-etiq">¿De qué cliente es?</div>' +
-        '<div class="buscador">' +
-          '<span class="ic-lupa">' + ic('search', 15) + '</span>' +
-          '<input class="campo-input" id="pend-cliente" autocomplete="off" ' +
-                 'placeholder="Número, nombre o zona" oninput="buscarClientePendiente(this.value)"/>' +
-        '</div>' +
-        '<div id="pend-cliente-res"></div>' +
-        '<div id="pend-cliente-elegido"></div>' +
-        '<button class="btn btn-fantasma" style="padding:4px 0;font-size:12px;text-decoration:underline" ' +
-                'onclick="abrirClienteNuevo()">Es un cliente que todavía no está cargado</button>' +
-        '<div id="pend-nuevo-wrap" style="display:none">' +
-          '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">' +
-            '<div class="campo" style="margin:0"><div class="campo-etiq">Nombre</div>' +
-              '<input class="campo-input" id="pend-nuevo-nombre" placeholder="Nombre del local"/></div>' +
-            '<div class="campo" style="margin:0"><div class="campo-etiq">Zona</div>' +
-              '<input class="campo-input" id="pend-nuevo-loc" list="zonas-conocidas" placeholder="Localidad"/></div>' +
-          '</div>' +
-          '<datalist id="zonas-conocidas"></datalist>' +
-          '<div class="campo-ayuda">Igual te va a avisar cuando la ruta pase por esa zona.</div>' +
-        '</div>' +
-        '<div class="campo-ayuda">Con esto la app sabe su ruta y su zona, y te avisa cuando toque.</div>' +
-      '</div>' +
-
-      (abiertos.length
-        ? '<div class="lista">' + abiertos.map(function (t) { return filaPendiente(t, false); }).join('') + '</div>'
-        : '<div class="campo-ayuda">No queda nada pendiente. Agregá uno arriba si te acordás de algo.</div>') +
+      (visibles.length
+        ? '<div class="lista">' + visibles.map(function (t) { return filaPendiente(t, false); }).join('') + '</div>'
+        : '<div class="campo-ayuda">' +
+          (abiertos.length ? 'No hay pendientes de ese tipo.' : 'No queda nada pendiente. Agregá uno arriba si te acordás de algo.') +
+          '</div>') +
 
       (hechas.length
         ? '<div class="eyebrow" style="margin:16px 0 8px">Hechas</div>' +
@@ -336,6 +321,37 @@ function bloquePendientes() {
     '</div>' +
   '</details>';
 }
+
+function chipPend(tipo, etiqueta, n) {
+  return '<button class="btn ' + (_filtroPend === tipo ? 'btn-primario' : 'btn-secundario') + '" ' +
+    'style="padding:5px 11px;font-size:12px" onclick="setFiltroPend(\'' + tipo + '\')">' +
+    esc(etiqueta) + ' <span class="pin pin-neutro" style="margin-left:2px">' + n + '</span></button>';
+}
+
+function setFiltroPend(t) {
+  _filtroPend = t;
+  pintarRuta();
+}
+
+/* El orden por tipo agrupa: primero lo que hay que retirar, después
+   los pedidos, después los clientes nuevos. */
+function ordenarPendientes(lista) {
+  var peso = { retirar: 0, pedido: 1, nuevo: 2, otro: 3 };
+  var copia = lista.slice();
+
+  if (_ordenPend === 'nuevos') {
+    return copia.sort(function (a, b) { return (+b.id || 0) - (+a.id || 0); });
+  }
+  if (_ordenPend === 'viejos') {
+    return copia.sort(function (a, b) { return (+a.id || 0) - (+b.id || 0); });
+  }
+  return copia.sort(function (a, b) {
+    var pa = peso[a.tipo || 'otro'], pb = peso[b.tipo || 'otro'];
+    if (pa !== pb) return pa - pb;
+    return (+b.id || 0) - (+a.id || 0);
+  });
+}
+
 
 function filaPendiente(t, hecha) {
   var d = tipoPendiente(t);
@@ -360,6 +376,9 @@ function filaPendiente(t, hecha) {
         (ruta ? ' <span class="pin pin-neutro">Ruta ' + esc(ruta) + '</span>' : '') +
         '</div>') +
     '</div>' +
+    (hecha ? '' :
+      '<button class="btn btn-fantasma" style="padding:4px" aria-label="Editar" onclick="editarPendiente(' + t.id + ')">' +
+        ic('edit', 15) + '</button>') +
     '<button class="btn btn-fantasma" style="padding:4px" aria-label="Borrar" onclick="borrarPendiente(' + t.id + ')">' +
       ic('trash', 15) + '</button>' +
   '</div>';
@@ -503,6 +522,76 @@ async function agregarPendiente() {
     inp.value = '';
     _clientePedido = null;
     toast('Pendiente agregado');
+    pintarRuta();
+  } catch (e) { toast(e.message, 'error'); }
+}
+
+/* ── Editar un pendiente ─────────────────────────────────── */
+var EP = null;
+
+function editarPendiente(id) {
+  var t = _pendientes.find(function (x) { return String(x.id) === String(id); });
+  if (!t) return;
+  EP = t;
+
+  abrirModal('Editar pendiente',
+    '<div class="campo"><div class="campo-etiq">Tipo</div>' +
+      '<select class="campo-input" id="ep-tipo">' +
+        Object.keys(TIPOS_PENDIENTE).map(function (k) {
+          return '<option value="' + k + '"' + ((t.tipo || 'otro') === k ? ' selected' : '') + '>' +
+            esc(TIPOS_PENDIENTE[k].etiqueta) + '</option>';
+        }).join('') +
+      '</select></div>' +
+
+    '<div class="campo"><div class="campo-etiq">Texto</div>' +
+      '<input class="campo-input" id="ep-texto" value="' + esc(t.texto || '') + '"/></div>' +
+
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">' +
+      '<div class="campo"><div class="campo-etiq">Cliente</div>' +
+        '<input class="campo-input" id="ep-cliente" list="ep-clientes" value="' + esc(t.cliente_nombre || '') + '" ' +
+               'placeholder="Opcional"/>' +
+        '<datalist id="ep-clientes">' +
+          _clientesInicio.filter(clienteActivo).slice(0, 400).map(function (c) {
+            return '<option value="' + esc(c.local) + '">';
+          }).join('') +
+        '</datalist></div>' +
+      '<div class="campo"><div class="campo-etiq">Zona</div>' +
+        '<input class="campo-input" id="ep-loc" value="' + esc(t.loc || '') + '" placeholder="Localidad"/></div>' +
+    '</div>',
+
+    '<div style="display:flex;gap:8px;flex-wrap:wrap">' +
+      '<button class="btn btn-primario" style="flex:1;min-width:150px" onclick="guardarPendiente()">Guardar</button>' +
+      '<button class="btn btn-peligro" onclick="cerrarModal();borrarPendiente(' + t.id + ')">' +
+        ic('trash', 15) + ' Borrar</button>' +
+    '</div>');
+}
+
+async function guardarPendiente() {
+  var t = EP;
+  if (!t) return;
+  var texto = (porId('ep-texto').value || '').trim();
+  if (!texto) { toast('El pendiente necesita un texto', 'error'); return; }
+
+  var cambios = {};
+  if (texto !== (t.texto || '')) cambios.texto = texto;
+
+  var tipo = porId('ep-tipo').value;
+  if (tipo !== (t.tipo || 'otro')) cambios.tipo = tipo;
+
+  var cliente = (porId('ep-cliente').value || '').trim();
+  if (cliente !== (t.cliente_nombre || '')) cambios.cliente_nombre = cliente || null;
+
+  var loc = (porId('ep-loc').value || '').trim();
+  if (loc !== (t.loc || '')) cambios.loc = loc || null;
+
+  if (!Object.keys(cambios).length) { cerrarModal(); return; }
+
+  try {
+    await actualizar('tareas', t.id, cambios);
+    Object.assign(t, cambios);
+    invalidarCache('tareas');
+    cerrarModal();
+    toast('Pendiente actualizado');
     pintarRuta();
   } catch (e) { toast(e.message, 'error'); }
 }

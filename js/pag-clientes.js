@@ -161,7 +161,7 @@ function filaCliente(c) {
 }
 
 /* ── Alta rápida de cliente ──────────────────────────────── */
-function nuevoCliente() {
+function nuevoCliente(rutaFija) {
   abrirModal('Nuevo cliente',
     '<div class="campo"><div class="campo-etiq">Nombre del local</div>' +
       '<input class="campo-input" id="nc-local" placeholder="Ej: Perfumería Sol"/></div>' +
@@ -175,7 +175,8 @@ function nuevoCliente() {
       '<input class="campo-input" id="nc-loc" placeholder="Ciudad o partido"/></div>' +
     '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">' +
       '<div class="campo"><div class="campo-etiq">Hoja de ruta</div>' +
-        '<input class="campo-input" id="nc-ruta" type="number" min="0" placeholder="Ej: 14"/></div>' +
+        '<input class="campo-input" id="nc-ruta" type="number" min="0" placeholder="Ej: 14" ' +
+               'value="' + esc(rutaFija || '') + '"/></div>' +
       '<div class="campo"><div class="campo-etiq">Exhibidores</div>' +
         '<input class="campo-input" id="nc-exhib" type="number" min="0" value="0"/></div>' +
     '</div>' +
@@ -244,7 +245,7 @@ function porHojaDeRuta(lista) {
     var proxima = proximaDe[r];
     var esHoy = r !== 'sin' && String(r) === String(hoy);
 
-    return '<details class="tarjeta"' + (esHoy ? ' open' : '') + '>' +
+    return '<details class="tarjeta">' +
       '<summary class="tarjeta-cab" style="cursor:pointer">' +
         ic('map', 16) + ' ' + (r === 'sin' ? 'Sin hoja de ruta' : 'Ruta ' + esc(r)) +
         (proxima && !esHoy ? ' <span class="campo-ayuda" style="font-weight:500;margin-left:6px">' + esc(fechaCorta(proxima)) + '</span>' : '') +
@@ -256,9 +257,13 @@ function porHojaDeRuta(lista) {
       '</summary>' +
       '<div class="tarjeta-cuerpo" style="padding:0">' +
         (r !== 'sin'
-          ? '<div style="padding:10px 14px;border-bottom:1px solid var(--border)">' +
+          ? '<div style="display:flex;gap:6px;flex-wrap:wrap;padding:10px 14px;border-bottom:1px solid var(--border)">' +
               '<button class="btn btn-secundario" style="font-size:12px;padding:6px 12px" ' +
-                'onclick="editarHoja(\'' + esc(r) + '\')">' + ic('edit', 14) + ' Editar la hoja ' + esc(r) + '</button>' +
+                'onclick="editarHoja(\'' + esc(r) + '\')">' + ic('edit', 14) + ' Editar hoja</button>' +
+              '<button class="btn btn-secundario" style="font-size:12px;padding:6px 12px" ' +
+                'onclick="nuevoCliente(\'' + esc(r) + '\')">' + ic('plus', 14) + ' Cliente acá</button>' +
+              '<button class="btn btn-secundario" style="font-size:12px;padding:6px 12px" ' +
+                'onclick="moverClientes(\'' + esc(r) + '\')">' + ic('shuffle', 14) + ' Mover clientes</button>' +
             '</div>'
           : '') +
         '<div class="lista" style="border:none;border-radius:0">' + g.map(filaCliente).join('') + '</div>' +
@@ -309,7 +314,11 @@ function editarHoja(ruta) {
     '</div>' +
     '<div id="eh-estado"></div>',
 
-    '<button class="btn btn-primario btn-bloque" onclick="guardarHoja(\'' + esc(ruta) + '\')">Guardar</button>');
+    '<div style="display:flex;gap:8px;flex-wrap:wrap">' +
+      '<button class="btn btn-primario" style="flex:1;min-width:150px" onclick="guardarHoja(\'' + esc(ruta) + '\')">Guardar</button>' +
+      '<button class="btn btn-peligro" onclick="cerrarModal();borrarHoja(\'' + esc(ruta) + '\')">' +
+        ic('trash', 15) + ' Borrar hoja</button>' +
+    '</div>');
 }
 
 async function guardarHoja(rutaVieja) {
@@ -468,7 +477,7 @@ function bloqueRemitosFicha(c, suyos) {
   var demora = demoraPromedio(lista);
   var rep = ultimaReposicion(c.local, lista);
 
-  return '<details class="tarjeta" open style="margin:0">' +
+  return '<details class="tarjeta" style="margin:0">' +
     '<summary class="tarjeta-cab" style="cursor:pointer">' + ic('clipboard', 16) + ' Remitos' +
       '<span style="margin-left:auto;display:inline-flex;gap:6px;align-items:center">' +
         '<span class="pin pin-neutro">' + plural(visitas.length, 'remito') + '</span>' +
@@ -689,4 +698,149 @@ function grupoDuplicados(titulo, pares, ayuda) {
       }).join('') +
     '</div>' +
     (pares.length > 30 ? '<div class="campo-ayuda">Se muestran 30 de ' + pares.length + '.</div>' : '');
+}
+
+/* ═══════════════════════════════════════════════════════════
+   MOVER Y BORRAR HOJAS DE RUTA
+   ═══════════════════════════════════════════════════════════ */
+var MC = { origen: '', elegidos: {} };
+
+function moverClientes(ruta) {
+  MC = { origen: String(ruta), elegidos: {} };
+  var g = _clientes.filter(function (c) { return String(rutaDe(c)) === MC.origen; });
+
+  abrirModal('Mover clientes de la hoja ' + ruta,
+    '<div class="campo"><div class="campo-etiq">¿A qué hoja pasan?</div>' +
+      '<input class="campo-input" id="mc-destino" type="number" min="0" placeholder="Número de la hoja"/>' +
+      '<div class="campo-ayuda">Dejalo vacío para sacarlos de toda hoja de ruta.</div>' +
+    '</div>' +
+
+    '<div style="display:flex;gap:8px;margin-bottom:8px">' +
+      '<button class="btn btn-secundario" style="flex:1;font-size:12px;padding:6px" onclick="elegirTodosMC(true)">Todos</button>' +
+      '<button class="btn btn-secundario" style="flex:1;font-size:12px;padding:6px" onclick="elegirTodosMC(false)">Ninguno</button>' +
+    '</div>' +
+
+    '<div class="lista" id="mc-lista">' + g.map(filaMover).join('') + '</div>' +
+    '<div class="campo-ayuda" id="mc-cuenta" style="margin-top:8px"></div>',
+
+    '<button class="btn btn-primario btn-bloque" id="btn-mc" onclick="confirmarMover()">Mover los elegidos</button>');
+  actualizarCuentaMC();
+}
+
+function filaMover(c) {
+  return '<label class="fila" style="cursor:pointer">' +
+    '<input type="checkbox" data-num="' + esc(c.num) + '" class="mc-check" onchange="marcarMC(this)"/>' +
+    '<span class="num-cliente">' + esc(c.num_str || c.num) + '</span>' +
+    '<div class="fila-principal">' +
+      '<div class="fila-titulo">' + esc(c.local) + '</div>' +
+      '<div class="fila-sub">' + [c.dir, c.loc].filter(Boolean).map(esc).join(' · ') + '</div>' +
+    '</div>' +
+  '</label>';
+}
+
+function marcarMC(inp) {
+  if (inp.checked) MC.elegidos[inp.dataset.num] = 1;
+  else delete MC.elegidos[inp.dataset.num];
+  actualizarCuentaMC();
+}
+
+function elegirTodosMC(todos) {
+  MC.elegidos = {};
+  $$('.mc-check').forEach(function (inp) {
+    inp.checked = todos;
+    if (todos) MC.elegidos[inp.dataset.num] = 1;
+  });
+  actualizarCuentaMC();
+}
+
+function actualizarCuentaMC() {
+  var el = porId('mc-cuenta');
+  if (!el) return;
+  var n = Object.keys(MC.elegidos).length;
+  el.textContent = n ? plural(n, 'cliente') + ' elegido' + (n === 1 ? '' : 's') : 'No elegiste ninguno todavía.';
+}
+
+async function confirmarMover() {
+  var nums = Object.keys(MC.elegidos);
+  if (!nums.length) { toast('Elegí al menos un cliente', 'error'); return; }
+
+  var destino = (porId('mc-destino').value || '').trim();
+  var btn = porId('btn-mc');
+  if (btn) { btn.disabled = true; btn.textContent = 'Moviendo…'; }
+
+  var fallos = 0;
+  for (var i = 0; i < nums.length; i++) {
+    var c = _clientes.find(function (x) { return String(x.num) === nums[i]; });
+    if (!c) continue;
+
+    var actual = {};
+    try { actual = typeof c.ruta === 'string' ? JSON.parse(c.ruta || '{}') : (c.ruta || {}); } catch (e) {}
+    actual.orden = destino;
+
+    var cambios = { ruta: JSON.stringify(actual) };
+    /* En la hoja nueva le toca un lugar libre */
+    if (destino) cambios.num_str = codigoParaRutaNueva(_clientes, destino, c);
+
+    try {
+      await actualizar('clientes', c.num, cambios);
+      Object.assign(c, cambios);
+    } catch (e) { fallos++; }
+  }
+
+  invalidarCache('clientes');
+  cerrarModal();
+  toast(fallos
+    ? 'Quedaron ' + fallos + ' sin mover'
+    : nums.length + (destino ? ' clientes pasaron a la hoja ' + destino : ' quedaron sin hoja'));
+  pintarRuta();
+}
+
+/* ── Borrar una hoja de ruta ─────────────────────────────────
+   La hoja no es una tabla: es el número que tienen sus clientes.
+   Borrarla es sacárselo a todos, no borrar a nadie.
+   ────────────────────────────────────────────────────────── */
+function borrarHoja(ruta) {
+  var g = _clientes.filter(function (c) { return String(rutaDe(c)) === String(ruta); });
+  var enCola = colaRutas().indexOf(String(ruta)) !== -1;
+
+  abrirModal('Borrar la hoja ' + ruta,
+    '<p style="font-size:13px;color:var(--text2);line-height:1.6">' +
+      'Sus <strong>' + plural(g.length, 'cliente') + '</strong> quedan sin hoja de ruta. ' +
+      'No se borra ningún cliente ni ningún remito.</p>' +
+    (enCola
+      ? avisoHTML('warn', 'La hoja ' + ruta + ' está en la cola de rutas: también se saca de ahí.', 'map')
+      : '') +
+    '<div class="campo-ayuda">Después podés asignarlos a otra hoja desde “Mover clientes”.</div>',
+
+    '<button class="btn btn-peligro btn-bloque" id="btn-bh" onclick="confirmarBorrarHoja(\'' + esc(ruta) + '\')">' +
+      'Sí, borrar la hoja</button>');
+}
+
+async function confirmarBorrarHoja(ruta) {
+  var g = _clientes.filter(function (c) { return String(rutaDe(c)) === String(ruta); });
+  var btn = porId('btn-bh');
+  if (btn) { btn.disabled = true; btn.textContent = 'Borrando…'; }
+
+  var fallos = 0;
+  for (var i = 0; i < g.length; i++) {
+    var c = g[i];
+    var actual = {};
+    try { actual = typeof c.ruta === 'string' ? JSON.parse(c.ruta || '{}') : (c.ruta || {}); } catch (e) {}
+    actual.orden = '';
+    try {
+      await actualizar('clientes', c.num, { ruta: JSON.stringify(actual) });
+      Object.assign(c, { ruta: JSON.stringify(actual) });
+    } catch (e) { fallos++; }
+  }
+
+  /* Y se saca de la cola, si estaba */
+  try {
+    var cola = colaRutas().filter(function (x) { return x !== String(ruta); });
+    if (cola.length !== colaRutas().length) await guardarCola(cola);
+  } catch (e) {}
+
+  invalidarCache('clientes');
+  cerrarModal();
+  toast(fallos ? 'Quedaron ' + fallos + ' clientes con la hoja vieja' : 'Hoja ' + ruta + ' borrada');
+  pintarRuta();
 }
