@@ -32,7 +32,7 @@ registrarPagina({
                   'onclick="verTodasLasHojas()">ver todas</button></div></div>'
         : '') +
       '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px">' +
-        '<button class="btn btn-primario" style="flex:1;min-width:170px" onclick="nuevoCliente()">' +
+        '<button class="btn btn-primario" style="flex:1;min-width:120px" onclick="nuevoCliente()">' +
           ic('plus', 16) + ' Nuevo cliente</button>' +
         '<button class="btn btn-secundario" onclick="revisarDuplicados()">' +
           ic('users', 15) + ' Revisar duplicados</button>' +
@@ -315,7 +315,7 @@ function editarHoja(ruta) {
     '<div id="eh-estado"></div>',
 
     '<div style="display:flex;gap:8px;flex-wrap:wrap">' +
-      '<button class="btn btn-primario" style="flex:1;min-width:150px" onclick="guardarHoja(\'' + esc(ruta) + '\')">Guardar</button>' +
+      '<button class="btn btn-primario" style="flex:1;min-width:120px" onclick="guardarHoja(\'' + esc(ruta) + '\')">Guardar</button>' +
       '<button class="btn btn-peligro" onclick="cerrarModal();borrarHoja(\'' + esc(ruta) + '\')">' +
         ic('trash', 15) + ' Borrar hoja</button>' +
     '</div>');
@@ -380,7 +380,7 @@ function abrirFicha(num) {
   abrirModal((c.num_str || c.num) + ' · ' + (c.local || 'Cliente'),
     cuerpoFicha(c) + '<div id="fc-remitos" style="margin-top:16px">' + cargando('Buscando sus remitos…') + '</div>',
     '<div style="display:flex;gap:8px;flex-wrap:wrap">' +
-      '<button class="btn btn-primario" style="flex:1;min-width:150px" onclick="guardarFicha()">Guardar cambios</button>' +
+      '<button class="btn btn-primario" style="flex:1;min-width:120px" onclick="guardarFicha()">Guardar cambios</button>' +
       '<button class="btn btn-secundario" onclick="cerrarModal();irA(\'remito\',\'cliente=' + esc(c.num) + '\')">' +
         ic('receipt', 15) + ' Remito</button>' +
       '<button class="btn btn-secundario" onclick="alternarBaja()">' +
@@ -574,7 +574,7 @@ function confirmarBorrarCliente() {
       'Sus remitos <strong>no</strong> se borran: quedan en el historial con el nombre del local. ' +
       'Si solo querés que deje de aparecer en las listas, conviene darlo de baja.', 'alert'),
     '<div style="display:flex;gap:8px;flex-wrap:wrap">' +
-      '<button class="btn btn-peligro" style="flex:1;min-width:140px" onclick="borrarCliente()">Sí, borrarlo</button>' +
+      '<button class="btn btn-peligro" style="flex:1;min-width:120px" onclick="borrarCliente()">Sí, borrarlo</button>' +
       '<button class="btn btn-secundario" onclick="abrirFicha(\'' + esc(c.num) + '\')">Volver</button>' +
     '</div>');
 }

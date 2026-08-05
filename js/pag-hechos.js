@@ -258,7 +258,7 @@ function verRemito(id) {
 
     '<div style="display:flex;gap:8px;flex-wrap:wrap">' +
       (deuda > 0
-        ? '<button class="btn btn-primario" style="flex:1;min-width:140px" onclick="abrirCobro()">' +
+        ? '<button class="btn btn-primario" style="flex:1;min-width:120px" onclick="abrirCobro()">' +
           ic('cash', 15) + ' Cobrar ' + plata(deuda) + '</button>'
         : '') +
       '<button class="btn btn-secundario" onclick="editarRemito()">' + ic('edit', 15) + ' Editar</button>' +

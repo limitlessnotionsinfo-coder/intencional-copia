@@ -293,7 +293,7 @@ function tarjetaProductos() {
       '<div id="lista-prods">' + _prods.map(filaProductoConfig).join('') + '</div>' +
       '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px">' +
         '<button class="btn btn-secundario" onclick="agregarProducto()">' + ic('plus', 15) + ' Agregar producto</button>' +
-        '<button class="btn btn-primario" style="flex:1;min-width:160px" onclick="guardarProductos()">Guardar</button>' +
+        '<button class="btn btn-primario" style="flex:1;min-width:120px" onclick="guardarProductos()">Guardar</button>' +
       '</div>' +
     '</div>' +
   '</details>';

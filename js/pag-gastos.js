@@ -938,7 +938,7 @@ function editarGasto(id) {
       '<input class="campo-input" id="eg-notas" value="' + esc(g.notas || '') + '"/></div>',
 
     '<div style="display:flex;gap:8px;flex-wrap:wrap">' +
-      '<button class="btn btn-primario" style="flex:1;min-width:150px" onclick="guardarGastoEditado()">Guardar</button>' +
+      '<button class="btn btn-primario" style="flex:1;min-width:120px" onclick="guardarGastoEditado()">Guardar</button>' +
       '<button class="btn btn-peligro" onclick="cerrarModal();borrarGasto(' + g.id + ')">' +
         ic('trash', 15) + ' Borrar</button>' +
     '</div>');

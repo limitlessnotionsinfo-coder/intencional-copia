@@ -578,7 +578,7 @@ function editarPendiente(id) {
     '</div>',
 
     '<div style="display:flex;gap:8px;flex-wrap:wrap">' +
-      '<button class="btn btn-primario" style="flex:1;min-width:150px" onclick="guardarPendiente()">Guardar</button>' +
+      '<button class="btn btn-primario" style="flex:1;min-width:120px" onclick="guardarPendiente()">Guardar</button>' +
       '<button class="btn btn-peligro" onclick="cerrarModal();borrarPendiente(' + t.id + ')">' +
         ic('trash', 15) + ' Borrar</button>' +
     '</div>');

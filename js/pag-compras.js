@@ -172,9 +172,9 @@ function cuerpoCompra() {
     (NC.id ? '' : bloquePagoCompra()) +
 
     '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px">' +
-      '<button class="btn btn-secundario" style="flex:1;min-width:150px" onclick="copiarPedido()">' +
+      '<button class="btn btn-secundario" style="flex:1;min-width:120px" onclick="copiarPedido()">' +
         ic('clipboard', 15) + ' Copiar como texto</button>' +
-      '<button class="btn btn-secundario" style="flex:1;min-width:150px" onclick="enviarPorWhatsApp()">' +
+      '<button class="btn btn-secundario" style="flex:1;min-width:120px" onclick="enviarPorWhatsApp()">' +
         ic('message', 15) + ' Mandar por WhatsApp</button>' +
     '</div>';
 }
@@ -439,7 +439,7 @@ function verCompra(id) {
     '</div>' +
     (c.notas ? '<div class="campo-ayuda" style="margin-top:10px">' + esc(c.notas) + '</div>' : ''),
     '<div style="display:flex;gap:8px;flex-wrap:wrap">' +
-      '<button class="btn btn-primario" style="flex:1;min-width:140px" onclick="editarCompra(' + c.id + ')">' +
+      '<button class="btn btn-primario" style="flex:1;min-width:120px" onclick="editarCompra(' + c.id + ')">' +
         ic('edit', 15) + ' Editar</button>' +
       '<button class="btn btn-peligro" onclick="borrarCompra(' + c.id + ')">' + ic('trash', 15) + ' Borrar</button>' +
     '</div>');
