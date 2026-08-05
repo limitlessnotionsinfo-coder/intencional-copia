@@ -419,3 +419,9 @@ input[type="date"]{
 }
 .atajos-visita .campo-ayuda{margin:0;flex:1 1 100%}
 .atajos-visita .btn{flex:1 1 auto;padding:7px 12px;font-size:12.5px}
+
+/* Aviso informativo, para recordatorios que no son urgentes */
+.aviso-info{
+  background:#eff6ff;border:1px solid #bfdbfe;color:#1e40af;
+}
+.aviso-info svg{color:#2563eb}

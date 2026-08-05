@@ -75,9 +75,9 @@ function panelFiltros() {
         '<div class="campo" style="margin:0"><div class="campo-etiq">Hasta</div>' +
           '<input class="campo-input" type="date" value="' + esc(F.hasta) + '" onchange="setF(\'hasta\',this.value)"/></div>' +
         '<div class="campo" style="margin:0"><div class="campo-etiq">Monto desde</div>' +
-          '<input class="campo-input" type="number" inputmode="decimal" value="' + esc(F.min) + '" oninput="setF(\'min\',this.value)"/></div>' +
+          inputMonto('f-min', F.min, 'setF(\'min\',String(leerMonto(this)||\'\'))') + '</div>' +
         '<div class="campo" style="margin:0"><div class="campo-etiq">Monto hasta</div>' +
-          '<input class="campo-input" type="number" inputmode="decimal" value="' + esc(F.max) + '" oninput="setF(\'max\',this.value)"/></div>' +
+          inputMonto('f-max', F.max, 'setF(\'max\',String(leerMonto(this)||\'\'))') + '</div>' +
       '</div>' +
       '<button class="btn btn-secundario btn-bloque" style="margin-top:12px" onclick="limpiarFiltros()">' +
         ic('undo', 15) + ' Limpiar filtros</button>' +
@@ -169,11 +169,17 @@ function pintarHechos() {
 
   var resumen = porId('resumen-hechos');
   if (resumen) {
+    /* La deuda que se muestra es la que sigue sin cobrarse, no la
+       que quedó anotada en su momento. */
+    var pendiente = lista.reduce(function (a, r) { return a + deudaPendiente(r); }, 0);
+    var deudores = {};
+    lista.forEach(function (r) { if (deudaPendiente(r) > 0) deudores[normalizar(r.cliente_nombre)] = 1; });
+
     resumen.innerHTML = '<div class="grilla-stats" style="margin-bottom:14px">' +
       stat('clipboard', 'Remitos', String(res.cantidad), plural(res.unidades, 'unidad', 'unidades'), 'var(--violet)') +
-      stat('receipt', 'Facturado', plata(res.facturado), '', 'var(--rose)') +
-      stat('cash', 'Cobrado', plata(res.efectivo + res.transferencia), '', 'var(--ok)') +
-      (res.deuda > 0 ? stat('clock', 'En deuda', plata(res.deuda), '', 'var(--warn)') : '') +
+      stat('clock', 'Deuda por cobrar', plata(pendiente),
+           pendiente > 0 ? plural(Object.keys(deudores).length, 'cliente') : 'todo cobrado',
+           pendiente > 0 ? 'var(--warn)' : 'var(--ok)') +
     '</div>';
   }
 

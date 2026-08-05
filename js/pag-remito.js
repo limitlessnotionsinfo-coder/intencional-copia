@@ -16,7 +16,7 @@ function remitoVacio() {
     filas: [{ prod: PRODUCTO_POR_DEFECTO, cant: 1, precio: 0 }],
     notas: '',
     pago1: '', alias1: '',
-    pago2: '', monto2: 0, alias2: '',
+    pago2: '', monto1: 0, alias2: '',
     guardando: false
   };
 }
@@ -117,6 +117,7 @@ function pintarZonaCliente() {
         '<div style="display:flex;gap:8px;flex-wrap:wrap">' +
           '<button class="btn btn-secundario" onclick="abrirEditarCliente()">' + ic('edit', 15) + ' Editar datos</button>' +
           '<button class="btn btn-secundario" onclick="marcarCerrado()">' + ic('ban', 15) + ' Estaba cerrado</button>' +
+          '<button class="btn btn-secundario" onclick="marcarSinVentas()">' + ic('minus', 15) + ' No vendió</button>' +
         '</div>' +
       '</div>' +
     '</div>';
@@ -303,6 +304,78 @@ async function confirmarRetiro() {
   }
 }
 
+/* ── Dar de alta al cliente sin salir del remito ──────────────
+   Toma los datos que ya escribiste: no hay que cargarlos dos veces.
+   ────────────────────────────────────────────────────────── */
+function guardarComoCliente() {
+  var nombre = R.nombre.trim();
+  if (!nombre) { toast('Escribí el nombre del local', 'error'); return; }
+
+  abrirModal('Guardar como cliente',
+    '<p style="font-size:13px;color:var(--text2);line-height:1.6">' +
+      'Se da de alta <strong>' + esc(nombre) + '</strong> con lo que ya cargaste en el remito.</p>' +
+    '<div class="campo"><div class="campo-etiq">Dirección</div>' +
+      '<input class="campo-input" id="gc-dir" value="' + esc(R.dir) + '"/></div>' +
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">' +
+      '<div class="campo"><div class="campo-etiq">Localidad</div>' +
+        '<input class="campo-input" id="gc-loc" value="' + esc(R.loc) + '"/></div>' +
+      '<div class="campo"><div class="campo-etiq">Teléfono</div>' +
+        '<input class="campo-input" id="gc-tel" inputmode="tel" value="' + esc(R.tel) + '"/></div>' +
+    '</div>' +
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">' +
+      '<div class="campo"><div class="campo-etiq">Hoja de ruta</div>' +
+        '<input class="campo-input" id="gc-ruta" type="number" min="0" placeholder="Ej: 14"/></div>' +
+      '<div class="campo"><div class="campo-etiq">Rubro</div>' +
+        '<select class="campo-input" id="gc-rubro">' +
+          RUBROS.map(function (r) { return '<option>' + esc(r) + '</option>'; }).join('') +
+        '</select></div>' +
+    '</div>',
+    '<button class="btn btn-primario btn-bloque" id="btn-gc" onclick="confirmarAltaCliente()">Guardar cliente</button>');
+}
+
+async function confirmarAltaCliente() {
+  var btn = porId('btn-gc');
+  if (btn) { btn.disabled = true; btn.textContent = 'Guardando…'; }
+
+  try {
+    var todos = await traerCacheado('clientes');
+    var num = todos.reduce(function (m, c) { return Math.max(m, +c.num || 0); }, 0) + 1;
+    var ruta = (porId('gc-ruta').value || '').trim();
+    var codigo = ruta ? codigoCliente(ruta, siguienteEnRuta(todos, ruta)) : String(num);
+
+    var nuevo = {
+      num: num,
+      num_str: codigo,
+      local: R.nombre.trim(),
+      dir: (porId('gc-dir').value || '').trim() || null,
+      loc: (porId('gc-loc').value || '').trim() || null,
+      tel: (porId('gc-tel').value || '').trim() || null,
+      rubro: porId('gc-rubro').value,
+      ruta: JSON.stringify({ orden: ruta, horarios: [], notas: '' }),
+      exhibidores: 0,
+      activo: true,
+      fecha: hoyTexto(),
+      created_at: new Date().toISOString()
+    };
+
+    await crear('clientes', nuevo);
+    invalidarCache('clientes');
+    _clientesRemito = await traerCacheado('clientes');
+
+    /* Queda seleccionado, así el remito sigue sin repetir nada */
+    R.cliente = nuevo;
+    R.dir = nuevo.dir || ''; R.loc = nuevo.loc || ''; R.tel = nuevo.tel || '';
+
+    cerrarModal();
+    toast('Cliente creado' + (ruta ? ' · ' + codigo : ''));
+    pintarZonaCliente();
+    pintarRemito();
+  } catch (e) {
+    if (btn) { btn.disabled = false; btn.textContent = 'Guardar cliente'; }
+    toast(e.message, 'error');
+  }
+}
+
 /* ── El cliente no vendió ────────────────────────────────────
    Queda el registro de la visita, sin reposición ni plata.
    ────────────────────────────────────────────────────────── */
@@ -415,12 +488,6 @@ function pintarRemito() {
   z.innerHTML =
     /* Los casos en que no se carga nada van arriba: si la visita
        no dio reposición, no hace falta bajar hasta el final. */
-    '<div class="atajos-visita">' +
-      '<span class="campo-ayuda">Si no hubo reposición:</span>' +
-      '<button class="btn btn-secundario" onclick="marcarCerrado()">' + ic('ban', 14) + ' Estaba cerrado</button>' +
-      '<button class="btn btn-secundario" onclick="marcarSinVentas()">' + ic('minus', 14) + ' No vendió</button>' +
-    '</div>' +
-
     '<div class="tarjeta" id="remito-card">' +
       '<div style="padding:18px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:12px">' +
         '<img src="' + LOGO_INTENCIONAL + '" style="width:44px;height:44px;object-fit:contain" alt=""/>' +
@@ -461,10 +528,11 @@ function pintarRemito() {
           '<div style="margin-top:10px">' +
             botonesPago(2) +
             (R.pago2
-              ? '<div class="campo" style="margin-top:10px"><div class="campo-etiq">Monto del segundo pago</div>' +
-                '<input class="campo-input" type="number" inputmode="decimal" min="0" id="r-monto2" ' +
-                       'value="' + (R.monto2 || '') + '" oninput="R.monto2=+this.value||0;pintarDesglose()"/>' +
-                '<div class="campo-ayuda" id="resto-pago"></div></div>' +
+              ? '<div class="campo" style="margin-top:10px">' +
+                  '<div class="campo-etiq">¿Cuánto paga con ' + esc((TIPOS_PAGO[R.pago1] || {}).corta || 'el primero') + '?</div>' +
+                  inputMonto('r-monto1', R.monto1, 'R.monto1=leerMonto(this);pintarDesglose()') +
+                  '<div class="campo-ayuda" id="resto-pago"></div>' +
+                '</div>' +
                 selectorAlias(2)
               : '') +
           '</div>' +
@@ -497,6 +565,11 @@ function pintarRemito() {
           : '') +
       '</div>' +
     '</div>' +
+
+    (!R.cliente && R.nombre.trim()
+      ? '<button class="btn btn-secundario btn-bloque" style="margin-bottom:8px" onclick="guardarComoCliente()">' +
+        ic('user', 15) + ' Guardar “' + esc(R.nombre.trim()) + '” como cliente' + '</button>'
+      : '') +
 
     '<button class="btn btn-primario btn-bloque" id="btn-confirmar" onclick="confirmarRemito()">' +
       ic('check', 16) + ' Confirmar y compartir' +
@@ -658,7 +731,10 @@ function setPago(cual, tipo) {
     if (tipo !== 'transferencia' && tipo !== 'deuda') R.alias1 = '';
   } else {
     R.pago2 = (R.pago2 === tipo) ? '' : tipo;   // volver a tocarlo lo saca
-    if (!R.pago2) { R.monto2 = 0; R.alias2 = ''; }
+    if (!R.pago2) { R.monto1 = 0; R.alias2 = ''; }
+    /* Al abrir el segundo medio, el primero arranca con el total:
+       así se escribe cuánto se paga ahora y el resto se calcula. */
+    if (R.pago2 && !R.monto1) R.monto1 = totalRemito();
     if ((R.pago2 === 'transferencia' || R.pago2 === 'deuda') && !R.alias2) {
       R.alias2 = aliasSugerido(_remitosAlias, _pagosAlias) || '';
     }
@@ -673,8 +749,11 @@ function pintarDesglose() {
   var cont = porId('desglose');
   var resto = porId('resto-pago');
   if (resto) {
-    var r = totalRemito() - (+R.monto2 || 0);
-    resto.textContent = 'Con el primer medio quedan ' + plata(Math.max(0, r)) + '.';
+    var total = totalRemito();
+    var m1 = Math.min(Math.max(0, +R.monto1 || 0), total);
+    var d = TIPOS_PAGO[R.pago2] || {};
+    resto.textContent = 'El resto, ' + plata(total - m1) + ', queda en ' +
+      ((d.corta || 'el segundo medio').toLowerCase()) + '.';
   }
   if (!cont) return;
 
@@ -694,12 +773,17 @@ function pintarDesglose() {
     '</div>';
 }
 
+/* Se escribe cuánto se paga con el primer medio; lo que falta
+   para el total va al segundo, sin tener que hacer la cuenta. */
 function partesDelFormulario() {
   var total = totalRemito();
-  var m2 = Math.min(+R.monto2 || 0, total);
-  var partes = [{ tipo: R.pago1 || 'sin_definir', monto: R.pago2 && m2 > 0 ? total - m2 : total, alias: R.alias1 || null }];
-  if (R.pago2 && m2 > 0) partes.push({ tipo: R.pago2, monto: m2, alias: R.alias2 || null });
-  return partes;
+  if (!R.pago2) {
+    return [{ tipo: R.pago1 || 'sin_definir', monto: total, alias: R.alias1 || null }];
+  }
+  var m1 = Math.min(Math.max(0, +R.monto1 || 0), total);
+  var partes = [{ tipo: R.pago1 || 'sin_definir', monto: m1, alias: R.alias1 || null }];
+  if (total - m1 > 0) partes.push({ tipo: R.pago2, monto: total - m1, alias: R.alias2 || null });
+  return partes.filter(function (p) { return p.monto > 0; });
 }
 
 /* ── Confirmar ───────────────────────────────────────────── */
@@ -713,7 +797,7 @@ async function confirmarRemito() {
 
   if (btn) { btn.disabled = true; btn.textContent = 'Guardando…'; }
   var partes = partesDelFormulario();
-  var m2 = Math.min(+R.monto2 || 0, total);
+  var segunda = partes[1];
 
   var remito = {
     fecha: R.fecha,
@@ -731,9 +815,9 @@ async function confirmarRemito() {
     pagos_detalle: JSON.stringify(partes),
     created_at: new Date().toISOString()
   };
-  if (R.pago2 && m2 > 0) {
+  if (segunda) {
     remito.pago2_tipo = R.pago2;
-    remito.pago2_monto = m2;
+    remito.pago2_monto = segunda.monto;
     remito.pago2_alias = R.alias2 || null;
   }
 

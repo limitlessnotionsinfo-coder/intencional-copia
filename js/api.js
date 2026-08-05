@@ -8,7 +8,7 @@
 var TOPE_PAGINA = 1000;   // tope que impone PostgREST por request
 var _sesion = null;       // sesión de Supabase Auth
 var _cache = {};          // { tabla: {datos, ts} }
-var TTL_CACHE = 15000;    // 15 s: evita ráfagas de pedidos iguales
+var TTL_CACHE = 5 * 60 * 1000;   // 5 minutos: las tablas cambian poco y la app se siente instantánea
 
 /* ── Sesión ──────────────────────────────────────────────── */
 function sesionActual() { return _sesion; }
@@ -180,15 +180,35 @@ async function traerTodo(tabla, consulta) {
   return filas;
 }
 
-/* Igual que traerTodo pero con caché corta, para las pantallas
-   que piden la misma tabla varias veces seguidas */
+/* Igual que traerTodo pero con caché, para que cambiar de pantalla
+   no vuelva a bajar lo mismo. Si dos pantallas piden la misma tabla
+   al mismo tiempo, comparten el pedido en vez de hacer dos. */
+var _enVuelo = {};
+
 async function traerCacheado(tabla, consulta) {
   var clave = tabla + '|' + (consulta || '');
   var c = _cache[clave];
   if (c && (Date.now() - c.ts) < TTL_CACHE) return c.datos;
-  var datos = await traerTodo(tabla, consulta);
-  _cache[clave] = { datos: datos, ts: Date.now() };
-  return datos;
+  if (_enVuelo[clave]) return _enVuelo[clave];
+
+  _enVuelo[clave] = (async function () {
+    try {
+      var datos = await traerTodo(tabla, consulta);
+      _cache[clave] = { datos: datos, ts: Date.now() };
+      return datos;
+    } finally {
+      delete _enVuelo[clave];
+    }
+  })();
+  return _enVuelo[clave];
+}
+
+/* Se llama al arrancar: deja lo pesado listo antes de que el
+   usuario entre a la primera pantalla que lo necesita. */
+function precargar() {
+  ['clientes', 'remitos', 'tareas', 'gastos'].forEach(function (t) {
+    traerCacheado(t).catch(function () {});
+  });
 }
 
 function invalidarCache(tabla) {

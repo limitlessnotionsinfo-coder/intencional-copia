@@ -623,7 +623,31 @@ function socios() {
 function quienesPagan() {
   var lista = [{ id: 'empresa', etiqueta: 'La empresa' }];
   socios().forEach(function (s2) { lista.push({ id: s2, etiqueta: s2 }); });
+  /* El sueldo del empleado, por ejemplo, lo ponen los dos dueños */
+  if (socios().length > 1) lista.push({ id: 'socios', etiqueta: 'Entre los dueños' });
   return lista;
+}
+
+/* Cuánto puso cada uno. Es un mapa, no un solo nombre: hay gastos
+   que se pagan entre varios. */
+function puestoPorCadaUno(g) {
+  var total = +g.monto || 0;
+  var quien = g.pagado_por;
+  if (!quien) return {};
+
+  if (quien === 'socios') {
+    var lista = socios();
+    var cada = Math.floor(total / (lista.length || 1));
+    var r = {};
+    lista.forEach(function (s2, i) {
+      r[s2] = i === lista.length - 1 ? total - cada * (lista.length - 1) : cada;
+    });
+    return r;
+  }
+
+  var uno = {};
+  uno[quien] = total;
+  return uno;
 }
 
 /* Sueldo de cada socio: "Franco|400000, Augusto|400000" */
@@ -668,7 +692,7 @@ function plantillaGasto(tipo, nombre) {
       descripcion: 'Sueldo' + (e.nombre ? ' ' + e.nombre : ''),
       monto: e.sueldo,
       categoria: 'empleado',
-      pagadoPor: 'empresa',
+      pagadoPor: 'socios',    // la plata la ponen los dos dueños
       modo: 'socios'
     };
   }
@@ -816,7 +840,7 @@ function repartoDeGasto(g) {
 /* Saldo de un gasto para una persona.
    Positivo = le deben. Negativo = debe. */
 function saldoDeGasto(g, quien) {
-  var puso = (g.pagado_por === quien) ? (+g.monto || 0) : 0;
+  var puso = +puestoPorCadaUno(g)[quien] || 0;
   var leToca = +repartoDeGasto(g)[quien] || 0;
   return puso - leToca;
 }
@@ -948,4 +972,75 @@ function renumerarRuta(clientesDeLaRuta, ruta) {
   return (clientesDeLaRuta || []).map(function (c, i) {
     return { cliente: c, codigo: codigoCliente(ruta, i + 1) };
   }).filter(function (x) { return x.codigo !== x.cliente.num_str; });
+}
+
+
+/* ═══════════════════════════════════════════════════════════
+   DEUDAS POR COBRAR
+   ═══════════════════════════════════════════════════════════ */
+
+/* Los remitos con saldo pendiente, del más viejo al más nuevo */
+function remitosConDeuda(remitos) {
+  return (remitos || [])
+    .filter(function (r) { return deudaPendiente(r) > 0; })
+    .map(function (r) {
+      var alias = r.alias || r.pago2_alias || null;
+      partesPago(r).forEach(function (p) {
+        if (p.tipo === 'deuda' && p.alias) alias = p.alias;
+      });
+      return {
+        remito: r,
+        cliente: r.cliente_nombre || '—',
+        monto: deudaPendiente(r),
+        fecha: r.fecha || r.created_at,
+        dias: diasEntre(r.fecha || r.created_at, hoyISO()),
+        alias: alias
+      };
+    })
+    .sort(function (a, b) { return b.dias - a.dias; });
+}
+
+/* Resumen para el aviso del inicio */
+function resumenDeudas(remitos) {
+  var items = remitosConDeuda(remitos);
+  var porCliente = {};
+  items.forEach(function (d) { porCliente[normalizar(d.cliente)] = 1; });
+  return {
+    items: items,
+    clientes: Object.keys(porCliente).length,
+    total: items.reduce(function (a, d) { return a + d.monto; }, 0),
+    masVieja: items.length ? items[0] : null
+  };
+}
+
+/* ── Recordatorio semanal de gastos fijos ────────────────────
+   Al cierre de la semana hay que anotar sueldos y demás. Se
+   considera hecho si esta semana ya se cargó un gasto de ese tipo.
+   ────────────────────────────────────────────────────────── */
+function faltaAnotarGastos(gastos, desde, hasta) {
+  var delRango = (gastos || []).filter(function (g) {
+    var k = claveFecha(g.fecha || g.created_at);
+    return k && k >= desde && k <= hasta;
+  });
+  var hay = function (test) { return delRango.some(test); };
+
+  var faltan = [];
+  var sueldos = sueldosSocios();
+
+  socios().forEach(function (s2) {
+    if (!sueldos[s2]) return;
+    if (!hay(function (g) { return normalizar(g.descripcion).indexOf(normalizar(s2)) !== -1; })) {
+      faltan.push('el sueldo de ' + s2);
+    }
+  });
+
+  var e = empleadoConfig();
+  if (e.sueldo && e.frecuencia === 'semanal' &&
+      !hay(function (g) { return g.categoria === 'empleado' && normalizar(g.descripcion).indexOf(normalizar(e.nombre || 'sueldo')) !== -1; })) {
+    faltan.push('el sueldo de ' + (e.nombre || 'el empleado'));
+  }
+
+  if (!hay(function (g) { return g.categoria === 'combustible'; })) faltan.push('la nafta');
+
+  return faltan;
 }

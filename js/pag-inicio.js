@@ -6,6 +6,8 @@
 
 var _pendientes = [];
 var _clientesInicio = [];
+var _gastosInicio = [];
+var _remitosInicio = [];
 
 registrarPagina({
   id: 'inicio',
@@ -21,12 +23,15 @@ registrarPagina({
     var datos = await Promise.all([
       traerCacheado('remitos'),
       traerCacheado('tareas').catch(function () { return []; }),
-      traerCacheado('clientes').catch(function () { return []; })
+      traerCacheado('clientes').catch(function () { return []; }),
+      traerCacheado('gastos').catch(function () { return []; })
     ]);
     var remitos = datos[0];
     _pendientes = datos[1];
     var clientes = datos[2];
     _clientesInicio = clientes;
+    _gastosInicio = datos[3] || [];
+    _remitosInicio = remitos;
 
     var hoy = claveFecha(hoyTexto());
     var deHoy = remitos.filter(function (r) {
@@ -39,6 +44,7 @@ registrarPagina({
     cont.innerHTML =
       /* Primero lo que hay que hacer, después con qué hacerlo,
          después el plan de rutas y al final los números. */
+      bloqueAvisos(remitos, _gastosInicio) +
       bloquePendientes() +
 
       '<div class="eyebrow" style="margin-top:18px">' + ic('zap', 13) + ' Accesos rápidos</div>' +
@@ -66,6 +72,8 @@ registrarPagina({
       '</div>' +
 
       bloqueRemitosHoy(deHoy);
+
+    pintarExtraPendiente();
   }
 });
 
@@ -255,6 +263,30 @@ function bloquePendientes() {
       '</span>' +
     '</summary>' +
     '<div class="tarjeta-cuerpo">' +
+      /* Primero el tipo: de eso depende qué más hace falta. */
+      '<div class="campo" style="margin-bottom:10px"><div class="campo-etiq">¿Qué tipo de pendiente?</div>' +
+        '<select class="campo-input" id="pend-tipo" onchange="alternarClientePendiente()">' +
+          Object.keys(TIPOS_PENDIENTE).map(function (k) {
+            return '<option value="' + k + '"' + (_tipoPend === k ? ' selected' : '') + '>' +
+              esc(TIPOS_PENDIENTE[k].etiqueta) + '</option>';
+          }).join('') +
+        '</select></div>' +
+
+      '<div id="pend-extra"></div>' +
+
+      '<div class="pend-form">' +
+        '<input class="campo-input pf-texto" id="pend-texto" ' +
+               'placeholder="' + esc(placeholderPendiente()) + '" ' +
+               'onkeydown="if(event.key===\'Enter\')agregarPendiente()"/>' +
+        '<button class="btn btn-primario pf-mas" onclick="agregarPendiente()" aria-label="Agregar pendiente">' +
+          ic('plus', 17) + '</button>' +
+      '</div>' +
+
+      (abiertos.length ? abiertos.length + ' por hacer' : 'todo listo') +
+        '</span>' +
+      '</span>' +
+    '</summary>' +
+    '<div class="tarjeta-cuerpo">' +
       /* Texto arriba, tipo y botón abajo: en el celular no entran
          los tres en el mismo renglón y el más quedaba suelto. */
       '<div class="pend-form">' +
@@ -333,16 +365,68 @@ function filaPendiente(t, hecha) {
   '</div>';
 }
 
-/* ── Cliente del pendiente ───────────────────────────────── */
+/* ── Lo que hace falta según el tipo ─────────────────────────
+   Un pedido o un retiro necesitan el cliente. Un cliente nuevo
+   todavía no está en la base: alcanza con su zona.
+   ────────────────────────────────────────────────────────── */
 var _clientePedido = null;
+var _tipoPend = 'nuevo';
 
-/* Pedidos y retiros necesitan saber de qué cliente son: con eso
-   la app avisa cuando su ruta o su zona caiga en la próxima salida. */
 function necesitaCliente(tipo) { return tipo === 'pedido' || tipo === 'retirar'; }
 
+function placeholderPendiente() {
+  if (_tipoPend === 'pedido')  return 'Ej: 2 cremas y 5 esmaltes';
+  if (_tipoPend === 'retirar') return 'Ej: retirar el exhibidor viejo';
+  if (_tipoPend === 'nuevo')   return 'Ej: perfumería nueva sobre la avenida';
+  return 'Ej: llamar al contador';
+}
+
 function alternarClientePendiente() {
-  var wrap = porId('pend-cliente-wrap');
-  if (wrap) wrap.style.display = necesitaCliente(porId('pend-tipo').value) ? '' : 'none';
+  _tipoPend = porId('pend-tipo').value;
+  _clientePedido = null;
+  var texto = porId('pend-texto');
+  if (texto) texto.placeholder = placeholderPendiente();
+  pintarExtraPendiente();
+}
+
+function pintarExtraPendiente() {
+  var cont = porId('pend-extra');
+  if (!cont) return;
+
+  if (necesitaCliente(_tipoPend)) {
+    cont.innerHTML =
+      '<div class="campo-etiq">¿De qué cliente es?</div>' +
+      '<div class="buscador">' +
+        '<span class="ic-lupa">' + ic('search', 15) + '</span>' +
+        '<input class="campo-input" id="pend-cliente" autocomplete="off" ' +
+               'placeholder="Número, nombre o zona" oninput="buscarClientePendiente(this.value)"/>' +
+      '</div>' +
+      '<div id="pend-cliente-res"></div>' +
+      '<div id="pend-cliente-elegido"></div>' +
+      '<div class="campo-ayuda" style="margin-bottom:10px">' +
+        'Con esto la app te avisa cuando su hoja de ruta o su zona caiga en la próxima salida.</div>';
+    return;
+  }
+
+  if (_tipoPend === 'nuevo') {
+    var zonas = {};
+    _clientesInicio.forEach(function (c) { if (c.loc) zonas[c.loc] = 1; });
+    cont.innerHTML =
+      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">' +
+        '<div class="campo" style="margin:0"><div class="campo-etiq">Zona</div>' +
+          '<input class="campo-input" id="pend-nuevo-loc" list="zonas-conocidas" placeholder="Localidad"/></div>' +
+        '<div class="campo" style="margin:0"><div class="campo-etiq">Dirección (opcional)</div>' +
+          '<input class="campo-input" id="pend-nuevo-dir" placeholder="Calle y número"/></div>' +
+      '</div>' +
+      '<datalist id="zonas-conocidas">' +
+        Object.keys(zonas).sort().map(function (z) { return '<option value="' + esc(z) + '">'; }).join('') +
+      '</datalist>' +
+      '<div class="campo-ayuda" style="margin-bottom:10px">' +
+        'Con la zona te aviso cuando pases por ahí o por una cercana.</div>';
+    return;
+  }
+
+  cont.innerHTML = '';
 }
 
 function buscarClientePendiente(q) {
@@ -353,7 +437,7 @@ function buscarClientePendiente(q) {
     .filter(function (c) { return coincideCliente(c, q); }).slice(0, 6);
 
   cont.innerHTML = res.length
-    ? '<div class="lista" style="margin-top:8px">' + res.map(function (c) {
+    ? '<div class="lista" style="margin:8px 0">' + res.map(function (c) {
         return '<button class="fila" onclick="elegirClientePedido(\'' + esc(c.num) + '\')">' +
           '<span class="num-cliente">' + esc(c.num_str || c.num) + '</span>' +
           '<div class="fila-principal">' +
@@ -361,7 +445,7 @@ function buscarClientePendiente(q) {
             '<div class="fila-sub">' + [c.loc, rutaDe(c) ? 'Ruta ' + rutaDe(c) : ''].filter(Boolean).map(esc).join(' · ') + '</div>' +
           '</div></button>';
       }).join('') + '</div>'
-    : '<div class="campo-ayuda" style="margin-top:8px">Ningún cliente coincide con “' + esc(q) + '”.</div>';
+    : '<div class="campo-ayuda" style="margin:8px 0">Ningún cliente coincide con “' + esc(q) + '”.</div>';
 }
 
 function elegirClientePedido(num) {
@@ -374,7 +458,7 @@ function elegirClientePedido(num) {
   var cal = calendarioRutas().find(function (e) { return String(e.ruta) === String(ruta); });
 
   porId('pend-cliente-elegido').innerHTML =
-    '<div class="aviso aviso-ok" style="margin-top:8px">' + ic('check', 15) +
+    '<div class="aviso aviso-ok" style="margin:8px 0">' + ic('check', 15) +
       '<div><strong>' + esc(c.local) + '</strong>' +
         (c.loc ? ' · ' + esc(c.loc) : '') +
         (ruta ? ' · Ruta ' + esc(ruta) : ' · sin hoja de ruta') +
@@ -386,20 +470,8 @@ function elegirClientePedido(num) {
 
 function soltarClientePedido() {
   _clientePedido = null;
-  porId('pend-cliente-elegido').innerHTML = '';
-}
-
-/* Cliente que todavía no está en la base: alcanza con nombre y zona */
-function abrirClienteNuevo() {
-  soltarClientePedido();
-  var wrap = porId('pend-nuevo-wrap');
-  if (!wrap) return;
-  wrap.style.display = wrap.style.display === 'none' ? '' : 'none';
-
-  var zonas = {};
-  _clientesInicio.forEach(function (c) { if (c.loc) zonas[c.loc] = 1; });
-  porId('zonas-conocidas').innerHTML = Object.keys(zonas).sort()
-    .map(function (z) { return '<option value="' + esc(z) + '">'; }).join('');
+  var el = porId('pend-cliente-elegido');
+  if (el) el.innerHTML = '';
 }
 
 async function agregarPendiente() {
@@ -408,29 +480,28 @@ async function agregarPendiente() {
   if (!texto) { toast('Escribí el pendiente', 'error'); return; }
 
   var tipo = porId('pend-tipo').value;
-  var nuevoNombre = ((porId('pend-nuevo-nombre') || {}).value || '').trim();
-  var nuevaLoc = ((porId('pend-nuevo-loc') || {}).value || '').trim();
-  var esNuevo = !!nuevoNombre;
+  var loc = ((porId('pend-nuevo-loc') || {}).value || '').trim();
+  var dir = ((porId('pend-nuevo-dir') || {}).value || '').trim();
 
-  if (necesitaCliente(tipo) && !_clientePedido && !esNuevo) {
-    toast('Elegí el cliente o cargalo como nuevo', 'error');
+  if (necesitaCliente(tipo) && !_clientePedido) {
+    toast('Elegí de qué cliente es', 'error');
     return;
   }
-  if (esNuevo && !nuevaLoc) {
+  if (tipo === 'nuevo' && !loc) {
     toast('Poné la zona del cliente nuevo', 'error');
     return;
   }
 
   try {
     await crear('tareas', {
-      texto: texto, hecha: false, tipo: tipo,
-      cliente_nombre: esNuevo ? nuevoNombre : (_clientePedido ? _clientePedido.local : null),
-      loc: esNuevo ? nuevaLoc : (_clientePedido ? _clientePedido.loc : null)
+      texto: dir ? texto + ' · ' + dir : texto,
+      hecha: false,
+      tipo: tipo,
+      cliente_nombre: _clientePedido ? _clientePedido.local : null,
+      loc: _clientePedido ? _clientePedido.loc : (loc || null)
     });
     inp.value = '';
     _clientePedido = null;
-    if (porId('pend-nuevo-nombre')) porId('pend-nuevo-nombre').value = '';
-    if (porId('pend-nuevo-loc')) porId('pend-nuevo-loc').value = '';
     toast('Pendiente agregado');
     pintarRuta();
   } catch (e) { toast(e.message, 'error'); }
@@ -492,3 +563,62 @@ function stat(icono, etiqueta, valor, sub, color) {
 }
 
 function capitalizar(s) { return String(s || '').charAt(0).toUpperCase() + String(s || '').slice(1); }
+
+
+/* ═══════════════════════════════════════════════════════════
+   AVISOS
+   Lo que hay que hacer y todavía no se hizo.
+   ═══════════════════════════════════════════════════════════ */
+function bloqueAvisos(remitos, gastos) {
+  var html = '';
+
+  /* Deudas por cobrar */
+  var d = resumenDeudas(remitos);
+  if (d.items.length) {
+    html += '<button class="aviso aviso-warn" style="width:100%;text-align:left;cursor:pointer;border:1px solid var(--warn-border)" ' +
+      'onclick="verDeudas()">' + ic('clock', 16) +
+      '<div><strong>' + plural(d.clientes, 'cliente') + ' con deuda</strong> · ' + plata(d.total) + ' por cobrar' +
+      (d.masVieja ? '<br>La más vieja es de ' + esc(d.masVieja.cliente) + ', hace ' + plural(d.masVieja.dias, 'día') + '.' : '') +
+      '<br><span style="text-decoration:underline">Ver el detalle</span></div></button>';
+  }
+
+  /* Gastos de la semana sin anotar */
+  var desde = isoDe(sumarDias(-6));
+  var faltan = faltaAnotarGastos(gastos, desde, hoyISO());
+  if (faltan.length) {
+    html += '<button class="aviso aviso-info" style="width:100%;text-align:left;cursor:pointer" ' +
+      'onclick="irA(\'gastos\')">' + ic('wallet', 16) +
+      '<div><strong>Faltan anotar gastos de esta semana:</strong> ' + esc(faltan.join(', ')) + '.' +
+      '<br><span style="text-decoration:underline">Ir a Gastos</span></div></button>';
+  }
+
+  return html;
+}
+
+/* ── Listado de deudas ───────────────────────────────────── */
+function verDeudas() {
+  var d = resumenDeudas(_remitosInicio);
+  if (!d.items.length) { toast('No hay deudas pendientes'); return; }
+
+  abrirModal('Deudas por cobrar',
+    '<div class="grilla-stats" style="margin-bottom:14px">' +
+      stat('clock', 'Total', plata(d.total), plural(d.clientes, 'cliente'), 'var(--warn)') +
+      stat('calendar', 'La más vieja', plural(d.masVieja.dias, 'día'), esc(d.masVieja.cliente), 'var(--danger)') +
+    '</div>' +
+    '<div class="lista">' +
+      d.items.map(function (x) {
+        return '<div class="fila" style="cursor:default;align-items:flex-start">' +
+          '<div class="fila-principal">' +
+            '<div class="fila-titulo">' + esc(x.cliente) + '</div>' +
+            '<div class="fila-sub">' + esc(fechaCorta(x.fecha)) + ' · hace ' + plural(x.dias, 'día') +
+              (x.alias ? '<br>' + ic('card', 12) + ' Iba a transferir a <strong>' + esc(x.alias) + '</strong>'
+                       : '<br><span style="color:var(--muted)">sin alias anotado</span>') +
+            '</div>' +
+          '</div>' +
+          '<div class="fila-derecha"><div class="fila-titulo">' + plata(x.monto) + '</div></div>' +
+        '</div>';
+      }).join('') +
+    '</div>',
+    '<button class="btn btn-secundario btn-bloque" onclick="cerrarModal();irA(\'hechos\',\'filtro=deuda&q=\')">' +
+      ic('search', 15) + ' Abrirlas en Remitos hechos para cobrarlas</button>');
+}

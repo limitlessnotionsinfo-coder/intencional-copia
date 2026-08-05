@@ -103,6 +103,7 @@ function arrancarApp() {
   pintarMarca(porId('marca-lateral'));
   construirMenu();
   construirBarraInferior();
+  precargar();   // las tablas grandes se van bajando mientras mirás el inicio
   cargarConfig().catch(function () { /* si no hay red, se usa lo local */ });
   pintarRuta();
 }

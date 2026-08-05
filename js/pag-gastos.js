@@ -200,7 +200,11 @@ function pintarGastos() {
 function filaGasto(g) {
   var cat = categoriaGasto(g.categoria);
   var partes = partesGasto(g).filter(function (p) { return +p.monto > 0; });
-  var saldo = g.pagado_por && g.pagado_por !== 'empresa' ? saldoDeGasto(g, g.pagado_por) : 0;
+  /* Si lo pusieron entre varios, se muestra el saldo del que más puso */
+  var puestos = puestoPorCadaUno(g);
+  var quienMas = Object.keys(puestos).filter(function (k) { return k !== 'empresa'; })
+    .sort(function (a, b) { return puestos[b] - puestos[a]; })[0];
+  var saldo = quienMas ? saldoDeGasto(g, quienMas) : 0;
 
   return '<div class="fila" style="cursor:default;align-items:flex-start">' +
     '<div class="fila-principal">' +
@@ -219,9 +223,11 @@ function filaGasto(g) {
           ? '<span class="pin pin-danger">' + ic('clock', 12) + ' pago pendiente</span> '
           : '') +
         (g.pagado_por
-          ? '<span class="pin pin-neutro">puso ' + esc(g.pagado_por === 'empresa' ? 'la empresa' : g.pagado_por) + '</span>'
+          ? '<span class="pin pin-neutro">puso ' +
+            esc(g.pagado_por === 'empresa' ? 'la empresa'
+              : g.pagado_por === 'socios' ? 'entre los dueños' : g.pagado_por) + '</span>'
           : '') +
-        (saldo > 0 ? ' <span class="pin pin-ok">le deben ' + plata(saldo) + '</span>' : '') +
+        (saldo > 0 ? ' <span class="pin pin-ok">le deben ' + plata(saldo) + ' a ' + esc(quienMas) + '</span>' : '') +
       '</div>' +
     '</div>' +
     '<div class="fila-derecha">' +
@@ -433,17 +439,26 @@ function bloqueReparto() {
   var claves = Object.keys(r).filter(function (k) { return r[k]; });
   if (claves.length < 2) return '';
 
-  var puso = NG.pagadoPor;
-  var deben = claves.filter(function (k) { return k !== puso; })
-    .map(function (k) { return esc(k === 'empresa' ? 'la empresa' : k) + ' ' + plata(r[k]); });
+  var puestos = puestoPorCadaUno({ monto: +NG.monto || 0, pagado_por: NG.pagadoPor });
+  var saldos = [];
+  Object.keys(r).concat(Object.keys(puestos)).forEach(function (k) {
+    if (saldos.indexOf(k) === -1) saldos.push(k);
+  });
+
+  var lineas = saldos.map(function (k) {
+    var neto = (+puestos[k] || 0) - (+r[k] || 0);
+    if (!neto) return '';
+    var nombre = k === 'empresa' ? 'la empresa' : k;
+    return neto > 0
+      ? 'A <strong>' + esc(nombre) + '</strong> le deben ' + plata(neto)
+      : '<strong>' + esc(nombre) + '</strong> debe ' + plata(-neto);
+  }).filter(Boolean);
 
   return '<div class="aviso aviso-ok">' + ic('scale', 15) +
-    '<div>' + claves.map(function (k) {
+    '<div>Se lo cargan: ' + claves.map(function (k) {
       return '<strong>' + esc(k === 'empresa' ? 'Empresa' : k) + '</strong> ' + plata(r[k]);
     }).join(' · ') +
-    (deben.length && puso
-      ? '<br>Lo puso ' + esc(puso === 'empresa' ? 'la empresa' : puso) + ', así que le deben: ' + deben.join(' · ')
-      : '') +
+    (lineas.length ? '<br>' + lineas.join('<br>') : '') +
     '</div></div>';
 }
 
