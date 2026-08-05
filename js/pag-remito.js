@@ -504,9 +504,11 @@ function pintarRemito() {
       '</div>' +
 
       '<div class="tarjeta-cuerpo">' +
-        '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px">' +
-          campoTexto('Cliente', 'r-nombre', R.nombre, 'Nombre del local') +
-          campoTexto('Dirección', 'r-dir', R.dir, 'Calle y número') +
+        /* El nombre a lo ancho y los otros tres de a dos: en el
+           celular, uno por renglón obligaba a bajar demasiado. */
+        '<div class="datos-cliente">' +
+          '<div class="dc-ancho">' + campoTexto('Cliente', 'r-nombre', R.nombre, 'Nombre del local') + '</div>' +
+          '<div class="dc-ancho">' + campoTexto('Dirección', 'r-dir', R.dir, 'Calle y número') + '</div>' +
           campoTexto('Localidad', 'r-loc', R.loc, 'Ciudad / partido') +
           campoTexto('Teléfono', 'r-tel', R.tel, 'Opcional') +
         '</div>' +
