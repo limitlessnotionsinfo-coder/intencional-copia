@@ -167,14 +167,17 @@ function pintarGastos() {
 
   porId('g-resumen').innerHTML =
     '<div class="grilla-stats" style="margin-top:12px">' +
-      stat('wallet', 'Paga la empresa', plata(total), plural(lista.length, 'gasto'), 'var(--danger)') +
+      stat('wallet', 'Paga la empresa', plata(total), plural(lista.length, 'gasto'), 'var(--danger)',
+           "detalleGastos('empresa')") +
       (deSocios > 0
-        ? stat('users', 'Ponen los dueños', plata(deSocios), 'aparte de la empresa', 'var(--violet)')
+        ? stat('users', 'Ponen los dueños', plata(deSocios), 'aparte de la empresa', 'var(--violet)',
+               "detalleGastos('socios')")
         : '') +
       Object.keys(porCat).sort(function (a, b2) { return porCat[b2] - porCat[a]; }).slice(0, 2)
         .map(function (c) {
           var cat = categoriaGasto(c);
-          return stat(cat.icono, cat.etiqueta, plata(porCat[c]), '', 'var(--text2)');
+          return stat(cat.icono, cat.etiqueta, plata(porCat[c]), '', 'var(--text2)',
+                      "detalleGastos('cat:" + c + "')");
         }).join('') +
     '</div>';
 
@@ -631,9 +634,12 @@ async function pintarCierre(lista, rango) {
           'Falta pagar ' + plata(c.compromisos.total) + '</summary>' +
         c.compromisos.items.map(function (i) {
           return '<div style="display:flex;justify-content:space-between;padding:4px 0;font-size:13px' +
-            (i.loPonenLosDuenos ? ';color:var(--muted)' : '') + '">' +
-            '<span>' + esc(i.concepto) + ' <span class="campo-ayuda">· cada ' + esc(i.cada) +
-              (i.loPonenLosDuenos ? ' · lo ponen los dueños' : '') + '</span></span>' +
+            (i.pagado || i.loPonenLosDuenos ? ';color:var(--muted)' : '') +
+            (i.pagado ? ';text-decoration:line-through' : '') + '">' +
+            '<span>' + esc(i.concepto) +
+              ' <span class="campo-ayuda" style="text-decoration:none">· ' +
+              (i.pagado ? 'ya se pagó' : 'cada ' + esc(i.cada) +
+                (i.loPonenLosDuenos ? ' · lo ponen los dueños' : '')) + '</span></span>' +
             '<strong>' + plata(i.monto) + '</strong></div>';
         }).join('') +
         '<div style="display:flex;justify-content:space-between;padding:5px 0;border-top:1px solid var(--border);font-size:13px">' +
@@ -992,4 +998,49 @@ async function guardarGastoEditado() {
     toast('Gasto actualizado');
     pintarRuta();
   } catch (e) { toast(e.message, 'error'); }
+}
+
+
+/* ── Detalle de una tarjeta ──────────────────────────────── */
+function detalleGastos(que) {
+  var lista = gastosFiltrados();
+  var r = rangoGastos();
+  var titulo, items;
+
+  if (que === 'empresa') {
+    titulo = 'Gastos de la empresa';
+    items = lista.filter(function (g) { return montoEmpresa(g) > 0; });
+  } else if (que === 'socios') {
+    titulo = 'Lo que ponen los dueños';
+    items = lista.filter(function (g) { return montoDeSocios(g) > 0; });
+  } else {
+    var cat = categoriaGasto(que.slice(4));
+    titulo = cat.etiqueta;
+    items = lista.filter(function (g) { return (g.categoria || 'otro') === cat.id; });
+  }
+
+  var suma = items.reduce(function (a, g) {
+    return a + (que === 'socios' ? montoDeSocios(g) : montoEmpresa(g));
+  }, 0);
+
+  abrirModal(titulo,
+    '<div class="campo-ayuda" style="margin-bottom:10px">' + esc(r.etiqueta) + ' · ' +
+      plural(items.length, 'gasto') + ' · <strong>' + plata(suma) + '</strong></div>' +
+    (items.length
+      ? '<div class="lista">' + items.map(function (g) {
+          var m = que === 'socios' ? montoDeSocios(g) : montoEmpresa(g);
+          return '<div class="fila" style="cursor:default">' +
+            '<div class="fila-principal">' +
+              '<div class="fila-titulo">' + esc(g.descripcion || '—') + '</div>' +
+              '<div class="fila-sub">' + esc(fechaCorta(g.fecha)) + ' · ' +
+                esc(categoriaGasto(g.categoria).etiqueta) +
+                (g.pagado_por ? ' · puso ' + esc(g.pagado_por === 'empresa' ? 'la empresa' : g.pagado_por) : '') +
+                (gastoPagado(g) ? '' : ' · <strong>sin pagar</strong>') + '</div>' +
+            '</div>' +
+            '<div class="fila-derecha"><div class="fila-titulo">' + plata(m) + '</div>' +
+              (m !== (+g.monto || 0) ? '<div class="campo-ayuda">de ' + plata(g.monto) + '</div>' : '') +
+            '</div>' +
+          '</div>';
+        }).join('') + '</div>'
+      : '<div class="campo-ayuda">No hay gastos de ese tipo en el período.</div>'));
 }

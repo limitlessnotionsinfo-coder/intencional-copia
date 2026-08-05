@@ -45,7 +45,7 @@ registrarPagina({
       /* Primero lo que hay que hacer, después con qué hacerlo,
          después el plan de rutas y al final los números. */
       bloqueAvisos(remitos, _gastosInicio) +
-      bloquePendientes() +
+      '<div id="zona-pendientes">' + bloquePendientes() + '</div>' +
 
       '<div class="eyebrow" style="margin-top:18px">' + ic('zap', 13) + ' Accesos rápidos</div>' +
       '<div class="atajos">' +
@@ -300,7 +300,7 @@ function bloquePendientes() {
             Object.keys(TIPOS_PENDIENTE).filter(function (k) { return porTipo[k]; })
               .map(function (k) { return chipPend(k, TIPOS_PENDIENTE[k].etiqueta, porTipo[k]); }).join('') +
             '<select class="campo-input" style="width:auto;margin-left:auto;font-size:12px;padding:5px 8px" ' +
-                    'onchange="_ordenPend=this.value;pintarRuta()">' +
+                    'onchange="setOrdenPend(this.value)">' +
               [['tipo', 'Por tipo'], ['nuevos', 'Más nuevos'], ['viejos', 'Más viejos']].map(function (o) {
                 return '<option value="' + o[0] + '"' + (_ordenPend === o[0] ? ' selected' : '') + '>' + o[1] + '</option>';
               }).join('') +
@@ -328,9 +328,25 @@ function chipPend(tipo, etiqueta, n) {
     esc(etiqueta) + ' <span class="pin pin-neutro" style="margin-left:2px">' + n + '</span></button>';
 }
 
+/* Repinta solo la tarjeta de pendientes y la deja abierta: antes
+   redibujaba toda la pantalla y el desplegable se cerraba solo. */
+function pintarPendientes() {
+  var z = porId('zona-pendientes');
+  if (!z) { pintarRuta(); return; }
+  z.innerHTML = bloquePendientes();
+  var det = z.querySelector('details');
+  if (det) det.open = true;
+  pintarExtraPendiente();
+}
+
 function setFiltroPend(t) {
   _filtroPend = t;
-  pintarRuta();
+  pintarPendientes();
+}
+
+function setOrdenPend(v) {
+  _ordenPend = v;
+  pintarPendientes();
 }
 
 /* El orden por tipo agrupa: primero lo que hay que retirar, después
@@ -522,7 +538,9 @@ async function agregarPendiente() {
     inp.value = '';
     _clientePedido = null;
     toast('Pendiente agregado');
-    pintarRuta();
+    invalidarCache('tareas');
+    _pendientes = await traerCacheado('tareas');
+    pintarPendientes();
   } catch (e) { toast(e.message, 'error'); }
 }
 
@@ -592,18 +610,28 @@ async function guardarPendiente() {
     invalidarCache('tareas');
     cerrarModal();
     toast('Pendiente actualizado');
-    pintarRuta();
+    pintarPendientes();
   } catch (e) { toast(e.message, 'error'); }
 }
 
 async function marcarPendiente(id, hecha) {
-  try { await actualizar('tareas', id, { hecha: hecha }); pintarRuta(); }
-  catch (e) { toast(e.message, 'error'); }
+  var t = _pendientes.find(function (x) { return String(x.id) === String(id); });
+  try {
+    await actualizar('tareas', id, { hecha: hecha });
+    if (t) t.hecha = hecha;
+    invalidarCache('tareas');
+    pintarPendientes();
+  } catch (e) { toast(e.message, 'error'); }
 }
 
 async function borrarPendiente(id) {
-  try { await borrar('tareas', id); toast('Pendiente borrado'); pintarRuta(); }
-  catch (e) { toast(e.message, 'error'); }
+  try {
+    await borrar('tareas', id);
+    _pendientes = _pendientes.filter(function (x) { return String(x.id) !== String(id); });
+    invalidarCache('tareas');
+    toast('Pendiente borrado');
+    pintarPendientes();
+  } catch (e) { toast(e.message, 'error'); }
 }
 
 /* ── Remitos de hoy ──────────────────────────────────────── */
@@ -643,12 +671,18 @@ function filaRemitoHoy(r) {
 }
 
 /* ── Bloques compartidos con otras páginas ───────────────── */
-function stat(icono, etiqueta, valor, sub, color) {
-  return '<div class="stat">' +
-    '<div class="stat-etiq">' + ic(icono, 14) + esc(etiqueta) + '</div>' +
+/* Si se le pasa una acción, la tarjeta se vuelve un botón: tocarla
+   abre el detalle de ese número. */
+function stat(icono, etiqueta, valor, sub, color, accion) {
+  var cuerpo =
+    '<div class="stat-etiq">' + ic(icono, 14) + esc(etiqueta) +
+      (accion ? '<span style="margin-left:auto;opacity:.5">' + ic('chevron', 12) + '</span>' : '') + '</div>' +
     '<div class="stat-val" style="color:' + color + '">' + esc(valor) + '</div>' +
-    (sub ? '<div class="stat-sub">' + esc(sub) + '</div>' : '') +
-  '</div>';
+    (sub ? '<div class="stat-sub">' + esc(sub) + '</div>' : '');
+
+  return accion
+    ? '<button class="stat stat-tocable" onclick="' + accion + '">' + cuerpo + '</button>'
+    : '<div class="stat">' + cuerpo + '</div>';
 }
 
 function capitalizar(s) { return String(s || '').charAt(0).toUpperCase() + String(s || '').slice(1); }

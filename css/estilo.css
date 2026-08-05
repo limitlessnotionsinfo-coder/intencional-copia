@@ -425,3 +425,60 @@ input[type="date"]{
   background:#eff6ff;border:1px solid #bfdbfe;color:#1e40af;
 }
 .aviso-info svg{color:#2563eb}
+
+/* Tarjetas que se pueden tocar para ver el detalle */
+.stat-tocable{
+  width:100%;text-align:left;cursor:pointer;font:inherit;
+  -webkit-tap-highlight-color:transparent;
+}
+.stat-tocable:active{transform:scale(.985)}
+.stat-tocable .stat-etiq{display:flex;align-items:center;width:100%}
+
+/* ═══════════════════════════════════════════════════════════
+   AJUSTES PARA CELULAR
+   La app se usa casi siempre en la calle, con una mano.
+   ═══════════════════════════════════════════════════════════ */
+@media (max-width:620px){
+  /* Menos aire perdido en los bordes */
+  .contenido{padding-left:12px;padding-right:12px}
+  .tarjeta-cuerpo{padding:14px}
+  .tarjeta-cab{padding:12px 14px;font-size:14px}
+
+  /* Los números del día, de a dos por renglón */
+  .grilla-stats{grid-template-columns:1fr 1fr;gap:8px}
+  .stat{padding:10px 12px}
+  .stat-val{font-size:18px}
+  .stat-etiq{font-size:9.5px}
+  .stat-sub{font-size:10px}
+
+  /* Blancos táctiles: nada de botones de 24 px */
+  .btn{min-height:42px}
+  .btn-fantasma{min-height:36px}
+  .campo-input{font-size:16px;min-height:44px}   /* 16 px evita el zoom de iOS al enfocar */
+  select.campo-input{min-height:44px}
+  .fila{padding:12px 14px;gap:10px}
+  .fila input[type="checkbox"]{width:22px;height:22px}
+
+  /* Modales a pantalla casi completa: se lee mejor */
+  .modal-caja{
+    max-height:92vh;border-radius:18px 18px 0 0;
+    margin-top:auto;width:100%;max-width:none;
+  }
+  .modal-cuerpo{padding:16px}
+  .modal-cab{padding:14px 16px}
+  .modal-pie{padding:12px 16px calc(12px + env(safe-area-inset-bottom))}
+
+  /* Títulos más contenidos */
+  .titulo-pagina{font-size:24px}
+  .eyebrow{font-size:9.5px}
+
+  /* Las tablas de los detalles no desbordan */
+  .tabla{font-size:12.5px}
+  .tabla td,.tabla th{padding:6px 4px}
+}
+
+@media (max-width:400px){
+  .grilla-stats{gap:6px}
+  .stat-val{font-size:17px}
+  .atajo{padding:10px;font-size:12px}
+}

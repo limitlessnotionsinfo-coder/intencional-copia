@@ -176,10 +176,12 @@ function pintarHechos() {
     lista.forEach(function (r) { if (deudaPendiente(r) > 0) deudores[normalizar(r.cliente_nombre)] = 1; });
 
     resumen.innerHTML = '<div class="grilla-stats" style="margin-bottom:14px">' +
-      stat('clipboard', 'Remitos', String(res.cantidad), plural(res.unidades, 'unidad', 'unidades'), 'var(--violet)') +
+      stat('clipboard', 'Remitos', String(res.cantidad), plural(res.unidades, 'unidad', 'unidades'), 'var(--violet)',
+           'detalleRemitos()') +
       stat('clock', 'Deuda por cobrar', plata(pendiente),
            pendiente > 0 ? plural(Object.keys(deudores).length, 'cliente') : 'todo cobrado',
-           pendiente > 0 ? 'var(--warn)' : 'var(--ok)') +
+           pendiente > 0 ? 'var(--warn)' : 'var(--ok)',
+           pendiente > 0 ? 'detalleDeuda()' : '') +
     '</div>';
   }
 
@@ -434,4 +436,55 @@ async function recargarHechos() {
   _hechos = (await traerCacheado('remitos')).slice().reverse();
   pintarChips();
   pintarHechos();
+}
+
+
+/* ── Detalle de las tarjetas ─────────────────────────────── */
+function detalleRemitos() {
+  var lista = hechosFiltrados();
+  var res = resumirRemitos(lista);
+  var porTipo = {};
+  lista.forEach(function (r) {
+    partesPago(r).forEach(function (p) {
+      if (p.monto > 0) porTipo[p.tipo] = (porTipo[p.tipo] || 0) + p.monto;
+    });
+  });
+
+  abrirModal('Resumen de ' + plural(lista.length, 'remito'),
+    '<div class="grilla-stats" style="margin-bottom:12px">' +
+      stat('receipt', 'Facturado', plata(res.facturado), '', 'var(--rose)') +
+      stat('box', 'Unidades', String(res.unidades), '', 'var(--text2)') +
+      stat('users', 'Clientes', String(Object.keys(lista.reduce(function (a, r) {
+        a[normalizar(r.cliente_nombre)] = 1; return a;
+      }, {})).length), '', 'var(--violet)') +
+    '</div>' +
+    '<div class="eyebrow">Cómo pagaron</div>' +
+    Object.keys(porTipo).map(function (t) {
+      var d = TIPOS_PAGO[t] || TIPOS_PAGO.sin_definir;
+      return '<div style="display:flex;justify-content:space-between;padding:5px 0;font-size:13px">' +
+        '<span style="color:' + d.color + ';font-weight:600">' + esc(d.etiqueta) + '</span>' +
+        '<strong>' + plata(porTipo[t]) + '</strong></div>';
+    }).join(''));
+}
+
+function detalleDeuda() {
+  var conDeuda = hechosFiltrados().filter(function (r) { return deudaPendiente(r) > 0; });
+  var d = resumenDeudas(conDeuda);
+
+  abrirModal('Deuda por cobrar',
+    '<div class="campo-ayuda" style="margin-bottom:10px">' +
+      plural(d.clientes, 'cliente') + ' · <strong>' + plata(d.total) + '</strong></div>' +
+    '<div class="lista">' +
+      d.items.map(function (x) {
+        return '<button class="fila" onclick="cerrarModal();verRemito(' + x.remito.id + ')">' +
+          '<div class="fila-principal">' +
+            '<div class="fila-titulo">' + esc(x.cliente) + '</div>' +
+            '<div class="fila-sub">' + esc(fechaCorta(x.fecha)) + ' · hace ' + plural(x.dias, 'día') +
+              (x.alias ? ' · a ' + esc(x.alias) : '') + '</div>' +
+          '</div>' +
+          '<div class="fila-derecha"><div class="fila-titulo">' + plata(x.monto) + '</div>' +
+            '<div class="campo-ayuda">cobrar →</div></div>' +
+        '</button>';
+      }).join('') +
+    '</div>');
 }

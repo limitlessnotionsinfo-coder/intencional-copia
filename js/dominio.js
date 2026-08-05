@@ -790,6 +790,17 @@ function cobradoEnRango(remitos, desde, hasta) {
 }
 
 /* El veredicto: ¿alcanza para pagar todo? */
+/* ¿Ya se anotó un gasto que corresponde a este compromiso? */
+function compromisoPagado(item, gastos) {
+  var clave = normalizar(item.concepto).replace(/^sueldo /, '');
+  return (gastos || []).some(function (g) {
+    if (!gastoPagado(g)) return false;
+    var d = normalizar(g.descripcion);
+    if (item.concepto === 'Deuda') return g.categoria === 'deuda';
+    return d.indexOf(clave) !== -1;
+  });
+}
+
 function cierreSemana(remitos, gastos, desde, hasta, conDeuda) {
   var entradas = cobradoEnRango(remitos, desde, hasta);
   var delRango = (gastos || []).filter(function (g) {
@@ -804,6 +815,16 @@ function cierreSemana(remitos, gastos, desde, hasta, conDeuda) {
   var pendientes = delRango.filter(function (g) { return !gastoPagado(g); });
 
   var comp = compromisosSemana(conDeuda);
+
+  /* Lo que ya se anotó esta semana queda tachado y no vuelve a sumar */
+  comp.items.forEach(function (i) {
+    i.pagado = compromisoPagado(i, delRango);
+  });
+  comp.total = comp.items.reduce(function (a, i) {
+    return a + (i.pagado || i.loPonenLosDuenos ? 0 : i.monto);
+  }, 0);
+  comp.totalConDuenos = comp.items.reduce(function (a, i) { return a + (i.pagado ? 0 : i.monto); }, 0);
+
   pendientes.forEach(function (g) {
     comp.items.push({ concepto: g.descripcion || 'Gasto sin pagar', monto: montoEmpresa(g), cada: 'pendiente' });
     comp.total += montoEmpresa(g);
