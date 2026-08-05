@@ -31,8 +31,12 @@ registrarPagina({
           '<button class="btn btn-fantasma" style="padding:0 4px;text-decoration:underline" ' +
                   'onclick="verTodasLasHojas()">ver todas</button></div></div>'
         : '') +
-      '<button class="btn btn-primario btn-bloque" style="margin-bottom:14px" onclick="nuevoCliente()">' +
-        ic('plus', 16) + ' Nuevo cliente</button>' +
+      '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px">' +
+        '<button class="btn btn-primario" style="flex:1;min-width:170px" onclick="nuevoCliente()">' +
+          ic('plus', 16) + ' Nuevo cliente</button>' +
+        '<button class="btn btn-secundario" onclick="revisarDuplicados()">' +
+          ic('users', 15) + ' Revisar duplicados</button>' +
+      '</div>' +
       '<div class="buscador" style="margin-bottom:14px">' +
         '<span class="ic-lupa">' + ic('search', 16) + '</span>' +
         '<input class="campo-input" id="q-clientes" type="search" autocomplete="off" ' +
@@ -626,4 +630,63 @@ async function guardarFicha() {
     toast('Cliente actualizado');
     pintarRuta();
   } catch (e) { toast(e.message, 'error'); }
+}
+
+
+/* ═══════════════════════════════════════════════════════════
+   DUPLICADOS
+   El nombre no alcanza: hay varias perfumerías con el mismo
+   nombre y hay clientes con más de una sucursal. Lo que decide
+   es la dirección, la localidad y el teléfono.
+   ═══════════════════════════════════════════════════════════ */
+function revisarDuplicados() {
+  var pares = buscarDuplicados(_clientes);
+  var seguros = pares.filter(function (p) { return p.nivel === 'seguro'; });
+  var posibles = pares.filter(function (p) { return p.nivel === 'posible'; });
+  var sucursales = pares.filter(function (p) { return p.nivel === 'sucursal'; });
+
+  if (!pares.length) {
+    abrirModal('Revisar duplicados',
+      avisoHTML('ok', 'No encontré clientes repetidos entre los ' + _clientes.length + ' cargados.', 'check'));
+    return;
+  }
+
+  abrirModal('Revisar duplicados',
+    '<div class="grilla-stats" style="margin-bottom:14px">' +
+      stat('alert', 'Repetidos', String(seguros.length), 'misma dirección', 'var(--danger)') +
+      stat('search', 'Para revisar', String(posibles.length), 'faltan datos', 'var(--warn)') +
+      stat('store', 'Sucursales', String(sucursales.length), 'mismo dueño', 'var(--info)') +
+    '</div>' +
+
+    grupoDuplicados('Seguramente repetidos', seguros,
+      'Misma dirección en la misma localidad: es el mismo local cargado dos veces.') +
+    grupoDuplicados('Para revisar a mano', posibles,
+      'Coinciden en algo pero faltan datos para estar seguro.') +
+    grupoDuplicados('Parecen sucursales', sucursales,
+      'Mismo teléfono pero direcciones distintas: probablemente el mismo dueño con dos locales. No conviene borrarlos.'));
+}
+
+function grupoDuplicados(titulo, pares, ayuda) {
+  if (!pares.length) return '';
+  return '<div class="eyebrow" style="margin-top:14px">' + esc(titulo) + '</div>' +
+    '<div class="campo-ayuda" style="margin-bottom:8px">' + esc(ayuda) + '</div>' +
+    '<div class="lista">' +
+      pares.slice(0, 30).map(function (p) {
+        return '<div class="fila" style="cursor:default;flex-direction:column;align-items:stretch;gap:6px">' +
+          [p.a, p.b].map(function (c) {
+            return '<button class="fila" style="padding:6px 0;border:none;background:none" ' +
+              'onclick="cerrarModal();abrirFicha(\'' + esc(c.num) + '\')">' +
+              '<span class="num-cliente">' + esc(c.num_str || c.num) + '</span>' +
+              '<div class="fila-principal">' +
+                '<div class="fila-titulo">' + esc(c.local) +
+                  (clienteActivo(c) ? '' : ' <span class="pin pin-neutro">inactivo</span>') + '</div>' +
+                '<div class="fila-sub">' +
+                  [c.dir, c.loc, c.tel].filter(Boolean).map(esc).join(' · ') + '</div>' +
+              '</div></button>';
+          }).join('') +
+          '<div class="campo-ayuda" style="margin:0">' + ic('alert', 12) + ' ' + esc(p.motivo) + '</div>' +
+        '</div>';
+      }).join('') +
+    '</div>' +
+    (pares.length > 30 ? '<div class="campo-ayuda">Se muestran 30 de ' + pares.length + '.</div>' : '');
 }

@@ -53,6 +53,7 @@ registrarPagina({
         '</div>' +
       '</details>' +
 
+      tarjetaAvisos() +
       tarjetaEmpleado() +
       tarjetaProductos() +
       tarjetaRutas() +
@@ -536,6 +537,65 @@ async function guardarEmpleado() {
     await guardarConfig('empleado_frecuencia', porId('cfg-emp-frec').value);
     await guardarConfig('reparto_empresa', +porId('cfg-reparto').value || 50);
     toast('Guardado');
+    pintarRuta();
+  } catch (e) { toast(e.message, 'error'); }
+}
+
+
+/* ── Cuándo aparecen los avisos del inicio ───────────────── */
+function tarjetaAvisos() {
+  return '<details class="tarjeta">' +
+    '<summary class="tarjeta-cab" style="cursor:pointer">' + ic('megaphone', 16) + ' Avisos del inicio</summary>' +
+    '<div class="tarjeta-cuerpo">' +
+      '<div class="campo-etiq">Recordar anotar los gastos</div>' +
+      selectorDias('gastos', 'dia_aviso_gastos', '5') +
+      '<div class="campo-ayuda" style="margin-bottom:14px">' +
+        'El día que cerrás la semana. Si no elegís ninguno, aparece todos los días.</div>' +
+
+      '<div class="campo-etiq">Avisar de las deudas por cobrar</div>' +
+      selectorDias('deudas', 'dias_aviso_deudas', '') +
+      '<div class="campo-ayuda" style="margin-bottom:14px">' +
+        'En el inicio se puede cerrar con la cruz y no vuelve hasta el día siguiente.</div>' +
+
+      '<button class="btn btn-primario btn-bloque" onclick="guardarAvisos()">Guardar</button>' +
+    '</div>' +
+  '</details>';
+}
+
+function selectorDias(id, clave, porDefecto) {
+  var elegidos = diasDeAviso(clave, porDefecto);
+  return '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px" id="dias-' + id + '">' +
+    [1, 2, 3, 4, 5, 6, 0].map(function (d) {
+      var activo = elegidos.indexOf(d) !== -1;
+      return '<button class="btn ' + (activo ? 'btn-primario' : 'btn-secundario') + ' dia-' + id + '" ' +
+        'data-dia="' + d + '" data-activo="' + (activo ? '1' : '0') + '" ' +
+        'style="padding:6px 11px;font-size:12px" onclick="alternarDia(this)">' +
+        capitalizar(DIAS_CORTOS[d]) + '</button>';
+    }).join('') +
+  '</div>';
+}
+
+function alternarDia(btn) {
+  var activo = btn.dataset.activo === '1';
+  btn.dataset.activo = activo ? '0' : '1';
+  btn.className = 'btn ' + (activo ? 'btn-secundario' : 'btn-primario') + ' ' +
+    btn.className.split(' ').filter(function (c) { return c.indexOf('dia-') === 0; }).join(' ');
+  btn.style.padding = '6px 11px';
+  btn.style.fontSize = '12px';
+}
+
+function diasElegidos(id) {
+  return $$('.dia-' + id)
+    .filter(function (b) { return b.dataset.activo === '1'; })
+    .map(function (b) { return b.dataset.dia; })
+    .join(',');
+}
+
+async function guardarAvisos() {
+  try {
+    await guardarConfig('dia_aviso_gastos', diasElegidos('gastos'));
+    await guardarConfig('dias_aviso_deudas', diasElegidos('deudas'));
+    toast('Avisos guardados');
     pintarRuta();
   } catch (e) { toast(e.message, 'error'); }
 }

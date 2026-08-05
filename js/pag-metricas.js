@@ -95,8 +95,10 @@ function pintarMetricas() {
   var r = rangoElegido();
   var remitosP = d.remitos.filter(reales).filter(function (x) { return enRango(x, r); });
   var p = resumirRemitos(remitosP);
+  /* Solo lo que pone la empresa: lo que ponen los dueños de su
+     bolsillo no es un gasto de la empresa. */
   var gastosP = d.gastos.filter(function (x) { return enRango(x, r); })
-    .reduce(function (s, g) { return s + (+g.monto || 0); }, 0);
+    .reduce(function (s, g) { return s + montoEmpresa(g); }, 0);
   var comprasP = d.compras.filter(function (x) { return enRango(x, r); })
     .reduce(function (s, c) { return s + (+c.total_costo || +c.total || 0); }, 0);
   var dias = {};
@@ -121,7 +123,7 @@ function pintarMetricas() {
   /* Histórico */
   var todos = d.remitos.filter(reales);
   var t = resumirRemitos(todos);
-  var gastosT = d.gastos.reduce(function (s, g) { return s + (+g.monto || 0); }, 0);
+  var gastosT = d.gastos.reduce(function (s, g) { return s + montoEmpresa(g); }, 0);
   var comprasT = d.compras.reduce(function (s, c) { return s + (+c.total_costo || +c.total || 0); }, 0);
   var clientes = {};
   todos.forEach(function (x) { if (x.cliente_nombre) clientes[normalizar(x.cliente_nombre)] = 1; });

@@ -566,9 +566,11 @@ function pintarRemito() {
       '</div>' +
     '</div>' +
 
-    (!R.cliente && R.nombre.trim()
+    /* Mientras no haya un cliente de la base elegido, se ofrece darlo
+       de alta. Al elegir uno existente el botón desaparece solo. */
+    (!R.cliente
       ? '<button class="btn btn-secundario btn-bloque" style="margin-bottom:8px" onclick="guardarComoCliente()">' +
-        ic('user', 15) + ' Guardar “' + esc(R.nombre.trim()) + '” como cliente' + '</button>'
+        ic('user', 15) + ' Guardar como cliente nuevo</button>'
       : '') +
 
     '<button class="btn btn-primario btn-bloque" id="btn-confirmar" onclick="confirmarRemito()">' +

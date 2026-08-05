@@ -140,7 +140,10 @@ function pintarGastos() {
     }).join('');
 
   var lista = gastosFiltrados();
-  var total = lista.reduce(function (s, g) { return s + (+g.monto || 0); }, 0);
+  /* Lo que sale de la caja de la empresa. Un gasto que ponen los
+     dueños de su bolsillo no es plata de la empresa. */
+  var total = lista.reduce(function (s, g) { return s + montoEmpresa(g); }, 0);
+  var deSocios = lista.reduce(function (s, g) { return s + montoDeSocios(g); }, 0);
   var r = rangoGastos();
 
   pintarCierre(lista, r);
@@ -178,13 +181,16 @@ function pintarGastos() {
   var porCat = {};
   lista.forEach(function (g) {
     var c = g.categoria || 'otro';
-    porCat[c] = (porCat[c] || 0) + (+g.monto || 0);
+    porCat[c] = (porCat[c] || 0) + montoEmpresa(g);
   });
 
   porId('g-resumen').innerHTML =
     '<div class="campo-ayuda" style="margin-bottom:8px">' + esc(r.etiqueta) + '</div>' +
     '<div class="grilla-stats">' +
-      stat('wallet', 'Total', plata(total), plural(lista.length, 'gasto'), 'var(--danger)') +
+      stat('wallet', 'Paga la empresa', plata(total), plural(lista.length, 'gasto'), 'var(--danger)') +
+      (deSocios > 0
+        ? stat('users', 'Ponen los dueños', plata(deSocios), 'no sale de la empresa', 'var(--violet)')
+        : '') +
       Object.keys(porCat).sort(function (a, b2) { return porCat[b2] - porCat[a]; }).slice(0, 3)
         .map(function (c) {
           var cat = categoriaGasto(c);
@@ -272,7 +278,7 @@ function porGrupo(lista) {
 
   return GRUPOS.filter(function (gr) { return grupos[gr.id]; }).map(function (gr) {
     var items = grupos[gr.id];
-    var total = items.reduce(function (a, g) { return a + (+g.monto || 0); }, 0);
+    var total = items.reduce(function (a, g) { return a + montoEmpresa(g); }, 0);
     return '<details class="tarjeta" open>' +
       '<summary class="tarjeta-cab" style="cursor:pointer">' + ic(gr.icono, 16) + ' ' + esc(gr.etiqueta) +
         '<span style="margin-left:auto;display:inline-flex;gap:6px;align-items:center">' +
@@ -632,12 +638,14 @@ async function pintarCierre(lista, rango) {
 
         '<div class="campo-etiq" style="margin-top:14px">Falta pagar</div>' +
         c.compromisos.items.map(function (i) {
-          return '<div style="display:flex;justify-content:space-between;padding:4px 0;font-size:13px">' +
-            '<span>' + esc(i.concepto) + ' <span class="campo-ayuda">· cada ' + esc(i.cada) + '</span></span>' +
+          return '<div style="display:flex;justify-content:space-between;padding:4px 0;font-size:13px' +
+            (i.loPonenLosDuenos ? ';color:var(--muted)' : '') + '">' +
+            '<span>' + esc(i.concepto) + ' <span class="campo-ayuda">· cada ' + esc(i.cada) +
+              (i.loPonenLosDuenos ? ' · lo ponen los dueños' : '') + '</span></span>' +
             '<strong>' + plata(i.monto) + '</strong></div>';
         }).join('') +
         '<div style="display:flex;justify-content:space-between;padding:6px 0;border-top:1px solid var(--border);font-size:13px">' +
-          '<span>Total a pagar</span><strong>' + plata(c.compromisos.total) + '</strong></div>' +
+          '<span>Sale de la empresa</span><strong>' + plata(c.compromisos.total) + '</strong></div>' +
 
         '<label style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted);margin:10px 0;cursor:pointer">' +
           '<input type="checkbox"' + (conDeuda ? ' checked' : '') + ' onchange="alternarDeuda()"/> ' +

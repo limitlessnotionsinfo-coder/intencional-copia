@@ -572,27 +572,42 @@ function capitalizar(s) { return String(s || '').charAt(0).toUpperCase() + Strin
 function bloqueAvisos(remitos, gastos) {
   var html = '';
 
-  /* Deudas por cobrar */
+  /* Deudas por cobrar: los días elegidos y hasta que lo cierres */
   var d = resumenDeudas(remitos);
-  if (d.items.length) {
-    html += '<button class="aviso aviso-warn" style="width:100%;text-align:left;cursor:pointer;border:1px solid var(--warn-border)" ' +
-      'onclick="verDeudas()">' + ic('clock', 16) +
-      '<div><strong>' + plural(d.clientes, 'cliente') + ' con deuda</strong> · ' + plata(d.total) + ' por cobrar' +
-      (d.masVieja ? '<br>La más vieja es de ' + esc(d.masVieja.cliente) + ', hace ' + plural(d.masVieja.dias, 'día') + '.' : '') +
-      '<br><span style="text-decoration:underline">Ver el detalle</span></div></button>';
+  if (d.items.length && tocaHoy('dias_aviso_deudas', '') && !avisoSilenciado('deudas')) {
+    html += '<div class="aviso aviso-warn" style="align-items:flex-start">' + ic('clock', 16) +
+      '<div style="flex:1">' +
+        '<strong>' + plural(d.clientes, 'cliente') + ' con deuda</strong> · ' + plata(d.total) + ' por cobrar' +
+        (d.masVieja ? '<br>La más vieja es de ' + esc(d.masVieja.cliente) + ', hace ' + plural(d.masVieja.dias, 'día') + '.' : '') +
+        '<br><button class="btn btn-fantasma" style="padding:2px 0;text-decoration:underline;font-size:12.5px" ' +
+          'onclick="verDeudas()">Ver el detalle</button>' +
+      '</div>' +
+      '<button class="btn btn-fantasma" style="padding:2px 6px" aria-label="No mostrar hoy" ' +
+        'onclick="cerrarAviso(\'deudas\')">' + ic('x', 15) + '</button>' +
+    '</div>';
   }
 
-  /* Gastos de la semana sin anotar */
+  /* Gastos sin anotar: solo el día que se configure */
   var desde = isoDe(sumarDias(-6));
   var faltan = faltaAnotarGastos(gastos, desde, hoyISO());
-  if (faltan.length) {
-    html += '<button class="aviso aviso-info" style="width:100%;text-align:left;cursor:pointer" ' +
-      'onclick="irA(\'gastos\')">' + ic('wallet', 16) +
-      '<div><strong>Faltan anotar gastos de esta semana:</strong> ' + esc(faltan.join(', ')) + '.' +
-      '<br><span style="text-decoration:underline">Ir a Gastos</span></div></button>';
+  if (faltan.length && tocaHoy('dia_aviso_gastos', '5') && !avisoSilenciado('gastos')) {
+    html += '<div class="aviso aviso-info" style="align-items:flex-start">' + ic('wallet', 16) +
+      '<div style="flex:1">' +
+        '<strong>Faltan anotar gastos de esta semana:</strong> ' + esc(faltan.join(', ')) + '.' +
+        '<br><button class="btn btn-fantasma" style="padding:2px 0;text-decoration:underline;font-size:12.5px" ' +
+          'onclick="irA(\'gastos\')">Ir a Gastos</button>' +
+      '</div>' +
+      '<button class="btn btn-fantasma" style="padding:2px 6px" aria-label="No mostrar hoy" ' +
+        'onclick="cerrarAviso(\'gastos\')">' + ic('x', 15) + '</button>' +
+    '</div>';
   }
 
   return html;
+}
+
+function cerrarAviso(clave) {
+  silenciarAviso(clave);
+  pintarRuta();
 }
 
 /* ── Listado de deudas ───────────────────────────────────── */

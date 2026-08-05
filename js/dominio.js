@@ -740,10 +740,13 @@ function compromisosSemana(hayQuePagarDeuda) {
     var monto = e.frecuencia === 'semanal' ? e.sueldo
               : e.frecuencia === 'quincenal' ? Math.round(e.sueldo / 2)
               : Math.round(e.sueldo / 4);
+    /* Lo ponen los dueños de su bolsillo: hay que pagarlo igual,
+       pero no sale de la caja de la empresa. */
     items.push({
       concepto: 'Sueldo' + (e.nombre ? ' ' + e.nombre : ' empleado'),
       monto: monto,
-      cada: e.frecuencia === 'semanal' ? 'semana' : e.frecuencia + ' (prorrateado)'
+      cada: e.frecuencia === 'semanal' ? 'semana' : e.frecuencia + ' (prorrateado)',
+      loPonenLosDuenos: true
     });
   }
 
@@ -752,7 +755,12 @@ function compromisosSemana(hayQuePagarDeuda) {
     if (d) items.push({ concepto: 'Deuda', monto: d, cada: 'mes' });
   }
 
-  return { items: items, total: items.reduce(function (a, i) { return a + i.monto; }, 0) };
+  return {
+    items: items,
+    /* El total es lo que tiene que salir de la empresa */
+    total: items.reduce(function (a, i) { return a + (i.loPonenLosDuenos ? 0 : i.monto); }, 0),
+    totalConDuenos: items.reduce(function (a, i) { return a + i.monto; }, 0)
+  };
 }
 
 /* Lo que entró en el período: lo cobrado de verdad, sin la deuda */
@@ -779,14 +787,15 @@ function cierreSemana(remitos, gastos, desde, hasta, conDeuda) {
   });
 
   /* Lo que ya salió de la caja y lo que todavía se debe */
+  /* Solo lo que salió de la caja de la empresa */
   var yaGastado = delRango.filter(gastoPagado)
-    .reduce(function (a, g) { return a + (+g.monto || 0); }, 0);
+    .reduce(function (a, g) { return a + montoEmpresa(g); }, 0);
   var pendientes = delRango.filter(function (g) { return !gastoPagado(g); });
 
   var comp = compromisosSemana(conDeuda);
   pendientes.forEach(function (g) {
-    comp.items.push({ concepto: g.descripcion || 'Gasto sin pagar', monto: +g.monto || 0, cada: 'pendiente' });
-    comp.total += (+g.monto || 0);
+    comp.items.push({ concepto: g.descripcion || 'Gasto sin pagar', monto: montoEmpresa(g), cada: 'pendiente' });
+    comp.total += montoEmpresa(g);
   });
 
   var disponible = entradas.cobrado - yaGastado;
@@ -864,6 +873,21 @@ function balancesTodos(gastos) {
   return socios().map(function (s2) {
     return { quien: s2, balance: balanceGastos(gastos, s2) };
   }).filter(function (x) { return x.balance.items.length; });
+}
+
+/* Cuánto de un gasto le toca a la empresa. Si lo pagan los dueños
+   de su bolsillo y se lo reparten entre ellos, la empresa no puso
+   nada: no puede contarse como gasto de la empresa. */
+function montoEmpresa(g) {
+  var r = repartoDeGasto(g);
+  /* Sin reparto anotado se asume que era todo de la empresa */
+  if (!r || !Object.keys(r).length) return +g.monto || 0;
+  return +r.empresa || 0;
+}
+
+/* El que sale del bolsillo de los dueños */
+function montoDeSocios(g) {
+  return (+g.monto || 0) - montoEmpresa(g);
 }
 
 /* Un gasto puede quedar registrado sin pagar todavía */
@@ -1043,4 +1067,136 @@ function faltaAnotarGastos(gastos, desde, hasta) {
   if (!hay(function (g) { return g.categoria === 'combustible'; })) faltan.push('la nafta');
 
   return faltan;
+}
+
+
+/* ═══════════════════════════════════════════════════════════
+   AVISOS DEL INICIO
+   Cada uno aparece los días que se configuren, y el de deudas
+   se puede silenciar por el resto del día.
+   ═══════════════════════════════════════════════════════════ */
+
+var DIAS_CORTOS = ['dom', 'lun', 'mar', 'mié', 'jue', 'vie', 'sáb'];
+
+/* "5" o "1,3,5" — vacío quiere decir todos los días */
+function diasDeAviso(clave, porDefecto) {
+  var crudo = leerConfig(clave, porDefecto);
+  if (crudo === '' || crudo === null || crudo === undefined) return [];
+  return String(crudo).split(',')
+    .map(function (d) { return parseInt(d, 10); })
+    .filter(function (d) { return !isNaN(d) && d >= 0 && d <= 6; });
+}
+
+function tocaHoy(clave, porDefecto, fecha) {
+  var dias = diasDeAviso(clave, porDefecto);
+  if (!dias.length) return true;                    // sin días elegidos: siempre
+  return dias.indexOf((fecha || new Date()).getDay()) !== -1;
+}
+
+/* Silenciar un aviso hasta mañana */
+function silenciarAviso(clave) {
+  try { localStorage.setItem('intencional_silencio_' + clave, hoyISO()); } catch (e) {}
+}
+
+function avisoSilenciado(clave) {
+  try { return localStorage.getItem('intencional_silencio_' + clave) === hoyISO(); }
+  catch (e) { return false; }
+}
+
+/* ═══════════════════════════════════════════════════════════
+   CLIENTES DUPLICADOS
+   No alcanza con el nombre: hay muchas perfumerías "Burbujas" y
+   hay clientes con varias sucursales. Lo que delata un duplicado
+   es la misma dirección en la misma localidad, o el mismo teléfono
+   con la misma dirección.
+   ═══════════════════════════════════════════════════════════ */
+
+function soloDigitosTel(t) { return String(t || '').replace(/[^0-9]/g, '').slice(-8); }
+
+/* Normaliza una dirección para poder compararla: saca "calle",
+   abreviaturas y espacios de más. */
+function claveDireccion(dir) {
+  return normalizar(dir)
+    .replace(/\b(calle|av|avda|avenida|ruta|km|nro|n|no|numero|piso|local|depto|dpto)\b/g, ' ')
+    .replace(/[^a-z0-9 ]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/* Compara dos clientes y dice qué tan probable es que sean el mismo */
+function comparar(a, b) {
+  var dirA = claveDireccion(a.dir), dirB = claveDireccion(b.dir);
+  var locA = normalizar(a.loc), locB = normalizar(b.loc);
+  var telA = soloDigitosTel(a.tel), telB = soloDigitosTel(b.tel);
+  var nomA = normalizar(a.local), nomB = normalizar(b.local);
+
+  var mismaDir = !!dirA && dirA === dirB;
+  var mismaLoc = !!locA && locA === locB;
+  var mismoTel = telA.length >= 6 && telA === telB;
+  var mismoNombre = !!nomA && nomA === nomB;
+
+  /* Misma dirección y misma localidad: es el mismo local */
+  if (mismaDir && mismaLoc) {
+    return { nivel: 'seguro', motivo: 'misma dirección en ' + (a.loc || b.loc) };
+  }
+  /* Mismo teléfono y misma dirección, aunque cambie el nombre */
+  if (mismoTel && mismaDir) {
+    return { nivel: 'seguro', motivo: 'mismo teléfono y misma dirección' };
+  }
+  /* Mismo teléfono en distinta dirección: suele ser otra sucursal
+     del mismo dueño, no un duplicado. */
+  if (mismoTel && dirA && dirB && dirA !== dirB) {
+    return { nivel: 'sucursal', motivo: 'mismo teléfono, direcciones distintas' };
+  }
+  if (mismoTel && (!dirA || !dirB)) {
+    return { nivel: 'posible', motivo: 'mismo teléfono, falta la dirección de alguno' };
+  }
+  /* Mismo nombre y misma localidad, sin dirección cargada */
+  if (mismoNombre && mismaLoc && (!dirA || !dirB)) {
+    return { nivel: 'posible', motivo: 'mismo nombre y misma zona, sin dirección para confirmar' };
+  }
+  return null;
+}
+
+/* Busca duplicados agrupando por dirección, teléfono y nombre:
+   comparar todos contra todos con mil clientes sería un millón de
+   comparaciones, así que solo se comparan los que comparten algo. */
+function buscarDuplicados(clientes) {
+  var lista = (clientes || []).filter(function (c) { return c.local; });
+  var candidatos = {};
+
+  function agrupar(clave, c) {
+    if (!clave) return;
+    (candidatos[clave] = candidatos[clave] || []).push(c);
+  }
+
+  lista.forEach(function (c) {
+    var dir = claveDireccion(c.dir);
+    if (dir) agrupar('d:' + dir + '|' + normalizar(c.loc), c);
+    var tel = soloDigitosTel(c.tel);
+    if (tel.length >= 6) agrupar('t:' + tel, c);
+    agrupar('n:' + normalizar(c.local) + '|' + normalizar(c.loc), c);
+  });
+
+  var vistos = {};
+  var pares = [];
+
+  Object.keys(candidatos).forEach(function (k) {
+    var g = candidatos[k];
+    if (g.length < 2) return;
+    for (var i = 0; i < g.length; i++) {
+      for (var j = i + 1; j < g.length; j++) {
+        var par = [g[i], g[j]].sort(function (x, y) { return (+x.num || 0) - (+y.num || 0); });
+        var id = par[0].num + '-' + par[1].num;
+        if (vistos[id]) continue;
+        var r = comparar(par[0], par[1]);
+        if (!r) continue;
+        vistos[id] = 1;
+        pares.push({ a: par[0], b: par[1], nivel: r.nivel, motivo: r.motivo });
+      }
+    }
+  });
+
+  var orden = { seguro: 0, posible: 1, sucursal: 2 };
+  return pares.sort(function (x, y) { return orden[x.nivel] - orden[y.nivel]; });
 }
