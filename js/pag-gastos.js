@@ -29,6 +29,8 @@ registrarPagina({
           '<div id="g-categorias" style="display:flex;gap:6px;flex-wrap:wrap"></div>' +
         '</div>' +
       '</details>' +
+      '<div id="g-empleado"></div>' +
+      '<div id="g-reintegros"></div>' +
       '<div id="g-cierre"></div>' +
       '<div id="g-balance"></div>' +
       '<div id="g-resumen"></div>' +
@@ -146,6 +148,8 @@ function pintarGastos() {
   var deSocios = lista.reduce(function (s, g) { return s + montoDeSocios(g); }, 0);
   var r = rangoGastos();
 
+  pintarEmpleado(lista, r);
+  pintarReintegros();
   pintarCierre(lista, r);
 
   /* Balance: cuánto le corresponde a cada uno al cerrar */
@@ -758,4 +762,138 @@ async function confirmarPago() {
     invalidarCache('gastos');
     pintarRuta();
   } catch (e) { toast(e.message, 'error'); }
+}
+
+
+/* ═══════════════════════════════════════════════════════════
+   EL EMPLEADO
+   Su sueldo no sale de la empresa: lo ponen los dueños. Va
+   aparte para que se vea cuánto les cuesta.
+   ═══════════════════════════════════════════════════════════ */
+function pintarEmpleado(lista, rango) {
+  var cont = porId('g-empleado');
+  if (!cont) return;
+
+  var e = empleadoConfig();
+  var g = gastoEnEmpleado(lista);
+  if (!g.total) { cont.innerHTML = ''; return; }
+
+  var porSocio = Object.keys(g.porSocio);
+
+  cont.innerHTML =
+    '<div class="tarjeta" style="border-color:var(--violet-border, var(--border))">' +
+      '<div class="tarjeta-cab">' + ic('user', 16) + ' ' + esc(e.nombre || 'Empleado') +
+        '<span style="margin-left:auto"><span class="pin pin-neutro">lo pagan los dueños</span></span>' +
+      '</div>' +
+      '<div class="tarjeta-cuerpo">' +
+        '<div style="display:flex;justify-content:space-between;align-items:baseline">' +
+          '<div>' +
+            '<div class="campo-etiq" style="margin:0">' + esc(rango.etiqueta) + '</div>' +
+            '<div class="campo-ayuda">' + plural(g.items.length, 'pago') + '</div>' +
+          '</div>' +
+          '<div class="stat-val" style="font-size:23px;color:var(--violet)">' + plata(g.total) + '</div>' +
+        '</div>' +
+        (porSocio.length
+          ? '<div class="campo-ayuda" style="margin-top:8px">Le tocó a ' +
+            porSocio.map(function (k) { return esc(k) + ' ' + plata(g.porSocio[k]); }).join(' · ') + '</div>'
+          : '') +
+        '<div class="campo-ayuda" style="margin-top:6px">' +
+          'No entra en los gastos de la empresa: sale del bolsillo de los dueños.</div>' +
+      '</div>' +
+    '</div>';
+}
+
+/* ═══════════════════════════════════════════════════════════
+   REINTEGROS
+   La nafta la adelanta un dueño y la empresa le devuelve su parte.
+   ═══════════════════════════════════════════════════════════ */
+function pintarReintegros() {
+  var cont = porId('g-reintegros');
+  if (!cont) return;
+
+  /* Se miran todos los gastos, no solo los del filtro: una deuda
+     de la semana pasada sigue estando aunque mires esta. */
+  var grupos = reintegrosPorSocio(_gastos);
+  if (!grupos.length) { cont.innerHTML = ''; return; }
+
+  cont.innerHTML =
+    '<details class="tarjeta" open>' +
+      '<summary class="tarjeta-cab" style="cursor:pointer">' + ic('fuel', 16) + ' A devolverle a los dueños' +
+        '<span style="margin-left:auto"><span class="pin pin-warn">' +
+          plata(grupos.reduce(function (a, x) { return a + x.total; }, 0)) + '</span></span>' +
+      '</summary>' +
+      '<div class="tarjeta-cuerpo">' +
+        '<div class="campo-ayuda" style="margin-bottom:10px">' +
+          'Plata que pusieron de su bolsillo por algo que le toca a la empresa. ' +
+          'Al pagarles, marcalo como devuelto y deja de figurar.</div>' +
+        grupos.map(function (x) {
+          return '<div style="padding:10px 0;border-top:1px solid var(--border)">' +
+            '<div style="display:flex;justify-content:space-between;align-items:baseline;gap:10px">' +
+              '<div>' +
+                '<strong>' + esc(x.quien) + '</strong>' +
+                '<div class="campo-ayuda">' + plural(x.items.length, 'gasto') + ' sin devolver</div>' +
+              '</div>' +
+              '<div style="text-align:right">' +
+                '<div style="font-weight:700;font-size:17px;color:var(--warn)">' + plata(x.total) + '</div>' +
+                '<button class="btn btn-primario" style="padding:5px 12px;font-size:12px;margin-top:4px" ' +
+                  'onclick="pagarReintegro(\'' + esc(x.quien).replace(/'/g, "\\'") + '\')">' +
+                  ic('cash', 13) + ' Cobrar</button>' +
+              '</div>' +
+            '</div>' +
+            '<div class="campo-ayuda" style="margin-top:6px">' +
+              x.items.slice(0, 6).map(function (i) {
+                return esc(fechaCorta(i.gasto.fecha)) + ' · ' + esc(i.gasto.descripcion) + ' · ' + plata(i.monto);
+              }).join('<br>') +
+              (x.items.length > 6 ? '<br>y ' + (x.items.length - 6) + ' más' : '') +
+            '</div>' +
+          '</div>';
+        }).join('') +
+      '</div>' +
+    '</details>';
+}
+
+function pagarReintegro(quien) {
+  var grupo = reintegrosPorSocio(_gastos).find(function (x) { return x.quien === quien; });
+  if (!grupo) return;
+
+  abrirModal('Devolverle a ' + quien,
+    '<p style="font-size:13px;color:var(--text2);line-height:1.6">' +
+      'Se marcan como devueltos ' + plural(grupo.items.length, 'gasto') + ' por un total de ' +
+      '<strong>' + plata(grupo.total) + '</strong>.</p>' +
+    '<div class="lista">' +
+      grupo.items.map(function (i) {
+        return '<div class="fila" style="cursor:default">' +
+          '<div class="fila-principal">' +
+            '<div class="fila-titulo">' + esc(i.gasto.descripcion) + '</div>' +
+            '<div class="fila-sub">' + esc(fechaCorta(i.gasto.fecha)) + '</div>' +
+          '</div>' +
+          '<div class="fila-derecha"><div class="fila-titulo">' + plata(i.monto) + '</div></div>' +
+        '</div>';
+      }).join('') +
+    '</div>',
+    '<button class="btn btn-primario btn-bloque" id="btn-reint" onclick="confirmarReintegro(\'' +
+      esc(quien).replace(/'/g, "\\'") + '\')">Marcar como devuelto</button>');
+}
+
+async function confirmarReintegro(quien) {
+  var grupo = reintegrosPorSocio(_gastos).find(function (x) { return x.quien === quien; });
+  if (!grupo) return;
+  var btn = porId('btn-reint');
+  if (btn) { btn.disabled = true; btn.textContent = 'Guardando…'; }
+
+  var fallos = 0;
+  for (var i = 0; i < grupo.items.length; i++) {
+    try {
+      await actualizar('gastos', grupo.items[i].gasto.id, {
+        reintegrado: true,
+        reintegrado_fecha: hoyISO()
+      });
+      grupo.items[i].gasto.reintegrado = true;
+    } catch (e) { fallos++; }
+  }
+
+  invalidarCache('gastos');
+  cerrarModal();
+  toast(fallos ? 'Quedaron ' + fallos + ' sin marcar' : 'Devuelto a ' + quien + ': ' + plata(grupo.total));
+  pintarRuta();
 }

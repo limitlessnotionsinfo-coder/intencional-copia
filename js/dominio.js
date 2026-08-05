@@ -859,6 +859,7 @@ function balanceGastos(gastos, quien) {
   var b = { aCobrar: 0, aDevolver: 0, neto: 0, items: [] };
   (gastos || []).forEach(function (g) {
     if (!g.pagado_por) return;                 // sin ese dato no se puede saber
+    if (gastoReintegrado(g)) return;           // ya se saldó
     var s = saldoDeGasto(g, quien);
     if (!s) return;
     if (s > 0) b.aCobrar += s; else b.aDevolver += -s;
@@ -998,6 +999,71 @@ function renumerarRuta(clientesDeLaRuta, ruta) {
   }).filter(function (x) { return x.codigo !== x.cliente.num_str; });
 }
 
+
+/* ═══════════════════════════════════════════════════════════
+   REINTEGROS
+   Cuando un dueño pone plata de su bolsillo por algo que le toca
+   a la empresa, la empresa se lo devuelve al cerrar la semana.
+   ═══════════════════════════════════════════════════════════ */
+
+function gastoReintegrado(g) { return bool(g.reintegrado); }
+
+/* Lo que la empresa le debe a cada dueño y todavía no le devolvió */
+function reintegrosPendientes(gastos, categoria) {
+  return (gastos || [])
+    .filter(function (g) {
+      if (categoria && g.categoria !== categoria) return false;
+      if (gastoReintegrado(g)) return false;
+      return montoEmpresa(g) > 0 && (+puestoPorCadaUno(g).empresa || 0) === 0;
+    })
+    .map(function (g) {
+      var puestos = puestoPorCadaUno(g);
+      var quien = Object.keys(puestos).filter(function (k) { return k !== 'empresa'; })
+        .sort(function (a, b) { return puestos[b] - puestos[a]; })[0];
+      return { gasto: g, quien: quien || '—', monto: montoEmpresa(g) };
+    })
+    .filter(function (x) { return x.monto > 0; });
+}
+
+/* Agrupado por dueño, para poder pagarle todo junto */
+function reintegrosPorSocio(gastos, categoria) {
+  var por = {};
+  reintegrosPendientes(gastos, categoria).forEach(function (x) {
+    (por[x.quien] = por[x.quien] || { quien: x.quien, total: 0, items: [] });
+    por[x.quien].total += x.monto;
+    por[x.quien].items.push(x);
+  });
+  return Object.keys(por).map(function (k) { return por[k]; })
+    .sort(function (a, b) { return b.total - a.total; });
+}
+
+/* ── Lo que se gasta en el empleado ──────────────────────── */
+function gastoEnEmpleado(gastos, desde, hasta) {
+  var lista = (gastos || []).filter(function (g) {
+    if (g.categoria !== 'empleado') return false;
+    var nombres = socios().map(normalizar);
+    /* Los sueldos de los dueños no cuentan acá */
+    if (nombres.some(function (n) { return normalizar(g.descripcion).indexOf(n) !== -1; })) return false;
+    if (!desde) return true;
+    var k = claveFecha(g.fecha || g.created_at);
+    return k && k >= desde && k <= hasta;
+  });
+  return {
+    items: lista,
+    total: lista.reduce(function (a, g) { return a + (+g.monto || 0); }, 0),
+    porSocio: (function () {
+      var r = {};
+      lista.forEach(function (g) {
+        var rep = repartoDeGasto(g);
+        Object.keys(rep).forEach(function (k) {
+          if (k === 'empresa') return;
+          r[k] = (r[k] || 0) + (+rep[k] || 0);
+        });
+      });
+      return r;
+    })()
+  };
+}
 
 /* ═══════════════════════════════════════════════════════════
    DEUDAS POR COBRAR

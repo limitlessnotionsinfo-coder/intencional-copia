@@ -483,7 +483,9 @@ function unidadesRemito() {
 function pintarRemito() {
   var z = porId('zona-remito'); if (!z) return;
   var total = totalRemito();
-  var mostrarAviso = aumentoConfig().activo && !clienteAvisado(R.cliente);
+  /* Solo cuando hay un cliente elegido y todavía no se le avisó:
+     sin cliente no se sabe a quién avisar, y el cartel molestaba. */
+  var mostrarAviso = aumentoConfig().activo && !!R.cliente && !clienteAvisado(R.cliente);
 
   z.innerHTML =
     /* Los casos en que no se carga nada van arriba: si la visita
@@ -968,7 +970,7 @@ function remitoParaImagen(r) {
         esc(textoPagoPendiente(r.alias || r.pago2_alias).replace('Pago pendiente — ', '')) + '</div>'
       : '') +
 
-    (aumentoConfig().activo && !clienteAvisado(R.cliente)
+    (aumentoConfig().activo && !!R.cliente && !clienteAvisado(R.cliente)
       ? '<div style="margin-top:12px;border:1px solid #fed7aa;background:#fff7ed;border-radius:10px;padding:10px 13px;font-size:12.5px;color:#9a3412;line-height:1.5">' +
         '<strong>Aviso:</strong> ' + esc(textoAviso(aumentoConfig().nuevo)) + '</div>'
       : '') +
