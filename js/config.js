@@ -60,3 +60,37 @@ var TABLAS = {
   tareas:   'id',
   config:   'key'
 };
+
+/* ═══════════════════════════════════════════════════════════
+   TEMA
+   'auto' sigue al sistema, 'claro' y 'oscuro' lo fuerzan.
+   Se aplica antes de pintar nada para que no haya un destello
+   blanco al abrir la app de noche.
+   ═══════════════════════════════════════════════════════════ */
+function temaGuardado() {
+  try { return localStorage.getItem('intencional_tema') || 'auto'; }
+  catch (e) { return 'auto'; }
+}
+
+function aplicarTema(t) {
+  var tema = t || temaGuardado();
+  document.documentElement.setAttribute('data-tema', tema);
+  var meta = document.querySelector('meta[name="theme-color"]');
+  if (meta) meta.setAttribute('content', temaEsOscuro(tema) ? '#1a1618' : '#c84b8c');
+}
+
+function temaEsOscuro(t) {
+  var tema = t || temaGuardado();
+  if (tema === 'oscuro') return true;
+  if (tema === 'claro') return false;
+  try { return window.matchMedia('(prefers-color-scheme: dark)').matches; }
+  catch (e) { return false; }
+}
+
+function guardarTema(t) {
+  try { localStorage.setItem('intencional_tema', t); } catch (e) {}
+  aplicarTema(t);
+}
+
+/* Se aplica ya, sin esperar al resto de los scripts */
+aplicarTema();

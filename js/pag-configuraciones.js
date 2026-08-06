@@ -53,6 +53,7 @@ registrarPagina({
         '</div>' +
       '</details>' +
 
+      tarjetaTema() +
       tarjetaAvisos() +
       tarjetaEmpleado() +
       tarjetaProductos() +
@@ -598,4 +599,39 @@ async function guardarAvisos() {
     toast('Avisos guardados');
     pintarRuta();
   } catch (e) { toast(e.message, 'error'); }
+}
+
+
+/* ── Claro, oscuro o el del teléfono ─────────────────────── */
+function tarjetaTema() {
+  var actual = temaGuardado();
+  var opciones = [
+    ['auto', 'Como el teléfono', 'smartphone'],
+    ['claro', 'Siempre claro', 'droplet'],
+    ['oscuro', 'Siempre oscuro', 'eye']
+  ];
+
+  return '<details class="tarjeta">' +
+    '<summary class="tarjeta-cab" style="cursor:pointer">' + ic('droplet', 16) + ' Apariencia' +
+      '<span style="margin-left:auto"><span class="pin pin-neutro">' +
+        esc((opciones.find(function (o) { return o[0] === actual; }) || opciones[0])[1]) + '</span></span>' +
+    '</summary>' +
+    '<div class="tarjeta-cuerpo">' +
+      '<div style="display:flex;gap:8px;flex-wrap:wrap">' +
+        opciones.map(function (o) {
+          return '<button class="btn ' + (actual === o[0] ? 'btn-primario' : 'btn-secundario') + '" ' +
+            'style="flex:1;min-width:120px" onclick="cambiarTema(\'' + o[0] + '\')">' +
+            ic(o[2], 15) + ' ' + esc(o[1]) + '</button>';
+        }).join('') +
+      '</div>' +
+      '<div class="campo-ayuda" style="margin-top:10px">' +
+        '“Como el teléfono” cambia solo cuando tu celular pasa a modo oscuro. ' +
+        'El remito que se comparte sale siempre en claro, para que se lea bien impreso o reenviado.</div>' +
+    '</div>' +
+  '</details>';
+}
+
+function cambiarTema(t) {
+  guardarTema(t);
+  pintarRuta();
 }

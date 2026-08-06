@@ -46,6 +46,75 @@
   --acento:Montserrat,Inter,sans-serif;
 }
 
+/* ═══════════════════════════════════════════════════════════
+   MODO OSCURO
+   Solo cambian los tokens: el resto de la hoja no se entera.
+   Los fondos no son negros puros sino grises cálidos, para que
+   el rosa de la marca no vibre encima.
+   ═══════════════════════════════════════════════════════════ */
+html[data-tema="oscuro"]{
+  --rose:#e879b0;
+  --rose-light:#2a1d26;
+  --rose-border:rgba(232,121,176,.28);
+  --rose-30:rgba(232,121,176,.35);
+  --violet:#b98fd0;
+
+  --bg:#1a1618;
+  --surface:#211c1f;
+  --subtle:#272025;
+  --border:#332b2f;
+
+  --text:#f2ecee;
+  --text2:#c4b7bc;
+  --muted:#93848a;
+
+  --ok:#34d399;      --ok-bg:#0f2a20;      --ok-border:#1e5943;
+  --info:#60a5fa;    --info-bg:#14243d;    --info-border:#1e4272;
+  --warn:#fbbf24;    --warn-bg:#2e2110;    --warn-border:#6b4a12;
+  --danger:#f87171;  --danger-bg:#331818;  --danger-border:#7a2b2b;
+
+  --sombra:0 1px 2px rgba(0,0,0,.4);
+  --sombra-alta:0 8px 28px rgba(0,0,0,.55);
+  --warn-texto:#fcd34d;
+  --danger-texto:#fca5a5;
+  --vidrio:rgba(26,22,24,.94);
+
+  color-scheme:dark;
+}
+
+/* Sin preferencia guardada se sigue la del sistema */
+@media (prefers-color-scheme:dark){
+  html[data-tema="auto"]{
+    --rose:#e879b0;
+    --rose-light:#2a1d26;
+    --rose-border:rgba(232,121,176,.28);
+    --rose-30:rgba(232,121,176,.35);
+    --violet:#b98fd0;
+
+    --bg:#1a1618;
+    --surface:#211c1f;
+    --subtle:#272025;
+    --border:#332b2f;
+
+    --text:#f2ecee;
+    --text2:#c4b7bc;
+    --muted:#93848a;
+
+    --ok:#34d399;      --ok-bg:#0f2a20;      --ok-border:#1e5943;
+    --info:#60a5fa;    --info-bg:#14243d;    --info-border:#1e4272;
+    --warn:#fbbf24;    --warn-bg:#2e2110;    --warn-border:#6b4a12;
+    --danger:#f87171;  --danger-bg:#331818;  --danger-border:#7a2b2b;
+
+    --sombra:0 1px 2px rgba(0,0,0,.4);
+    --sombra-alta:0 8px 28px rgba(0,0,0,.55);
+    --warn-texto:#fcd34d;
+    --danger-texto:#fca5a5;
+    --vidrio:rgba(26,22,24,.94);
+
+    color-scheme:dark;
+  }
+}
+
 *{box-sizing:border-box;min-width:0}
 
 /* Nada puede ser más ancho que la pantalla: el scroll es solo
@@ -189,8 +258,8 @@ button,input,select,textarea{font-family:inherit;font-size:inherit;color:inherit
 /* ── Avisos ──────────────────────────────────────────────── */
 .aviso{display:flex;gap:9px;align-items:flex-start;border:1px solid;border-radius:var(--radius);padding:10px 13px;font-size:12.5px;line-height:1.55;margin-bottom:14px}
 .aviso-ok{color:var(--ok);background:var(--ok-bg);border-color:var(--ok-border)}
-.aviso-warn{color:#9a3412;background:var(--warn-bg);border-color:var(--warn-border)}
-.aviso-danger{color:#991b1b;background:var(--danger-bg);border-color:var(--danger-border)}
+.aviso-warn{color:var(--warn-texto,#9a3412);background:var(--warn-bg);border-color:var(--warn-border)}
+.aviso-danger{color:var(--danger-texto,#991b1b);background:var(--danger-bg);border-color:var(--danger-border)}
 
 /* ── Estados vacíos y carga ──────────────────────────────── */
 .vacio{text-align:center;padding:44px 20px;color:var(--muted)}
@@ -226,7 +295,7 @@ button,input,select,textarea{font-family:inherit;font-size:inherit;color:inherit
   }
   .topbar{
     display:flex;align-items:center;gap:10px;position:sticky;top:0;z-index:50;
-    background:rgba(255,255,255,.92);backdrop-filter:blur(8px);
+    background:var(--vidrio,rgba(255,255,255,.92));backdrop-filter:blur(8px);
     border-bottom:1px solid var(--border);padding:10px 14px;margin:-14px -16px 16px;
   }
   .topbar .marca-nombre{font-size:16px}
@@ -317,7 +386,7 @@ html{touch-action:manipulation}
   .barra-inferior{
     display:grid;grid-template-columns:repeat(5,1fr);
     position:fixed;left:0;right:0;bottom:0;z-index:70;
-    background:rgba(255,255,255,.96);backdrop-filter:blur(10px);
+    background:var(--vidrio,rgba(255,255,255,.96));backdrop-filter:blur(10px);
     border-top:1px solid var(--border);
     padding-bottom:env(safe-area-inset-bottom);
   }
