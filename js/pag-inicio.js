@@ -674,7 +674,7 @@ function filaRemitoHoy(r) {
     '</div>' +
     '<div class="fila-derecha">' +
       '<div class="fila-titulo">' + plata(r.total) + '</div>' +
-      (cerrado ? '' : '<div style="margin-top:4px">' + pagoHTML(r) + '</div>') +
+      (cerrado ? '' : '<div class="pagos" style="margin-top:4px">' + pagoHTML(r) + '</div>') +
     '</div>' +
   '</button>';
 }

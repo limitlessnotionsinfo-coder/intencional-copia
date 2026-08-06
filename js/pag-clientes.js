@@ -519,7 +519,7 @@ function bloqueRemitosFicha(c, suyos) {
             '</div>' +
             '<div class="fila-derecha">' +
               '<div class="fila-titulo">' + plata(r.total) + '</div>' +
-              '<div style="margin-top:4px">' + pagoHTML(r) +
+              '<div class="pagos" style="margin-top:4px">' + pagoHTML(r) +
                 (d !== null ? ' <span class="pin pin-ok">pagó en ' + plural(d, 'día') + '</span>' : '') +
               '</div>' +
             '</div>' +

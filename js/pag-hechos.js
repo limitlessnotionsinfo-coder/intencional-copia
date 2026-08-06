@@ -224,7 +224,7 @@ function filaHecho(r) {
     '</div>' +
     '<div class="fila-derecha">' +
       '<div class="fila-titulo">' + plata(r.total) + '</div>' +
-      '<div style="margin-top:4px">' + pagoHTML(r) +
+      '<div class="pagos" style="margin-top:4px">' + pagoHTML(r) +
         (demora !== null ? ' <span class="pin pin-ok">cobrado en ' + plural(demora, 'día') + '</span>' : '') +
       '</div>' +
     '</div>' +
