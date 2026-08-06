@@ -170,7 +170,7 @@ function pintarGastos() {
       stat('wallet', 'Paga la empresa', plata(total), plural(lista.length, 'gasto'), 'var(--danger)',
            "detalleGastos('empresa')") +
       (deSocios > 0
-        ? stat('users', 'Ponen los dueños', plata(deSocios), 'aparte de la empresa', 'var(--violet)',
+        ? stat('users', 'Ponen los dueños', plata(deSocios), resumenPorSocio(lista), 'var(--violet)',
                "detalleGastos('socios')")
         : '') +
       Object.keys(porCat).sort(function (a, b2) { return porCat[b2] - porCat[a]; }).slice(0, 2)
@@ -212,9 +212,8 @@ function filaGasto(g) {
           ? '<span class="pin pin-danger">' + ic('clock', 12) + ' pago pendiente</span> '
           : '') +
         (g.pagado_por
-          ? '<span class="pin pin-neutro">puso ' +
-            esc(g.pagado_por === 'empresa' ? 'la empresa'
-              : g.pagado_por === 'socios' ? 'entre los dueños' : g.pagado_por) + '</span>'
+          ? '<span class="pin pin-neutro">' + esc(verboPuso(g.pagado_por)) + ' ' +
+            esc(nombreDePagador(g.pagado_por)) + '</span>'
           : '') +
         (saldo > 0 ? ' <span class="pin pin-ok">le deben ' + plata(saldo) + ' a ' + esc(quienMas) + '</span>' : '') +
       '</div>' +
@@ -1001,6 +1000,20 @@ async function guardarGastoEditado() {
 }
 
 
+/* Quién pone cuánto, para que se vea que la nafta es de uno solo */
+function resumenPorSocio(lista) {
+  var por = {};
+  lista.forEach(function (g) {
+    var rep = repartoDeGasto(g);
+    Object.keys(rep).forEach(function (k) {
+      if (k === 'empresa' || !rep[k]) return;
+      por[k] = (por[k] || 0) + (+rep[k] || 0);
+    });
+  });
+  var claves = Object.keys(por).sort(function (a, b) { return por[b] - por[a]; });
+  return claves.map(function (k) { return k + ' ' + plata(por[k]); }).join(' · ');
+}
+
 /* ── Detalle de una tarjeta ──────────────────────────────── */
 function detalleGastos(que) {
   var lista = gastosFiltrados();
@@ -1011,8 +1024,8 @@ function detalleGastos(que) {
     titulo = 'Gastos de la empresa';
     items = lista.filter(function (g) { return montoEmpresa(g) > 0; });
   } else if (que === 'socios') {
-    titulo = 'Lo que ponen los dueños';
-    items = lista.filter(function (g) { return montoDeSocios(g) > 0; });
+    detalleSocios(lista, rangoGastos());
+    return;
   } else {
     var cat = categoriaGasto(que.slice(4));
     titulo = cat.etiqueta;
@@ -1034,7 +1047,7 @@ function detalleGastos(que) {
               '<div class="fila-titulo">' + esc(g.descripcion || '—') + '</div>' +
               '<div class="fila-sub">' + esc(fechaCorta(g.fecha)) + ' · ' +
                 esc(categoriaGasto(g.categoria).etiqueta) +
-                (g.pagado_por ? ' · puso ' + esc(g.pagado_por === 'empresa' ? 'la empresa' : g.pagado_por) : '') +
+                (g.pagado_por ? ' · ' + esc(verboPuso(g.pagado_por)) + ' ' + esc(nombreDePagador(g.pagado_por)) : '') +
                 (gastoPagado(g) ? '' : ' · <strong>sin pagar</strong>') + '</div>' +
             '</div>' +
             '<div class="fila-derecha"><div class="fila-titulo">' + plata(m) + '</div>' +
@@ -1043,4 +1056,47 @@ function detalleGastos(que) {
           '</div>';
         }).join('') + '</div>'
       : '<div class="campo-ayuda">No hay gastos de ese tipo en el período.</div>'));
+}
+
+
+/* Lo que pone cada dueño, separado por concepto: la nafta la pone
+   siempre uno solo y no tiene sentido mezclarla con los sueldos. */
+function detalleSocios(lista, r) {
+  var porSocio = {};
+  lista.forEach(function (g) {
+    var rep = repartoDeGasto(g);
+    Object.keys(rep).forEach(function (k) {
+      if (k === 'empresa' || !rep[k]) return;
+      (porSocio[k] = porSocio[k] || { total: 0, porCat: {} });
+      porSocio[k].total += +rep[k] || 0;
+      var cat = g.categoria || 'otro';
+      (porSocio[k].porCat[cat] = porSocio[k].porCat[cat] || { total: 0, items: [] });
+      porSocio[k].porCat[cat].total += +rep[k] || 0;
+      porSocio[k].porCat[cat].items.push({ gasto: g, monto: +rep[k] || 0 });
+    });
+  });
+
+  var nombres = Object.keys(porSocio).sort(function (a, b) { return porSocio[b].total - porSocio[a].total; });
+
+  abrirModal('Lo que ponen los dueños',
+    '<div class="campo-ayuda" style="margin-bottom:12px">' + esc(r.etiqueta) +
+      ' · esto no sale de la caja de la empresa.</div>' +
+    nombres.map(function (n) {
+      var d = porSocio[n];
+      return '<div class="eyebrow">' + esc(n) + ' · ' + plata(d.total) + '</div>' +
+        '<div class="lista" style="margin-bottom:14px">' +
+          Object.keys(d.porCat).sort(function (a, b) { return d.porCat[b].total - d.porCat[a].total; })
+            .map(function (c) {
+              var cat = categoriaGasto(c);
+              return '<div class="fila" style="cursor:default">' +
+                '<span class="nav-ic">' + ic(cat.icono, 16) + '</span>' +
+                '<div class="fila-principal">' +
+                  '<div class="fila-titulo">' + esc(cat.etiqueta) + '</div>' +
+                  '<div class="fila-sub">' + plural(d.porCat[c].items.length, 'gasto') + '</div>' +
+                '</div>' +
+                '<div class="fila-derecha"><div class="fila-titulo">' + plata(d.porCat[c].total) + '</div></div>' +
+              '</div>';
+            }).join('') +
+        '</div>';
+    }).join(''));
 }

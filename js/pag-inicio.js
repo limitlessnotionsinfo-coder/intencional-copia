@@ -19,7 +19,10 @@ registrarPagina({
 
   async montar(cont) {
     await cargarConfig().catch(function () {});
-    await cargarFeriados().catch(function () {});
+    /* Los feriados se bajan de una API externa: si se esperan, la
+       pantalla tarda lo que tarde internet. Se piden en segundo
+       plano y cuando llegan se repinta. */
+    if (!_feriadosCargados) cargarFeriados().then(function () { pintarRuta(); }).catch(function () {});
     var datos = await Promise.all([
       traerCacheado('remitos'),
       traerCacheado('tareas').catch(function () { return []; }),
@@ -73,7 +76,6 @@ registrarPagina({
 
       bloqueRemitosHoy(deHoy);
 
-    pintarExtraPendiente();
   }
 });
 
@@ -274,32 +276,13 @@ function bloquePendientes() {
     '</summary>' +
     '<div class="tarjeta-cuerpo">' +
 
-      /* Primero el tipo: de eso depende qué más hace falta */
-      '<div class="campo" style="margin-bottom:10px"><div class="campo-etiq">¿Qué tipo de pendiente?</div>' +
-        '<select class="campo-input" id="pend-tipo" onchange="alternarClientePendiente()">' +
-          Object.keys(TIPOS_PENDIENTE).map(function (k) {
-            return '<option value="' + k + '"' + (_tipoPend === k ? ' selected' : '') + '>' +
-              esc(TIPOS_PENDIENTE[k].etiqueta) + '</option>';
-          }).join('') +
-        '</select></div>' +
-
-      '<div id="pend-extra"></div>' +
-
-      '<div class="pend-form">' +
-        '<input class="campo-input pf-texto" id="pend-texto" ' +
-               'placeholder="' + esc(placeholderPendiente()) + '" ' +
-               'onkeydown="if(event.key===\'Enter\')agregarPendiente()"/>' +
-        '<button class="btn btn-primario pf-mas" onclick="agregarPendiente()" aria-label="Agregar pendiente">' +
-          ic('plus', 17) + '</button>' +
-      '</div>' +
-
-      /* Filtros y orden */
+      /* Filtros y orden, solo si hay algo que filtrar */
       (abiertos.length > 1
-        ? '<div style="display:flex;gap:6px;flex-wrap:wrap;margin:14px 0 10px">' +
+        ? '<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:10px">' +
             chipPend('', 'Todos', abiertos.length) +
             Object.keys(TIPOS_PENDIENTE).filter(function (k) { return porTipo[k]; })
               .map(function (k) { return chipPend(k, TIPOS_PENDIENTE[k].etiqueta, porTipo[k]); }).join('') +
-            '<select class="campo-input" style="width:auto;margin-left:auto;font-size:12px;padding:5px 8px" ' +
+            '<select class="campo-input" style="width:auto;margin-left:auto;font-size:12px;padding:5px 8px;min-height:0" ' +
                     'onchange="setOrdenPend(this.value)">' +
               [['tipo', 'Por tipo'], ['nuevos', 'Más nuevos'], ['viejos', 'Más viejos']].map(function (o) {
                 return '<option value="' + o[0] + '"' + (_ordenPend === o[0] ? ' selected' : '') + '>' + o[1] + '</option>';
@@ -311,8 +294,12 @@ function bloquePendientes() {
       (visibles.length
         ? '<div class="lista">' + visibles.map(function (t) { return filaPendiente(t, false); }).join('') + '</div>'
         : '<div class="campo-ayuda">' +
-          (abiertos.length ? 'No hay pendientes de ese tipo.' : 'No queda nada pendiente. Agregá uno arriba si te acordás de algo.') +
+          (abiertos.length ? 'No hay pendientes de ese tipo.' : 'No queda nada pendiente.') +
           '</div>') +
+
+      /* El alta vive en su propia ventana: acá solo el botón */
+      '<button class="btn btn-primario btn-bloque" style="margin-top:12px" onclick="abrirNuevoPendiente()">' +
+        ic('plus', 16) + ' Agregar pendiente</button>' +
 
       (hechas.length
         ? '<div class="eyebrow" style="margin:16px 0 8px">Hechas</div>' +
@@ -320,6 +307,29 @@ function bloquePendientes() {
         : '') +
     '</div>' +
   '</details>';
+}
+
+/* ── Alta de un pendiente, en una ventana aparte ─────────── */
+function abrirNuevoPendiente() {
+  _clientePedido = null;
+  abrirModal('Nuevo pendiente',
+    '<div class="campo"><div class="campo-etiq">¿Qué tipo de pendiente?</div>' +
+      '<select class="campo-input" id="pend-tipo" onchange="alternarClientePendiente()">' +
+        Object.keys(TIPOS_PENDIENTE).map(function (k) {
+          return '<option value="' + k + '"' + (_tipoPend === k ? ' selected' : '') + '>' +
+            esc(TIPOS_PENDIENTE[k].etiqueta) + '</option>';
+        }).join('') +
+      '</select></div>' +
+
+    '<div id="pend-extra"></div>' +
+
+    '<div class="campo" style="margin:0"><div class="campo-etiq">¿Qué hay que hacer?</div>' +
+      '<input class="campo-input" id="pend-texto" placeholder="' + esc(placeholderPendiente()) + '" ' +
+             'onkeydown="if(event.key===\'Enter\')agregarPendiente()"/></div>',
+
+    '<button class="btn btn-primario btn-bloque" onclick="agregarPendiente()">' +
+      ic('plus', 16) + ' Agregar</button>');
+  pintarExtraPendiente();
 }
 
 function chipPend(tipo, etiqueta, n) {
@@ -336,7 +346,6 @@ function pintarPendientes() {
   z.innerHTML = bloquePendientes();
   var det = z.querySelector('details');
   if (det) det.open = true;
-  pintarExtraPendiente();
 }
 
 function setFiltroPend(t) {
@@ -511,7 +520,7 @@ function soltarClientePedido() {
 
 async function agregarPendiente() {
   var inp = porId('pend-texto');
-  var texto = (inp.value || '').trim();
+  var texto = ((inp || {}).value || '').trim();
   if (!texto) { toast('Escribí el pendiente', 'error'); return; }
 
   var tipo = porId('pend-tipo').value;
@@ -535,8 +544,8 @@ async function agregarPendiente() {
       cliente_nombre: _clientePedido ? _clientePedido.local : null,
       loc: _clientePedido ? _clientePedido.loc : (loc || null)
     });
-    inp.value = '';
     _clientePedido = null;
+    cerrarModal();
     toast('Pendiente agregado');
     invalidarCache('tareas');
     _pendientes = await traerCacheado('tareas');

@@ -523,3 +523,10 @@ input[type="date"]{
   .datos-cliente{grid-template-columns:repeat(4,minmax(0,1fr))}
   .datos-cliente .dc-ancho{grid-column:auto}
 }
+
+/* Con un modal abierto, el fondo no se mueve */
+body.fondo-quieto{
+  position:fixed;left:0;right:0;width:100%;
+  overflow:hidden;overscroll-behavior:none;
+}
+.modal-cuerpo{overscroll-behavior:contain;-webkit-overflow-scrolling:touch}

@@ -211,6 +211,8 @@ function precargar() {
   });
 }
 
+/* Al invalidar, se vuelve a pedir en segundo plano: la próxima
+   pantalla que la necesite la encuentra lista. */
 function invalidarCache(tabla) {
   if (!tabla) { _cache = {}; return; }
   Object.keys(_cache).forEach(function (k) {

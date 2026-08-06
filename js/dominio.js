@@ -156,6 +156,14 @@ function textoAviso(precio) {
   return 'A partir de la próxima reposición se aplicará un aumento. El nuevo costo será de ' + plata(precio) + '.';
 }
 
+/* Un cliente que se dio de alta hoy ya recibió el exhibidor con el
+   precio nuevo: no corresponde avisarle de un aumento futuro. */
+function clienteReciente(c) {
+  if (!c) return false;
+  var alta = claveFecha(c.fecha || c.created_at);
+  return !!alta && alta === hoyISO();
+}
+
 function clienteAvisado(c) { return !!c && bool(c.aviso_aumento); }
 
 /* Qué precio le corresponde hoy a este cliente por el producto en aumento */
@@ -609,7 +617,7 @@ function pedidosAbiertos(pendientes, clientes) {
 
 var CATEGORIAS_GASTO = [
   { id: 'combustible',   etiqueta: 'Combustible', icono: 'fuel',    compartido: true },
-  { id: 'empleado',      etiqueta: 'Empleado',    icono: 'user',    compartido: false },
+  { id: 'empleado',      etiqueta: 'Sueldos',     icono: 'user',    compartido: false },
   { id: 'deuda',         etiqueta: 'Deuda',       icono: 'clock',   compartido: false },
   { id: 'impuestos',     etiqueta: 'Impuestos',   icono: 'file',    compartido: false },
   { id: 'insumos',       etiqueta: 'Insumos',     icono: 'box',     compartido: false },
@@ -1297,4 +1305,20 @@ function buscarDuplicados(clientes) {
 
   var orden = { seguro: 0, posible: 1, sucursal: 2 };
   return pares.sort(function (x, y) { return orden[x.nivel] - orden[y.nivel]; });
+}
+
+
+/* Cómo se nombra a quien puso la plata, en singular o plural */
+function nombreDePagador(id) {
+  if (!id) return '';
+  if (id === 'empresa') return 'la empresa';
+  if (id === 'socios') {
+    var l = socios();
+    return l.length === 2 ? l.join(' y ') : 'los dueños';
+  }
+  return id;
+}
+
+function verboPuso(id) {
+  return id === 'socios' && socios().length > 1 ? 'pusieron' : 'puso';
 }

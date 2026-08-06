@@ -13,7 +13,7 @@ registrarPagina({
   async montar(cont) {
     _prods = null;
     await cargarConfig().catch(function () {});
-    await cargarFeriados().catch(function () {});
+    if (!_feriadosCargados) cargarFeriados().catch(function () {});
     var cfg = aumentoConfig();
 
     cont.innerHTML =

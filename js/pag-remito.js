@@ -17,6 +17,8 @@ function remitoVacio() {
     notas: '',
     pago1: '', alias1: '',
     pago2: '', monto1: 0, alias2: '',
+    /* Deuda vieja que se cobra junto con este remito */
+    cobrarDeuda: 0, deudasACobrar: [],
     guardando: false
   };
 }
@@ -99,12 +101,17 @@ function pintarZonaCliente() {
               : '<div class="stat-val" style="font-size:17px;color:var(--muted)">Primera vez</div>' +
                 '<div class="stat-sub">no tiene remitos anteriores</div>') +
           '</div>' +
-          '<div class="stat">' +
-            '<div class="stat-etiq">' + ic('clock', 14) + 'Deuda</div>' +
-            '<div class="stat-val" style="font-size:17px;color:' + (deuda > 0 ? 'var(--warn)' : 'var(--ok)') + '">' +
-              (deuda > 0 ? plata(deuda) : 'Al día') + '</div>' +
-            (deuda > 0 ? '<div class="stat-sub">' + plural(_remitosConDeuda, 'remito') + ' sin saldar</div>' : '') +
-          '</div>' +
+          (deuda > 0
+            ? '<button class="stat stat-tocable" onclick="verDeudaCliente()">' +
+                '<div class="stat-etiq">' + ic('clock', 14) + 'Deuda' +
+                  '<span style="margin-left:auto;opacity:.5">' + ic('chevron', 12) + '</span></div>' +
+                '<div class="stat-val" style="font-size:17px;color:var(--warn)">' + plata(deuda) + '</div>' +
+                '<div class="stat-sub">' + plural(_remitosConDeuda, 'remito') + ' · tocá para cobrar</div>' +
+              '</button>'
+            : '<div class="stat">' +
+                '<div class="stat-etiq">' + ic('clock', 14) + 'Deuda</div>' +
+                '<div class="stat-val" style="font-size:17px;color:var(--ok)">Al día</div>' +
+              '</div>') +
         '</div>' +
 
         (clienteAvisado(c)
@@ -143,6 +150,7 @@ function buscarClienteRemito(q) {
 }
 
 var _ultimaRep = null, _deudaCliente = 0, _remitosConDeuda = 0;
+var _deudasDelCliente = [];   // los remitos que quedaron sin saldar
 
 async function elegirCliente(num) {
   var c = _clientesRemito.find(function (x) { return String(x.num) === String(num); });
@@ -153,7 +161,7 @@ async function elegirCliente(num) {
   R.loc = c.loc || '';
   R.tel = c.tel || '';
 
-  _ultimaRep = null; _deudaCliente = 0; _remitosConDeuda = 0;
+  _ultimaRep = null; _deudaCliente = 0; _remitosConDeuda = 0; _deudasDelCliente = [];
   pintarZonaCliente();
   pintarRemito();
 
@@ -161,9 +169,10 @@ async function elegirCliente(num) {
     var suyos = await traerTodo('remitos', 'cliente_nombre=eq.' + encodeURIComponent(c.local));
     if (!R.cliente || R.cliente.num !== c.num) return;   // cambió mientras cargaba
     _ultimaRep = ultimaReposicion(c.local, suyos);
-    var conDeuda = suyos.filter(tieneDeuda);
+    var conDeuda = suyos.filter(function (r) { return deudaPendiente(r) > 0; });
+    _deudasDelCliente = conDeuda;
     _remitosConDeuda = conDeuda.length;
-    _deudaCliente = sumarTipo(conDeuda, 'deuda');
+    _deudaCliente = conDeuda.reduce(function (a, r) { return a + deudaPendiente(r); }, 0);
   } catch (e) { console.warn('historial del cliente:', e.message); }
 
   aplicarPrecioSugerido();
@@ -172,7 +181,8 @@ async function elegirCliente(num) {
 }
 
 function soltarCliente() {
-  R.cliente = null; _ultimaRep = null; _deudaCliente = 0;
+  R.cliente = null; _ultimaRep = null; _deudaCliente = 0; _deudasDelCliente = [];
+  R.cobrarDeuda = 0; R.deudasACobrar = [];
   pintarZonaCliente(); pintarRemito();
 }
 
@@ -354,6 +364,9 @@ async function confirmarAltaCliente() {
       ruta: JSON.stringify({ orden: ruta, horarios: [], notas: '' }),
       exhibidores: 0,
       activo: true,
+      /* Se lleva el exhibidor hoy con el precio nuevo: no hay aumento que avisarle */
+      aviso_aumento: true,
+      aviso_aumento_fecha: hoyISO(),
       fecha: hoyTexto(),
       created_at: new Date().toISOString()
     };
@@ -473,9 +486,14 @@ function precioInicial() {
 }
 
 /* ── El remito ───────────────────────────────────────────── */
-function totalRemito() {
+function totalProductos() {
   return R.filas.reduce(function (s, f) { return s + (+f.cant || 0) * (+f.precio || 0); }, 0);
 }
+/* Lo que se cobra hoy: los productos más la deuda que se salda */
+function totalRemito() {
+  return totalProductos() + (+R.cobrarDeuda || 0);
+}
+
 function unidadesRemito() {
   return R.filas.reduce(function (s, f) { return s + (+f.cant || 0); }, 0);
 }
@@ -485,7 +503,8 @@ function pintarRemito() {
   var total = totalRemito();
   /* Solo cuando hay un cliente elegido y todavía no se le avisó:
      sin cliente no se sabe a quién avisar, y el cartel molestaba. */
-  var mostrarAviso = aumentoConfig().activo && !!R.cliente && !clienteAvisado(R.cliente);
+  var mostrarAviso = aumentoConfig().activo && !!R.cliente &&
+    !clienteAvisado(R.cliente) && !clienteReciente(R.cliente);
 
   z.innerHTML =
     /* Los casos en que no se carga nada van arriba: si la visita
@@ -553,6 +572,10 @@ function pintarRemito() {
           '<div>' +
             '<div class="campo-etiq" style="margin:0">Total</div>' +
             '<div class="campo-ayuda" id="detalle-total" style="margin-top:2px">' + resumenFilas() + '</div>' +
+            (R.cobrarDeuda
+              ? '<div class="campo-ayuda" style="color:var(--warn)">' +
+                plata(totalProductos()) + ' del remito + ' + plata(R.cobrarDeuda) + ' de deuda</div>'
+              : '') +
           '</div>' +
           '<div class="stat-val" id="total-remito" style="font-size:26px;color:var(--rose)">' + plata(total) + '</div>' +
         '</div>' +
@@ -819,6 +842,7 @@ async function confirmarRemito() {
     productos: JSON.stringify(R.filas.filter(function (f) { return f.prod; })
       .map(function (f) { return { prod: f.prod, cant: +f.cant || 0, precio: +f.precio || 0 }; })),
     pagos_detalle: JSON.stringify(partes),
+    cobrado_deuda: +R.cobrarDeuda || 0,
     created_at: new Date().toISOString()
   };
   if (segunda) {
@@ -829,6 +853,7 @@ async function confirmarRemito() {
 
   try {
     await crear('remitos', remito);
+    await saldarDeudasCobradas();
     await marcarAvisoSiSalio();
     toast('Remito guardado');
     await compartirRemito(remito);
@@ -934,6 +959,17 @@ function remitoParaImagen(r) {
       }).join('') +
     '</tbody></table>' +
 
+    (+r.cobrado_deuda > 0
+      ? '<div style="margin-top:12px;border:1px solid #ead8e4;background:#fbf2f7;border-radius:10px;padding:10px 13px;font-size:13px;color:#8a2f68">' +
+        '<div style="display:flex;justify-content:space-between"><span>Productos de hoy</span>' +
+          '<strong>' + plata((+r.total || 0) - (+r.cobrado_deuda || 0)) + '</strong></div>' +
+        '<div style="display:flex;justify-content:space-between"><span>Deuda anterior</span>' +
+          '<strong>' + plata(r.cobrado_deuda) + '</strong></div>' +
+        '<div style="display:flex;justify-content:space-between;margin-top:4px;padding-top:4px;border-top:1px solid #ead8e4">' +
+          '<strong>Total a pagar</strong><strong>' + plata(r.total) + '</strong></div>' +
+      '</div>'
+      : '') +
+
     (r.motivo === 'sin_ventas'
       ? '<div style="margin-top:14px;border:1px solid #ead8e4;background:#fbf2f7;border-radius:10px;padding:10px 12px;font-size:13px;color:#8a2f68;text-align:center">' +
         '<strong>Visita sin reposición</strong> — el cliente no vendió</div>'
@@ -972,7 +1008,7 @@ function remitoParaImagen(r) {
         esc(textoPagoPendiente(r.alias || r.pago2_alias).replace('Pago pendiente — ', '')) + '</div>'
       : '') +
 
-    (aumentoConfig().activo && !!R.cliente && !clienteAvisado(R.cliente)
+    (aumentoConfig().activo && !!R.cliente && !clienteAvisado(R.cliente) && !clienteReciente(R.cliente)
       ? '<div style="margin-top:12px;border:1px solid #fed7aa;background:#fff7ed;border-radius:10px;padding:10px 13px;font-size:12.5px;color:#9a3412;line-height:1.5">' +
         '<strong>Aviso:</strong> ' + esc(textoAviso(aumentoConfig().nuevo)) + '</div>'
       : '') +
@@ -992,4 +1028,68 @@ async function marcarAvisoSiSalio() {
     c.aviso_aumento = true;
     c.aviso_aumento_fecha = hoyISO();
   } catch (e) { console.warn('no se pudo marcar el aviso:', e.message); }
+}
+
+
+/* Los remitos viejos que se cobraron en este quedan saldados */
+async function saldarDeudasCobradas() {
+  if (!R.cobrarDeuda || !R.deudasACobrar.length) return;
+  var hoy = hoyISO();
+
+  for (var i = 0; i < R.deudasACobrar.length; i++) {
+    var viejo = _deudasDelCliente.find(function (r) { return r.id === R.deudasACobrar[i]; });
+    if (!viejo) continue;
+    try {
+      await actualizar('remitos', viejo.id, remitoCobrado(viejo, R.pago1 || 'efectivo', R.alias1, hoy));
+    } catch (e) { console.warn('saldar deuda:', e.message); }
+  }
+  invalidarCache('remitos');
+}
+
+/* ═══════════════════════════════════════════════════════════
+   COBRAR LA DEUDA EN ESTE REMITO
+   Se suma al total y, al confirmar, los remitos viejos quedan
+   saldados con la fecha de hoy.
+   ═══════════════════════════════════════════════════════════ */
+function verDeudaCliente() {
+  if (!_deudasDelCliente.length) { toast('No tiene deuda pendiente'); return; }
+  var d = remitosConDeuda(_deudasDelCliente);
+
+  abrirModal('Deuda de ' + (R.cliente ? R.cliente.local : ''),
+    '<div class="campo-ayuda" style="margin-bottom:10px">' +
+      plural(d.length, 'remito') + ' sin saldar · <strong>' + plata(_deudaCliente) + '</strong></div>' +
+    '<div class="lista">' +
+      d.map(function (x) {
+        return '<div class="fila" style="cursor:default;align-items:flex-start">' +
+          '<div class="fila-principal">' +
+            '<div class="fila-titulo">' + esc(fechaCorta(x.fecha)) + '</div>' +
+            '<div class="fila-sub">hace ' + plural(x.dias, 'día') +
+              (x.alias ? ' · iba a transferir a ' + esc(x.alias) : '') +
+              (x.remito.notas ? '<br>' + esc(x.remito.notas) : '') + '</div>' +
+          '</div>' +
+          '<div class="fila-derecha"><div class="fila-titulo">' + plata(x.monto) + '</div></div>' +
+        '</div>';
+      }).join('') +
+    '</div>',
+
+    (R.cobrarDeuda
+      ? '<button class="btn btn-secundario btn-bloque" onclick="sacarDeudaDelRemito()">' +
+        ic('undo', 15) + ' Sacarla de este remito</button>'
+      : '<button class="btn btn-primario btn-bloque" onclick="cobrarDeudaEnRemito()">' +
+        ic('cash', 16) + ' Cobrar ' + plata(_deudaCliente) + ' en este remito</button>'));
+}
+
+function cobrarDeudaEnRemito() {
+  R.cobrarDeuda = _deudaCliente;
+  R.deudasACobrar = _deudasDelCliente.map(function (r) { return r.id; });
+  cerrarModal();
+  toast('Se sumó ' + plata(_deudaCliente) + ' al remito');
+  pintarRemito();
+}
+
+function sacarDeudaDelRemito() {
+  R.cobrarDeuda = 0;
+  R.deudasACobrar = [];
+  cerrarModal();
+  pintarRemito();
 }

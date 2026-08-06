@@ -186,7 +186,7 @@ function abrirModal(titulo, cuerpoHTML, pieHTML) {
       (pieHTML ? '<div class="modal-pie">' + pieHTML + '</div>' : '') +
     '</div>';
   m.className = 'modal visible';
-  document.body.style.overflow = 'hidden';
+  bloquearFondo();
   var primero = m.querySelector('input,select,textarea,button');
   if (primero) primero.focus();
 }
@@ -195,7 +195,27 @@ function cerrarModal() {
   var m = porId('modal');
   m.className = 'modal';
   m.innerHTML = '';
-  document.body.style.overflow = '';
+  soltarFondo();
+}
+
+/* ── Bloquear el fondo mientras hay un modal ─────────────────
+   En iOS no alcanza con overflow:hidden: hay que fijar el body
+   y guardar dónde estaba el scroll para devolverlo al cerrar.
+   ────────────────────────────────────────────────────────── */
+var _scrollGuardado = 0;
+
+function bloquearFondo() {
+  if (document.body.classList.contains('fondo-quieto')) return;
+  _scrollGuardado = window.scrollY || document.documentElement.scrollTop || 0;
+  document.body.classList.add('fondo-quieto');
+  document.body.style.top = '-' + _scrollGuardado + 'px';
+}
+
+function soltarFondo() {
+  if (!document.body.classList.contains('fondo-quieto')) return;
+  document.body.classList.remove('fondo-quieto');
+  document.body.style.top = '';
+  window.scrollTo(0, _scrollGuardado);
 }
 
 document.addEventListener('keydown', function (e) {
