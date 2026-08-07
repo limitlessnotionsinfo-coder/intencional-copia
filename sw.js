@@ -1,13 +1,16 @@
 /* Service worker: red primero, caché como respaldo si no hay señal. */
-const CACHE = 'intencional-v41';
+const CACHE = 'intencional-v43';
 
 const LOCALES = [
   './', './index.html', './css/estilo.css',
   './js/config.js', './js/logo.js', './js/iconos.js', './js/ui.js',
   './js/api.js', './js/dominio.js', './js/router.js', './js/app.js',
-  './js/pag-inicio.js', './js/pag-remito.js', './js/pag-hechos.js',
+  './js/push.js', './js/pag-inicio.js', './js/pag-remito.js', './js/pag-hechos.js',
   './js/pag-clientes.js', './js/pag-compras.js', './js/pag-gastos.js',
-  './js/pag-metricas.js', './js/pag-configuraciones.js'
+  './js/pag-metricas.js', './js/pag-configuraciones.js',
+  './manifest.json', './favicon.ico',
+  './iconos/icono-192.png', './iconos/icono-512.png',
+  './iconos/apple-touch-icon.png', './iconos/badge-96.png'
 ];
 
 const EXTERNOS = [
@@ -46,5 +49,46 @@ self.addEventListener('fetch', e => {
       .catch(() => caches.match(req).then(c =>
         c || (req.destination === 'document' ? caches.match('./index.html') : undefined)
       ))
+  );
+});
+
+/* ═══════════════════════════════════════════════════════════
+   NOTIFICACIONES
+   El servidor manda un push; acá se muestra y se decide adónde
+   lleva al tocarla.
+   ═══════════════════════════════════════════════════════════ */
+self.addEventListener('push', e => {
+  let d = {};
+  try { d = e.data ? e.data.json() : {}; } catch (err) { d = { cuerpo: e.data && e.data.text() }; }
+
+  const titulo = d.titulo || 'Intencional';
+  const opciones = {
+    body: d.cuerpo || '',
+    icon: './iconos/icono-192.png',
+    badge: './iconos/badge-96.png',
+    tag: d.tipo || 'intencional',        // uno por tipo: no se apilan repetidos
+    renotify: true,
+    data: { ruta: d.ruta || '/inicio' },
+    lang: 'es-AR'
+  };
+  e.waitUntil(self.registration.showNotification(titulo, opciones));
+});
+
+self.addEventListener('notificationclick', e => {
+  e.notification.close();
+  const destino = (e.notification.data && e.notification.data.ruta) || '/inicio';
+
+  e.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(lista => {
+      /* Si la app ya está abierta, se la trae al frente en vez de
+         abrir otra ventana. */
+      for (const c of lista) {
+        if (c.url.includes('index.html') || c.url.endsWith('/')) {
+          c.navigate(c.url.split('#')[0] + '#' + destino);
+          return c.focus();
+        }
+      }
+      return self.clients.openWindow('./index.html#' + destino);
+    })
   );
 });

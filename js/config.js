@@ -58,6 +58,7 @@ var TABLAS = {
   gastos:   'id',
   compras:  'id',
   tareas:   'id',
+  push_subs: 'id',
   config:   'key'
 };
 

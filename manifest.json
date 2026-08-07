@@ -1,0 +1,24 @@
+{
+  "name": "Intencional",
+  "short_name": "Intencional",
+  "description": "Remitos, clientes, rutas y gastos de Intencional",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#ffffff",
+  "theme_color": "#c84b8c",
+  "lang": "es-AR",
+  "dir": "ltr",
+  "categories": ["business", "productivity"],
+  "icons": [
+    { "src": "iconos/icono-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "iconos/icono-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "iconos/icono-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    { "name": "Nuevo remito", "url": "./index.html#/remito" },
+    { "name": "Remitos hechos", "url": "./index.html#/hechos" },
+    { "name": "Clientes", "url": "./index.html#/clientes" }
+  ]
+}

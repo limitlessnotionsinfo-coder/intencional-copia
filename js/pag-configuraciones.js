@@ -12,6 +12,7 @@ registrarPagina({
 
   async montar(cont) {
     _prods = null;
+    _subPush = await suscripcionActual();
     await cargarConfig().catch(function () {});
     if (!_feriadosCargados) cargarFeriados().catch(function () {});
     var cfg = aumentoConfig();
@@ -53,6 +54,7 @@ registrarPagina({
         '</div>' +
       '</details>' +
 
+      tarjetaNotificaciones() +
       tarjetaTema() +
       tarjetaAvisos() +
       tarjetaEmpleado() +
@@ -883,4 +885,141 @@ async function importarRutas() {
   cerrarModal();
   toast(fallos ? 'Quedaron ' + fallos + ' sin mover' : plural(IMP_RUTAS.length, 'cliente') + ' movidos');
   pintarRuta();
+}
+
+/* ═══════════════════════════════════════════════════════════
+   NOTIFICACIONES
+   ═══════════════════════════════════════════════════════════ */
+var _subPush = null;
+
+function tarjetaNotificaciones() {
+  var e = estadoNotificaciones();
+  var activas = !!_subPush;
+
+  return '<details class="tarjeta">' +
+    '<summary class="tarjeta-cab" style="cursor:pointer">' + ic('megaphone', 16) + ' Notificaciones' +
+      '<span style="margin-left:auto"><span class="pin ' + (activas ? 'pin-ok' : 'pin-neutro') + '">' +
+        (activas ? 'activadas' : 'apagadas') + '</span></span>' +
+    '</summary>' +
+    '<div class="tarjeta-cuerpo">' +
+
+      (e.puede
+        ? (activas
+            ? avisoHTML('ok', 'Este teléfono va a recibir los avisos de deudas por cobrar, ' +
+                'clientes a avisar y gastos sin anotar.', 'check') +
+              '<div style="display:flex;gap:8px;flex-wrap:wrap">' +
+                '<button class="btn btn-secundario" style="flex:1;min-width:120px" onclick="probarNotificacion()">' +
+                  ic('eye', 15) + ' Probar</button>' +
+                '<button class="btn btn-secundario" onclick="apagarPush()">' + ic('ban', 15) + ' Apagar</button>' +
+              '</div>'
+            : '<div class="campo-ayuda" style="margin-bottom:10px">' +
+                'Avisos de deudas por cobrar, clientes a los que hay que avisar del aumento ' +
+                'y gastos de la semana sin anotar.</div>' +
+              '<button class="btn btn-primario btn-bloque" onclick="prenderPush()">' +
+                ic('megaphone', 16) + ' Activar en este teléfono</button>')
+        : avisoHTML(e.instalar ? 'info' : 'warn', esc(e.motivo), e.instalar ? 'download' : 'alert')) +
+
+      /* La clave pública se pega una vez; la privada vive en el servidor */
+      '<details style="margin-top:14px">' +
+        '<summary style="cursor:pointer;font-size:12px;color:var(--rose);font-weight:600;padding:4px 0">' +
+          'Configuración del servidor</summary>' +
+        '<div style="margin-top:8px">' +
+          '<div class="campo"><div class="campo-etiq">Clave pública (VAPID)</div>' +
+            '<input class="campo-input" id="cfg-push-clave" value="' + esc(clavePublicaPush()) + '" ' +
+                   'placeholder="BN..."/>' +
+            '<div class="campo-ayuda">Es pública: puede estar en el código. La privada va en Supabase, ' +
+              'nunca acá.</div>' +
+          '</div>' +
+          '<div class="campo" style="margin:0"><div class="campo-etiq">Hora del aviso diario</div>' +
+            '<input class="campo-input" id="cfg-push-hora" type="number" min="0" max="23" ' +
+                   'style="max-width:110px" value="' + esc(leerConfig('push_hora', '9')) + '"/>' +
+            '<div class="campo-ayuda">Hora de Argentina. La usa la función del servidor.</div>' +
+          '</div>' +
+          '<button class="btn btn-primario btn-bloque" style="margin-top:10px" onclick="guardarPush()">Guardar</button>' +
+          '<button class="btn btn-secundario btn-bloque" style="margin-top:8px" onclick="crearClavesVapid()">' +
+            ic('lock', 15) + ' Generar un par de claves</button>' +
+          '<div class="campo-ayuda">Se generan en este dispositivo y no salen de acá.</div>' +
+        '</div>' +
+      '</details>' +
+    '</div>' +
+  '</details>';
+}
+
+async function prenderPush() {
+  if (await activarNotificaciones()) {
+    _subPush = await suscripcionActual();
+    pintarRuta();
+  }
+}
+
+async function apagarPush() {
+  if (await desactivarNotificaciones()) {
+    _subPush = null;
+    pintarRuta();
+  }
+}
+
+async function guardarPush() {
+  var clave = (porId('cfg-push-clave').value || '').trim();
+  if (clave && !/^[A-Za-z0-9_-]{80,}$/.test(clave)) {
+    toast('Esa no parece una clave VAPID pública', 'error');
+    return;
+  }
+  try {
+    await guardarConfig('push_clave_publica', clave);
+    await guardarConfig('push_hora', String(Math.max(0, Math.min(23, +porId('cfg-push-hora').value || 9))));
+    toast('Guardado');
+    pintarRuta();
+  } catch (e) { toast(e.message, 'error'); }
+}
+
+
+/* ── Generar las claves sin salir de la app ──────────────── */
+async function crearClavesVapid() {
+  try {
+    var par = await generarClavesVapid();
+
+    abrirModal('Par de claves nuevo',
+      avisoHTML('warn',
+        'La <strong>privada</strong> se muestra una sola vez y no se guarda en ningún lado. ' +
+        'Copiala ahora a Supabase → Edge Functions → Secrets. Si la perdés, generá otro par.', 'alert') +
+
+      '<div class="campo"><div class="campo-etiq">Pública · va en la app</div>' +
+        '<textarea class="campo-input" id="vp-publica" rows="3" readonly ' +
+                  'style="font-family:ui-monospace,monospace;font-size:12px">' + esc(par.publica) + '</textarea>' +
+        '<button class="btn btn-fantasma" style="padding:4px 0;text-decoration:underline;font-size:12px" ' +
+                'onclick="copiarCampo(\'vp-publica\')">Copiar</button>' +
+      '</div>' +
+
+      '<div class="campo" style="margin:0"><div class="campo-etiq">Privada · va solo en Supabase</div>' +
+        '<textarea class="campo-input" id="vp-privada" rows="2" readonly ' +
+                  'style="font-family:ui-monospace,monospace;font-size:12px">' + esc(par.privada) + '</textarea>' +
+        '<button class="btn btn-fantasma" style="padding:4px 0;text-decoration:underline;font-size:12px" ' +
+                'onclick="copiarCampo(\'vp-privada\')">Copiar</button>' +
+      '</div>',
+
+      '<button class="btn btn-primario btn-bloque" onclick="usarClavePublica(\'' +
+        esc(par.publica) + '\')">Usar la pública en la app</button>');
+  } catch (e) { toast(e.message, 'error'); }
+}
+
+async function copiarCampo(id) {
+  var el = porId(id);
+  if (!el) return;
+  try {
+    await navigator.clipboard.writeText(el.value);
+    toast('Copiado');
+  } catch (e) {
+    el.select();
+    toast('Seleccionado: copialo a mano');
+  }
+}
+
+async function usarClavePublica(publica) {
+  try {
+    await guardarConfig('push_clave_publica', publica);
+    cerrarModal();
+    toast('Clave pública guardada · ahora cargá la privada en Supabase');
+    pintarRuta();
+  } catch (e) { toast(e.message, 'error'); }
 }

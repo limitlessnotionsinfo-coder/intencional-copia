@@ -4,6 +4,15 @@
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover"/>
 <meta name="theme-color" content="#c84b8c"/>
+
+<!-- Instalable: sin manifest, iOS no la toma como app y no hay notificaciones -->
+<link rel="manifest" href="manifest.json"/>
+<link rel="icon" href="favicon.ico" sizes="any"/>
+<link rel="icon" type="image/png" sizes="32x32" href="iconos/favicon-32.png"/>
+<link rel="apple-touch-icon" href="iconos/apple-touch-icon.png"/>
+<meta name="apple-mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-status-bar-style" content="default"/>
+<meta name="apple-mobile-web-app-title" content="Intencional"/>
 <title>Intencional</title>
 
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
@@ -26,6 +35,7 @@
 <script src="js/ui.js"></script>
 <script src="js/api.js"></script>
 <script src="js/dominio.js"></script>
+<script src="js/push.js"></script>
 <script src="js/router.js"></script>
 
 <!-- páginas: cada una se registra sola, el menú se arma de esa lista -->
