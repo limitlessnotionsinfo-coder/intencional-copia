@@ -238,3 +238,29 @@ function selectorMes(nombreVar, filas, alCambiar) {
         MESES[+p[1] - 1].charAt(0).toUpperCase() + MESES[+p[1] - 1].slice(1) + ' ' + p[0] + '</option>';
     }).join('') + '</select>';
 }
+
+/* ── Descargar un archivo armado en el momento ───────────── */
+function descargar(nombre, contenido, tipo) {
+  var blob = new Blob(['\ufeff' + contenido], { type: (tipo || 'text/plain') + ';charset=utf-8' });
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement('a');
+  a.href = url;
+  a.download = nombre;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+}
+
+/* Lee un archivo elegido por el usuario, como texto */
+function leerArchivo(input) {
+  return new Promise(function (resolve, reject) {
+    var f = input && input.files && input.files[0];
+    if (!f) { reject(new Error('No elegiste ningún archivo')); return; }
+    if (f.size > 5 * 1024 * 1024) { reject(new Error('El archivo es muy grande (máximo 5 MB)')); return; }
+    var lector = new FileReader();
+    lector.onload = function () { resolve(String(lector.result || '')); };
+    lector.onerror = function () { reject(new Error('No se pudo leer el archivo')); };
+    lector.readAsText(f, 'utf-8');
+  });
+}

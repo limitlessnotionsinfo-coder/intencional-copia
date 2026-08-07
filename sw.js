@@ -1,5 +1,5 @@
 /* Service worker: red primero, caché como respaldo si no hay señal. */
-const CACHE = 'intencional-v40';
+const CACHE = 'intencional-v41';
 
 const LOCALES = [
   './', './index.html', './css/estilo.css',

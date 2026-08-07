@@ -19,6 +19,7 @@ function remitoVacio() {
     pago2: '', monto1: 0, alias2: '',
     /* Deuda vieja que se cobra junto con este remito */
     cobrarDeuda: 0, deudasACobrar: [],
+    forzarDuplicado: false,
     guardando: false
   };
 }
@@ -852,6 +853,17 @@ async function confirmarRemito() {
   }
 
   try {
+    /* Antes de escribir: ¿ya hay uno igual hoy? Pasa al tocar dos
+       veces confirmar o al recargar el mismo remito sin querer. */
+    if (!R.forzarDuplicado) {
+      var igual = buscarRemitoIgual(await traerCacheado('remitos'), remito);
+      if (igual) {
+        if (btn) { btn.disabled = false; btn.innerHTML = ic('check', 16) + ' Confirmar y compartir'; }
+        avisarDuplicado(igual);
+        return;
+      }
+    }
+
     await crear('remitos', remito);
     await saldarDeudasCobradas();
     await marcarAvisoSiSalio();
@@ -1030,6 +1042,29 @@ async function marcarAvisoSiSalio() {
   } catch (e) { console.warn('no se pudo marcar el aviso:', e.message); }
 }
 
+
+/* Ya existe uno igual: se pregunta en vez de duplicar en silencio */
+function avisarDuplicado(igual) {
+  abrirModal('¿Seguro que no está cargado?',
+    avisoHTML('warn',
+      'Hoy ya hay un remito de <strong>' + esc(igual.cliente_nombre) + '</strong> por ' +
+      plata(igual.total) + ' con las mismas unidades. ' +
+      'Puede que se haya guardado al tocar confirmar dos veces.', 'alert') +
+    '<div class="campo-ayuda">Si es otra reposición del mismo día, se puede guardar igual.</div>',
+
+    '<div style="display:flex;gap:8px;flex-wrap:wrap">' +
+      '<button class="btn btn-secundario" style="flex:1;min-width:120px" onclick="cerrarModal()">' +
+        'Cancelar</button>' +
+      '<button class="btn btn-primario" style="flex:1;min-width:120px" onclick="guardarIgual()">' +
+        'Guardar igual</button>' +
+    '</div>');
+}
+
+async function guardarIgual() {
+  R.forzarDuplicado = true;
+  cerrarModal();
+  await confirmarRemito();
+}
 
 /* Los remitos viejos que se cobraron en este quedan saldados */
 async function saldarDeudasCobradas() {

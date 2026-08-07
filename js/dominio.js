@@ -1322,3 +1322,181 @@ function nombreDePagador(id) {
 function verboPuso(id) {
   return id === 'socios' && socios().length > 1 ? 'pusieron' : 'puso';
 }
+
+/* ═══════════════════════════════════════════════════════════
+   REMITOS DUPLICADOS
+   El caso real: se toca confirmar dos veces, o se vuelve a
+   cargar el mismo remito sin darse cuenta.
+   ═══════════════════════════════════════════════════════════ */
+function buscarRemitoIgual(remitos, nuevo) {
+  var hoy = claveFecha(nuevo.fecha);
+  return (remitos || []).find(function (r) {
+    if (normalizar(r.cliente_nombre) !== normalizar(nuevo.cliente_nombre)) return false;
+    if (claveFecha(r.fecha) !== hoy) return false;
+    return Math.abs((+r.total || 0) - (+nuevo.total || 0)) < 1 &&
+           (+r.unidades || 0) === (+nuevo.unidades || 0);
+  }) || null;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   IMPORTAR Y EXPORTAR
+   ═══════════════════════════════════════════════════════════ */
+
+/* Un CSV se parte respetando las comillas: hay direcciones con comas */
+function leerCSV(texto) {
+  var filas = [];
+  var fila = [];
+  var campo = '';
+  var enComillas = false;
+  var t = String(texto || '').replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+
+  for (var i = 0; i < t.length; i++) {
+    var c = t[i];
+    if (enComillas) {
+      if (c === '"') {
+        if (t[i + 1] === '"') { campo += '"'; i++; }
+        else enComillas = false;
+      } else campo += c;
+    } else if (c === '"') {
+      enComillas = true;
+    } else if (c === ',' || c === ';') {
+      fila.push(campo); campo = '';
+    } else if (c === '\n') {
+      fila.push(campo); filas.push(fila); fila = []; campo = '';
+    } else campo += c;
+  }
+  if (campo !== '' || fila.length) { fila.push(campo); filas.push(fila); }
+
+  return filas.filter(function (f) { return f.some(function (x) { return String(x).trim(); }); });
+}
+
+/* Convierte el CSV en objetos usando la primera fila como encabezado */
+function csvAObjetos(texto) {
+  var filas = leerCSV(texto);
+  if (filas.length < 2) return [];
+  var claves = filas[0].map(function (c) { return normalizar(c).replace(/\s+/g, '_'); });
+  return filas.slice(1).map(function (f) {
+    var o = {};
+    claves.forEach(function (k, i) { o[k] = (f[i] || '').trim(); });
+    return o;
+  });
+}
+
+/* Los nombres de columna que aceptamos para cada campo */
+var ALIAS_COLUMNAS = {
+  local:        ['local', 'nombre', 'cliente', 'nombre_del_local', 'razon_social'],
+  dir:          ['dir', 'direccion', 'domicilio', 'calle'],
+  loc:          ['loc', 'localidad', 'zona', 'ciudad', 'partido'],
+  tel:          ['tel', 'telefono', 'celular', 'contacto'],
+  duenio:       ['duenio', 'dueno', 'dueño', 'titular', 'encargado'],
+  rubro:        ['rubro', 'tipo'],
+  ruta:         ['ruta', 'hoja', 'hoja_de_ruta', 'orden'],
+  num_str:      ['codigo', 'num_str', 'numero_str'],
+  num:          ['num', 'numero', 'id'],
+  exhibidores:  ['exhibidores', 'exhibidor'],
+  avisar_antes: ['avisar_antes', 'anticipacion']
+};
+
+function mapearFila(o) {
+  var r = {};
+  Object.keys(ALIAS_COLUMNAS).forEach(function (campo) {
+    for (var i = 0; i < ALIAS_COLUMNAS[campo].length; i++) {
+      var k = ALIAS_COLUMNAS[campo][i];
+      if (o[k] !== undefined && String(o[k]).trim() !== '') { r[campo] = String(o[k]).trim(); return; }
+    }
+  });
+  return r;
+}
+
+/* Revisa un archivo antes de importarlo: qué entra, qué ya está
+   y qué está mal. Nunca escribe: solo informa. */
+function revisarImportacion(texto, clientes) {
+  var crudas = csvAObjetos(texto);
+  var listos = [], repetidos = [], sinNombre = [];
+
+  crudas.forEach(function (o, i) {
+    var f = mapearFila(o);
+    f._fila = i + 2;
+    if (!f.local) { sinNombre.push(f); return; }
+
+    var yaEsta = (clientes || []).find(function (c) {
+      if (f.num && String(c.num) === String(f.num)) return true;
+      var mismoNombre = normalizar(c.local) === normalizar(f.local);
+      if (!mismoNombre) return false;
+      /* Mismo nombre en la misma dirección: es el mismo */
+      if (f.dir && c.dir) return claveDireccion(c.dir) === claveDireccion(f.dir);
+      return normalizar(c.loc) === normalizar(f.loc);
+    });
+
+    if (yaEsta) { f._existente = yaEsta; repetidos.push(f); }
+    else listos.push(f);
+  });
+
+  return { listos: listos, repetidos: repetidos, sinNombre: sinNombre, total: crudas.length };
+}
+
+/* ── Exportar ────────────────────────────────────────────── */
+function campoCSV(v) {
+  var s = String(v === null || v === undefined ? '' : v);
+  return /[",;\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+}
+
+function armarCSV(filas, columnas) {
+  var cab = columnas.map(function (c) { return campoCSV(c.etiqueta); }).join(',');
+  var cuerpo = (filas || []).map(function (f) {
+    return columnas.map(function (c) { return campoCSV(c.valor(f)); }).join(',');
+  });
+  return [cab].concat(cuerpo).join('\n');
+}
+
+var COLUMNAS_CLIENTES = [
+  { etiqueta: 'codigo',       valor: function (c) { return c.num_str || ''; } },
+  { etiqueta: 'num',          valor: function (c) { return c.num; } },
+  { etiqueta: 'local',        valor: function (c) { return c.local || ''; } },
+  { etiqueta: 'direccion',    valor: function (c) { return c.dir || ''; } },
+  { etiqueta: 'localidad',    valor: function (c) { return c.loc || ''; } },
+  { etiqueta: 'telefono',     valor: function (c) { return c.tel || ''; } },
+  { etiqueta: 'duenio',       valor: function (c) { return c.duenio || ''; } },
+  { etiqueta: 'rubro',        valor: function (c) { return c.rubro || ''; } },
+  { etiqueta: 'ruta',         valor: function (c) { return rutaDe(c); } },
+  { etiqueta: 'exhibidores',  valor: function (c) { return +c.exhibidores || 0; } },
+  { etiqueta: 'avisar_antes', valor: function (c) { return +c.avisar_antes || 0; } },
+  { etiqueta: 'activo',       valor: function (c) { return clienteActivo(c) ? 'si' : 'no'; } },
+  { etiqueta: 'mapa',         valor: function (c) { return enlaceMapa(c); } }
+];
+
+/* El enlace abre la dirección en la app de mapas del teléfono */
+function enlaceMapa(c) {
+  var partes = [c.dir, c.loc, 'Argentina'].filter(Boolean).join(', ');
+  return partes ? 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(partes) : '';
+}
+
+/* Una agenda .vcf: se abre en el teléfono y quedan como contactos,
+   con la dirección tocable para abrir el mapa. */
+function armarVCard(clientes) {
+  return (clientes || []).map(function (c) {
+    var nombre = (c.num_str ? c.num_str + ' ' : '') + (c.local || 'Cliente');
+    var lineas = [
+      'BEGIN:VCARD',
+      'VERSION:3.0',
+      'N:' + vcardTexto(nombre) + ';;;;',
+      'FN:' + vcardTexto(nombre),
+      'ORG:' + vcardTexto(c.rubro || 'Intencional')
+    ];
+    if (c.tel) lineas.push('TEL;TYPE=CELL:' + vcardTexto(c.tel));
+    if (c.dir || c.loc) {
+      lineas.push('ADR;TYPE=WORK:;;' + vcardTexto(c.dir || '') + ';' + vcardTexto(c.loc || '') + ';;;Argentina');
+    }
+    var notas = [rutaDe(c) ? 'Hoja de ruta ' + rutaDe(c) : '', c.duenio ? 'Dueño: ' + c.duenio : '']
+      .filter(Boolean).join(' · ');
+    if (notas) lineas.push('NOTE:' + vcardTexto(notas));
+    lineas.push('END:VCARD');
+    return lineas.join('\n');
+  }).join('\n');
+}
+
+/* En una vCard hay que escapar comas, punto y coma y saltos */
+function vcardTexto(v) {
+  return String(v === null || v === undefined ? '' : v)
+    .replace(/\\/g, '\\\\').replace(/;/g, '\\;').replace(/,/g, '\\,').replace(/\n/g, '\\n');
+}

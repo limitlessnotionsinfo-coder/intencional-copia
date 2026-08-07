@@ -62,20 +62,23 @@ registrarPagina({
       tarjetaAlias() +
       tarjetaMensaje() +
 
-      tarjetaConexion() +
+      tarjetaImportar() +
 
+      /* Actualizar los datos es de todos los días; cambiar de base
+         no, así que eso queda detrás del modo avanzado. */
       '<div class="tarjeta">' +
-        '<div class="tarjeta-cab">' + ic('db', 16) + ' Sesión y datos</div>' +
         '<div class="tarjeta-cuerpo">' +
-          '<div class="campo-ayuda" style="margin-bottom:12px">' +
-            'Los datos se guardan en <strong>' + esc(refProyecto(SB_URL)) + '</strong>. ' +
-            'Si algo se ve desactualizado, volvé a leer la base.' +
-          '</div>' +
-          '<button class="btn btn-secundario" onclick="invalidarCache();pintarRuta();toast(\'Datos actualizados\')">' +
-            ic('refresh', 15) + ' Volver a leer la base</button> ' +
-          (PEDIR_LOGIN ? '<button class="btn btn-secundario" onclick="salir()">' + ic('undo', 15) + ' Cerrar sesión</button>' : '') +
+          '<button class="btn btn-secundario btn-bloque" ' +
+                  'onclick="invalidarCache();pintarRuta();toast(\'Datos actualizados\')">' +
+            ic('refresh', 15) + ' Volver a leer la base</button>' +
+          (PEDIR_LOGIN
+            ? '<button class="btn btn-secundario btn-bloque" style="margin-top:8px" onclick="salir()">' +
+              ic('undo', 15) + ' Cerrar sesión</button>'
+            : '') +
         '</div>' +
-      '</div>';
+      '</div>' +
+
+      (MOSTRAR_AVANZADO ? tarjetaConexion() : botonAvanzado());
 
     previewAviso();
     previewCalendario();
@@ -633,5 +636,251 @@ function tarjetaTema() {
 
 function cambiarTema(t) {
   guardarTema(t);
+  pintarRuta();
+}
+
+/* ═══════════════════════════════════════════════════════════
+   MODO AVANZADO
+   Cambiar de base de datos es algo que se hace una vez. Vive
+   detrás de un botón para no tenerlo a mano por error.
+   ═══════════════════════════════════════════════════════════ */
+var MOSTRAR_AVANZADO = false;
+
+function botonAvanzado() {
+  return '<button class="btn btn-fantasma btn-bloque" style="margin-top:4px;font-size:12px" ' +
+    'onclick="MOSTRAR_AVANZADO=true;pintarRuta()">Opciones avanzadas</button>';
+}
+
+/* ═══════════════════════════════════════════════════════════
+   IMPORTAR Y EXPORTAR
+   ═══════════════════════════════════════════════════════════ */
+var IMP = null;
+
+function tarjetaImportar() {
+  return '<details class="tarjeta">' +
+    '<summary class="tarjeta-cab" style="cursor:pointer">' + ic('download', 16) + ' Importar y exportar</summary>' +
+    '<div class="tarjeta-cuerpo">' +
+
+      '<div class="eyebrow">Descargar</div>' +
+      '<div class="campo-ayuda" style="margin-bottom:8px">' +
+        'El CSV incluye un enlace al mapa de cada dirección. La agenda se abre en el ' +
+        'teléfono y los deja como contactos, con la dirección tocable.</div>' +
+      '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px">' +
+        '<button class="btn btn-secundario" style="flex:1;min-width:120px" onclick="bajarClientesCSV()">' +
+          ic('download', 15) + ' Clientes en CSV</button>' +
+        '<button class="btn btn-secundario" style="flex:1;min-width:120px" onclick="bajarAgenda()">' +
+          ic('phone', 15) + ' Agenda del teléfono</button>' +
+      '</div>' +
+
+      '<div class="eyebrow">Cargar clientes desde un archivo</div>' +
+      '<div class="campo-ayuda" style="margin-bottom:8px">' +
+        'Un CSV con una fila por cliente. Reconoce las columnas ' +
+        '<code>local</code>, <code>direccion</code>, <code>localidad</code>, <code>telefono</code>, ' +
+        '<code>rubro</code> y <code>ruta</code>, con esos nombres o los equivalentes.</div>' +
+      '<input class="campo-input" type="file" id="imp-clientes" accept=".csv,text/csv,text/plain"/>' +
+      '<button class="btn btn-secundario btn-bloque" style="margin:8px 0 16px" onclick="revisarArchivoClientes()">' +
+        ic('search', 15) + ' Revisar el archivo</button>' +
+
+      '<div class="eyebrow">Cargar hojas de ruta</div>' +
+      '<div class="campo-ayuda" style="margin-bottom:8px">' +
+        'Un CSV con el <code>codigo</code> o el <code>num</code> del cliente y su <code>ruta</code>. ' +
+        'Solo cambia la hoja: no crea clientes ni toca el resto de los datos.</div>' +
+      '<input class="campo-input" type="file" id="imp-rutas" accept=".csv,text/csv,text/plain"/>' +
+      '<button class="btn btn-secundario btn-bloque" style="margin-top:8px" onclick="revisarArchivoRutas()">' +
+        ic('map', 15) + ' Revisar el archivo</button>' +
+    '</div>' +
+  '</details>';
+}
+
+/* ── Descargar ───────────────────────────────────────────── */
+async function bajarClientesCSV() {
+  try {
+    var clientes = await traerCacheado('clientes');
+    descargar('clientes-intencional-' + hoyISO() + '.csv',
+      armarCSV(clientes, COLUMNAS_CLIENTES), 'text/csv');
+    toast(plural(clientes.length, 'cliente') + ' descargados');
+  } catch (e) { toast(e.message, 'error'); }
+}
+
+async function bajarAgenda() {
+  try {
+    var clientes = (await traerCacheado('clientes')).filter(clienteActivo);
+    descargar('clientes-intencional-' + hoyISO() + '.vcf',
+      armarVCard(clientes), 'text/vcard');
+    toast('Agenda con ' + plural(clientes.length, 'cliente') + ' · abrila en el teléfono');
+  } catch (e) { toast(e.message, 'error'); }
+}
+
+/* ── Cargar clientes ─────────────────────────────────────── */
+async function revisarArchivoClientes() {
+  try {
+    var texto = await leerArchivo(porId('imp-clientes'));
+    var clientes = await traerCacheado('clientes');
+    IMP = revisarImportacion(texto, clientes);
+
+    if (!IMP.total) { toast('El archivo no tiene filas', 'error'); return; }
+
+    abrirModal('Revisar la importación',
+      '<div class="grilla-stats" style="margin-bottom:12px">' +
+        stat('plus', 'Se crean', String(IMP.listos.length), 'clientes nuevos', 'var(--ok)') +
+        stat('users', 'Ya están', String(IMP.repetidos.length), 'no se tocan', 'var(--warn)') +
+        (IMP.sinNombre.length
+          ? stat('alert', 'Sin nombre', String(IMP.sinNombre.length), 'se saltean', 'var(--danger)')
+          : '') +
+      '</div>' +
+
+      (IMP.listos.length
+        ? '<div class="eyebrow">Los primeros que se van a crear</div>' +
+          '<div class="lista" style="margin-bottom:12px">' +
+            IMP.listos.slice(0, 8).map(function (f) {
+              return '<div class="fila" style="cursor:default">' +
+                '<div class="fila-principal">' +
+                  '<div class="fila-titulo">' + esc(f.local) + '</div>' +
+                  '<div class="fila-sub">' +
+                    [f.dir, f.loc, f.ruta ? 'Ruta ' + f.ruta : ''].filter(Boolean).map(esc).join(' · ') +
+                  '</div>' +
+                '</div></div>';
+            }).join('') +
+          '</div>' +
+          (IMP.listos.length > 8 ? '<div class="campo-ayuda">y ' + (IMP.listos.length - 8) + ' más.</div>' : '')
+        : avisoHTML('warn', 'No hay clientes nuevos para crear en este archivo.', 'alert')) +
+
+      (IMP.repetidos.length
+        ? '<div class="campo-ayuda" style="margin-top:10px">' +
+          'Los repetidos se detectan por número, o por nombre más dirección. No se modifican.</div>'
+        : ''),
+
+      IMP.listos.length
+        ? '<button class="btn btn-primario btn-bloque" id="btn-imp" onclick="importarClientes()">' +
+          'Crear ' + plural(IMP.listos.length, 'cliente') + '</button>'
+        : '');
+  } catch (e) { toast(e.message, 'error'); }
+}
+
+async function importarClientes() {
+  var btn = porId('btn-imp');
+  if (btn) { btn.disabled = true; btn.textContent = 'Creando…'; }
+
+  var todos = await traerCacheado('clientes');
+  var siguiente = todos.reduce(function (m, c) { return Math.max(m, +c.num || 0); }, 0);
+  var creados = 0, fallos = 0;
+  var enMemoria = todos.slice();
+
+  for (var i = 0; i < IMP.listos.length; i++) {
+    var f = IMP.listos[i];
+    siguiente++;
+    var ruta = f.ruta || '';
+    var nuevo = {
+      num: siguiente,
+      num_str: ruta ? codigoCliente(ruta, siguienteEnRuta(enMemoria, ruta)) : String(siguiente),
+      local: f.local,
+      dir: f.dir || null,
+      loc: f.loc || null,
+      tel: f.tel || null,
+      duenio: f.duenio || null,
+      rubro: f.rubro || null,
+      ruta: JSON.stringify({ orden: ruta, horarios: [], notas: '' }),
+      exhibidores: +f.exhibidores || 0,
+      avisar_antes: +f.avisar_antes || 0,
+      activo: true,
+      fecha: hoyTexto(),
+      created_at: new Date().toISOString()
+    };
+
+    try {
+      await crear('clientes', nuevo);
+      enMemoria.push(nuevo);
+      creados++;
+    } catch (e) { fallos++; }
+
+    if (btn) btn.textContent = 'Creando… ' + (i + 1) + ' de ' + IMP.listos.length;
+  }
+
+  invalidarCache('clientes');
+  cerrarModal();
+  toast(fallos ? creados + ' creados, ' + fallos + ' con error' : plural(creados, 'cliente') + ' creados');
+  pintarRuta();
+}
+
+/* ── Cargar hojas de ruta ────────────────────────────────── */
+var IMP_RUTAS = null;
+
+async function revisarArchivoRutas() {
+  try {
+    var texto = await leerArchivo(porId('imp-rutas'));
+    var clientes = await traerCacheado('clientes');
+    var filas = csvAObjetos(texto).map(mapearFila);
+
+    var cambios = [], sinEncontrar = [];
+    filas.forEach(function (f) {
+      if (!f.ruta) return;
+      var c = clientes.find(function (x) {
+        if (f.num && String(x.num) === String(f.num)) return true;
+        if (f.num_str && normalizar(x.num_str) === normalizar(f.num_str)) return true;
+        return f.local && normalizar(x.local) === normalizar(f.local);
+      });
+      if (!c) { sinEncontrar.push(f); return; }
+      if (String(rutaDe(c)) === String(f.ruta)) return;   // ya está en esa hoja
+      cambios.push({ cliente: c, rutaNueva: String(f.ruta) });
+    });
+
+    IMP_RUTAS = cambios;
+
+    abrirModal('Cargar hojas de ruta',
+      '<div class="grilla-stats" style="margin-bottom:12px">' +
+        stat('map', 'Se mueven', String(cambios.length), 'clientes', 'var(--ok)') +
+        (sinEncontrar.length
+          ? stat('alert', 'Sin encontrar', String(sinEncontrar.length), 'no están en la base', 'var(--warn)')
+          : '') +
+      '</div>' +
+      (cambios.length
+        ? '<div class="lista">' + cambios.slice(0, 10).map(function (x) {
+            return '<div class="fila" style="cursor:default">' +
+              '<span class="num-cliente">' + esc(x.cliente.num_str || x.cliente.num) + '</span>' +
+              '<div class="fila-principal">' +
+                '<div class="fila-titulo">' + esc(x.cliente.local) + '</div>' +
+                '<div class="fila-sub">' + (rutaDe(x.cliente) ? 'Ruta ' + esc(rutaDe(x.cliente)) : 'sin hoja') +
+                  ' → Ruta ' + esc(x.rutaNueva) + '</div>' +
+              '</div></div>';
+          }).join('') + '</div>' +
+          (cambios.length > 10 ? '<div class="campo-ayuda">y ' + (cambios.length - 10) + ' más.</div>' : '')
+        : avisoHTML('ok', 'No hay nada que cambiar: ya están todos en esa hoja.', 'check')),
+
+      cambios.length
+        ? '<button class="btn btn-primario btn-bloque" id="btn-imp-rutas" onclick="importarRutas()">' +
+          'Mover ' + plural(cambios.length, 'cliente') + '</button>'
+        : '');
+  } catch (e) { toast(e.message, 'error'); }
+}
+
+async function importarRutas() {
+  var btn = porId('btn-imp-rutas');
+  if (btn) btn.disabled = true;
+  var clientes = await traerCacheado('clientes');
+  var fallos = 0;
+
+  for (var i = 0; i < IMP_RUTAS.length; i++) {
+    var x = IMP_RUTAS[i];
+    var actual = {};
+    try { actual = typeof x.cliente.ruta === 'string' ? JSON.parse(x.cliente.ruta || '{}') : (x.cliente.ruta || {}); }
+    catch (e) {}
+    actual.orden = x.rutaNueva;
+
+    var cambios = {
+      ruta: JSON.stringify(actual),
+      num_str: codigoParaRutaNueva(clientes, x.rutaNueva, x.cliente)
+    };
+
+    try {
+      await actualizar('clientes', x.cliente.num, cambios);
+      Object.assign(x.cliente, cambios);
+    } catch (e) { fallos++; }
+
+    if (btn) btn.textContent = 'Moviendo… ' + (i + 1) + ' de ' + IMP_RUTAS.length;
+  }
+
+  invalidarCache('clientes');
+  cerrarModal();
+  toast(fallos ? 'Quedaron ' + fallos + ' sin mover' : plural(IMP_RUTAS.length, 'cliente') + ' movidos');
   pintarRuta();
 }
