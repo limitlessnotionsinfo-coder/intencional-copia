@@ -34,8 +34,10 @@ registrarPagina({
       '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px">' +
         '<button class="btn btn-primario" style="flex:1;min-width:120px" onclick="nuevoCliente()">' +
           ic('plus', 16) + ' Nuevo cliente</button>' +
+        '<button class="btn btn-secundario" onclick="abrirCalendarioRutas()">' +
+          ic('map', 15) + ' Orden de las rutas</button>' +
         '<button class="btn btn-secundario" onclick="revisarDuplicados()">' +
-          ic('users', 15) + ' Revisar duplicados</button>' +
+          ic('users', 15) + ' Duplicados</button>' +
       '</div>' +
       '<div class="buscador" style="margin-bottom:14px">' +
         '<span class="ic-lupa">' + ic('search', 16) + '</span>' +
@@ -178,7 +180,7 @@ function nuevoCliente(rutaFija) {
         '<input class="campo-input" id="nc-ruta" type="number" min="0" placeholder="Ej: 14" ' +
                'value="' + esc(rutaFija || '') + '"/></div>' +
       '<div class="campo"><div class="campo-etiq">Exhibidores</div>' +
-        '<input class="campo-input" id="nc-exhib" type="number" min="0" value="0"/></div>' +
+        '<input class="campo-input" id="nc-exhib" type="number" min="0" value="1"/></div>' +
     '</div>' +
     '<div class="campo"><div class="campo-etiq">Teléfono</div>' +
       '<input class="campo-input" id="nc-tel" inputmode="tel" placeholder="11-1234-5678"/></div>' +
@@ -843,4 +845,141 @@ async function confirmarBorrarHoja(ruta) {
   cerrarModal();
   toast(fallos ? 'Quedaron ' + fallos + ' clientes con la hoja vieja' : 'Hoja ' + ruta + ' borrada');
   pintarRuta();
+}
+
+
+/* ═══════════════════════════════════════════════════════════
+   ORDEN DE LAS HOJAS DE RUTA
+   La cola se arrastra para reordenarla. Cada posición muestra
+   qué día cae, salteando fines de semana y feriados.
+   ═══════════════════════════════════════════════════════════ */
+var _colaEdit = [];
+var _arrastrando = null;
+
+function abrirCalendarioRutas() {
+  _colaEdit = colaRutas().slice();
+  abrirModal('Orden de las rutas',
+    '<div class="campo-ayuda" style="margin-bottom:10px">' +
+      'Arrastrá para cambiar el orden. La app las reparte de a una por día hábil, ' +
+      'salteando fines de semana y feriados.</div>' +
+
+    '<div class="campo"><div class="campo-etiq">Arranca el</div>' +
+      '<input class="campo-input" type="date" id="cal-inicio" value="' + esc(inicioCola()) + '" ' +
+             'style="max-width:180px" onchange="pintarCalendarioRutas()"/></div>' +
+
+    '<div id="cal-lista"></div>' +
+
+    '<div class="campo" style="margin-top:12px"><div class="campo-etiq">Agregar una hoja</div>' +
+      '<div style="display:flex;gap:8px">' +
+        '<input class="campo-input" id="cal-nueva" type="number" min="0" placeholder="Número"/>' +
+        '<button class="btn btn-secundario" onclick="agregarAlCalendario()">' + ic('plus', 15) + '</button>' +
+      '</div></div>',
+
+    '<button class="btn btn-primario btn-bloque" onclick="guardarCalendarioRutas()">Guardar el orden</button>');
+  pintarCalendarioRutas();
+}
+
+function pintarCalendarioRutas() {
+  var cont = porId('cal-lista');
+  if (!cont) return;
+  if (!_colaEdit.length) {
+    cont.innerHTML = '<div class="campo-ayuda">No hay hojas en la cola. Agregá una abajo.</div>';
+    return;
+  }
+
+  /* Las fechas se calculan igual que en el inicio */
+  var inicio = proximoHabil((porId('cal-inicio') || {}).value || hoyISO());
+  var d = fechaDeIso(inicio);
+  var fechas = [];
+  for (var i = 0; i < _colaEdit.length; i++) {
+    while (!esHabil(isoDe(d))) d.setDate(d.getDate() + 1);
+    fechas.push(isoDe(d));
+    d.setDate(d.getDate() + 1);
+  }
+
+  cont.innerHTML = '<div class="lista-rutas" id="lista-rutas">' +
+    _colaEdit.map(function (r, i) {
+      var f = fechaDeIso(fechas[i]);
+      var n = clientesDeRuta(_clientes, r).length;
+      return '<div class="ruta-fila" draggable="true" data-i="' + i + '" ' +
+        'ondragstart="arrastrarInicio(event)" ondragover="arrastrarSobre(event)" ' +
+        'ondrop="arrastrarSoltar(event)" ondragend="arrastrarFin(event)">' +
+        '<span class="ruta-agarre">' + ic('menu', 15) + '</span>' +
+        '<div class="fila-principal">' +
+          '<div class="fila-titulo">Ruta ' + esc(r) + '</div>' +
+          '<div class="fila-sub">' + capitalizar(DIAS[f.getDay()]) + ' ' + esc(fechaCorta(fechas[i])) +
+            ' · ' + plural(n, 'cliente') + '</div>' +
+        '</div>' +
+        '<div style="display:flex;gap:2px">' +
+          '<button class="btn btn-fantasma" style="padding:4px 7px" aria-label="Subir" ' +
+            'onclick="moverRuta(' + i + ',-1)">↑</button>' +
+          '<button class="btn btn-fantasma" style="padding:4px 7px" aria-label="Bajar" ' +
+            'onclick="moverRuta(' + i + ',1)">↓</button>' +
+          '<button class="btn btn-fantasma" style="padding:4px 7px" aria-label="Quitar" ' +
+            'onclick="quitarDelCalendario(' + i + ')">✕</button>' +
+        '</div>' +
+      '</div>';
+    }).join('') + '</div>';
+}
+
+/* ── Arrastrar ───────────────────────────────────────────── */
+function arrastrarInicio(e) {
+  _arrastrando = +e.currentTarget.dataset.i;
+  e.currentTarget.classList.add('arrastrando');
+  try { e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', ''); } catch (err) {}
+}
+
+function arrastrarSobre(e) {
+  e.preventDefault();
+  var destino = +e.currentTarget.dataset.i;
+  if (_arrastrando === null || destino === _arrastrando) return;
+  e.currentTarget.classList.add('encima');
+}
+
+function arrastrarSoltar(e) {
+  e.preventDefault();
+  var destino = +e.currentTarget.dataset.i;
+  if (_arrastrando === null || destino === _arrastrando) return;
+  var m = _colaEdit.splice(_arrastrando, 1)[0];
+  _colaEdit.splice(destino, 0, m);
+  _arrastrando = null;
+  pintarCalendarioRutas();
+}
+
+function arrastrarFin() {
+  _arrastrando = null;
+  $$('.ruta-fila').forEach(function (x) { x.classList.remove('arrastrando', 'encima'); });
+}
+
+/* Los botones, para quien no puede arrastrar */
+function moverRuta(i, d) {
+  var j = i + d;
+  if (j < 0 || j >= _colaEdit.length) return;
+  var m = _colaEdit[i];
+  _colaEdit[i] = _colaEdit[j];
+  _colaEdit[j] = m;
+  pintarCalendarioRutas();
+}
+
+function quitarDelCalendario(i) {
+  _colaEdit.splice(i, 1);
+  pintarCalendarioRutas();
+}
+
+function agregarAlCalendario() {
+  var v = (porId('cal-nueva').value || '').trim();
+  if (!v) return;
+  if (_colaEdit.indexOf(v) !== -1) { toast('La ruta ' + v + ' ya está en la cola', 'error'); return; }
+  _colaEdit.push(v);
+  porId('cal-nueva').value = '';
+  pintarCalendarioRutas();
+}
+
+async function guardarCalendarioRutas() {
+  try {
+    await guardarCola(_colaEdit, (porId('cal-inicio') || {}).value || hoyISO());
+    cerrarModal();
+    toast('Orden guardado');
+    pintarRuta();
+  } catch (e) { toast(e.message, 'error'); }
 }

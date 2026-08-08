@@ -185,6 +185,26 @@ async function traerTodo(tabla, consulta) {
    al mismo tiempo, comparten el pedido en vez de hacer dos. */
 var _enVuelo = {};
 
+/* Tablas que se guardan en el teléfono: sin señal, la app las
+   sigue teniendo. Los clientes son la clave para poder armar un
+   remito en la calle. */
+var TABLAS_OFFLINE = ['clientes', 'config', 'tareas'];
+
+function guardarOffline(tabla, datos) {
+  if (TABLAS_OFFLINE.indexOf(tabla) === -1) return;
+  try {
+    localStorage.setItem('intencional_off_' + tabla,
+      JSON.stringify({ ts: Date.now(), datos: datos }));
+  } catch (e) { /* el teléfono puede estar sin espacio */ }
+}
+
+function leerOffline(tabla) {
+  try {
+    var g = JSON.parse(localStorage.getItem('intencional_off_' + tabla) || 'null');
+    return g && Array.isArray(g.datos) ? g : null;
+  } catch (e) { return null; }
+}
+
 async function traerCacheado(tabla, consulta) {
   var clave = tabla + '|' + (consulta || '');
   var c = _cache[clave];
@@ -195,12 +215,28 @@ async function traerCacheado(tabla, consulta) {
     try {
       var datos = await traerTodo(tabla, consulta);
       _cache[clave] = { datos: datos, ts: Date.now() };
+      if (!consulta) guardarOffline(tabla, datos);
       return datos;
+    } catch (e) {
+      /* Sin señal: se usa lo último que se bajó */
+      var g = !consulta && leerOffline(tabla);
+      if (g) {
+        _cache[clave] = { datos: g.datos, ts: Date.now() };
+        return g.datos;
+      }
+      throw e;
     } finally {
       delete _enVuelo[clave];
     }
   })();
   return _enVuelo[clave];
+}
+
+/* Hace cuánto se bajó por última vez, para poder avisarlo */
+function edadOffline(tabla) {
+  var g = leerOffline(tabla);
+  if (!g) return null;
+  return Math.round((Date.now() - g.ts) / 60000);   // minutos
 }
 
 /* Se llama al arrancar: deja lo pesado listo antes de que el
@@ -221,10 +257,35 @@ function invalidarCache(tabla) {
 }
 
 /* ── Escrituras ──────────────────────────────────────────── */
-async function crear(tabla, fila) {
+/* La escritura directa, sin red de contención. La usa la cola. */
+async function crearDirecto(tabla, fila) {
   var r = await rest(tabla, { method: 'POST', body: JSON.stringify(fila) });
   invalidarCache(tabla);
   return r;
+}
+
+/* ¿El error es de conexión o de datos? Solo el primero se reintenta. */
+function esErrorDeRed(e) {
+  var m = String((e && e.message) || '').toLowerCase();
+  return navigator.onLine === false ||
+    m.indexOf('failed to fetch') !== -1 ||
+    m.indexOf('networkerror') !== -1 ||
+    m.indexOf('load failed') !== -1 ||
+    m.indexOf('tardó demasiado') !== -1 ||
+    m.indexOf('sin conexión') !== -1 ||
+    m.indexOf('aborted') !== -1;
+}
+
+/* Si no hay señal, la fila queda guardada en el teléfono y se
+   sube sola cuando vuelve. Para quien llama, no cambia nada. */
+async function crear(tabla, fila) {
+  try {
+    return await crearDirecto(tabla, fila);
+  } catch (e) {
+    if (!esErrorDeRed(e)) throw e;
+    encolar(tabla, fila);
+    return [Object.assign({ _pendiente: true }, fila)];
+  }
 }
 
 async function actualizar(tabla, valorPk, cambios) {

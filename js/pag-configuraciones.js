@@ -13,86 +13,80 @@ registrarPagina({
   async montar(cont) {
     _prods = null;
     _subPush = await suscripcionActual();
+    _filaPush = _subPush ? await filaDeEsteTelefono() : null;
+    _avisosTel = leerAvisos(_filaPush);
     await cargarConfig().catch(function () {});
     if (!_feriadosCargados) cargarFeriados().catch(function () {});
     var cfg = aumentoConfig();
 
     cont.innerHTML =
-      '<details class="tarjeta">' +
-        '<summary class="tarjeta-cab" style="cursor:pointer">' + ic('megaphone', 16) + ' Aviso de aumento</summary>' +
-        '<div class="tarjeta-cuerpo">' +
-          '<div class="campo-ayuda" style="margin-bottom:14px">' +
-            'El aviso sale dentro del remito solo para los clientes que todavía no fueron notificados. ' +
-            'Al confirmar el remito, el cliente queda marcado con la fecha.' +
-          '</div>' +
+      /* Cuatro grupos en vez de diez tarjetas sueltas: se entra a
+         uno y adentro está todo lo de ese tema. */
+      grupoConfig('negocio', 'Precios y productos', 'tag',
+        tarjetaProductos() + tarjetaAumento()) +
 
-          '<label style="display:flex;align-items:center;gap:8px;margin-bottom:16px;cursor:pointer;font-size:13px">' +
-            '<input type="checkbox" id="cfg-activo"' + (cfg.activo ? ' checked' : '') + ' onchange="previewAviso()"/> ' +
-            'Mostrar el aviso en los remitos' +
-          '</label>' +
+      grupoConfig('plata', 'Cobranzas y gastos', 'wallet',
+        tarjetaAlias() + tarjetaEmpleado() + tarjetaMensaje()) +
 
-          '<div class="campo"><div class="campo-etiq">Producto que aumenta</div>' +
-            '<input class="campo-input" id="cfg-producto" list="opciones-prod" value="' + esc(cfg.producto) + '" oninput="previewAviso()"/>' +
-            '<datalist id="opciones-prod">' +
-              productos().map(function (p) { return '<option value="' + esc(p.nombre) + '">'; }).join('') +
-            '</datalist>' +
-          '</div>' +
+      grupoConfig('rutas', 'Rutas y feriados', 'map',
+        tarjetaRutas() + tarjetaFeriados()) +
 
-          '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">' +
-            '<div class="campo"><div class="campo-etiq">Precio actual</div>' +
-              '<input class="campo-input" id="cfg-viejo" type="number" inputmode="decimal" min="0" ' +
-                     'value="' + cfg.viejo + '" oninput="previewAviso()"/>' +
-              '<div class="campo-ayuda">Para quien no fue avisado</div></div>' +
-            '<div class="campo"><div class="campo-etiq">Precio nuevo</div>' +
-              '<input class="campo-input" id="cfg-nuevo" type="number" inputmode="decimal" min="0" ' +
-                     'value="' + cfg.nuevo + '" oninput="previewAviso()"/>' +
-              '<div class="campo-ayuda">Para quien ya sabe</div></div>' +
-          '</div>' +
-
-          '<div id="preview-aviso"></div>' +
-          '<button class="btn btn-primario btn-bloque" style="margin-top:14px" onclick="guardarAumento()">Guardar</button>' +
-        '</div>' +
-      '</details>' +
-
-      tarjetaNotificaciones() +
-      tarjetaTema() +
-      tarjetaAvisos() +
-      tarjetaEmpleado() +
-      tarjetaProductos() +
-      tarjetaRutas() +
-      tarjetaFeriados() +
-      tarjetaAlias() +
-      tarjetaMensaje() +
-
-      tarjetaImportar() +
-
-      /* Actualizar los datos es de todos los días; cambiar de base
-         no, así que eso queda detrás del modo avanzado. */
-      '<div class="tarjeta">' +
-        '<div class="tarjeta-cuerpo">' +
-          '<button class="btn btn-secundario btn-bloque" ' +
-                  'onclick="invalidarCache();pintarRuta();toast(\'Datos actualizados\')">' +
-            ic('refresh', 15) + ' Volver a leer la base</button>' +
-          (PEDIR_LOGIN
-            ? '<button class="btn btn-secundario btn-bloque" style="margin-top:8px" onclick="salir()">' +
-              ic('undo', 15) + ' Cerrar sesión</button>'
-            : '') +
-        '</div>' +
-      '</div>' +
+      grupoConfig('app', 'La app', 'settings',
+        tarjetaNotificaciones() + tarjetaAvisos() + tarjetaTema() +
+        tarjetaImportar() + tarjetaMantenimiento()) +
 
       (MOSTRAR_AVANZADO ? tarjetaConexion() : botonAvanzado());
 
-    previewAviso();
-    previewCalendario();
-    previewMensaje();
-    previewDeuda();
-    ['cfg-alias', 'cfg-tel', 'cfg-horas'].forEach(function (id) {
-      var el = porId(id); if (el) el.oninput = previewDeuda;
+    /* Las vistas previas se arman al abrir cada grupo: si el
+       grupo está plegado, sus campos todavía no existen. */
+    $$('.grupo-config').forEach(function (g) {
+      g.addEventListener('toggle', function () {
+        if (!g.open) return;
+        previewAviso(); previewCalendario(); previewMensaje(); previewDeuda();
+        ['cfg-alias', 'cfg-tel', 'cfg-horas'].forEach(function (id) {
+          var el = porId(id); if (el) el.oninput = previewDeuda;
+        });
+      });
     });
   }
 });
 
+/* ── Aviso de aumento ────────────────────────────────────── */
+function tarjetaAumento() {
+  var cfg = aumentoConfig();
+  return '<details class="tarjeta">' +
+    '<summary class="tarjeta-cab" style="cursor:pointer">' + ic('megaphone', 16) + ' Aviso de aumento' +
+      '<span style="margin-left:auto"><span class="pin ' + (cfg.activo ? 'pin-warn' : 'pin-neutro') + '">' +
+        (cfg.activo ? 'activo' : 'apagado') + '</span></span>' +
+    '</summary>' +
+    '<div class="tarjeta-cuerpo">' +
+      '<label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;margin-bottom:12px">' +
+        '<input type="checkbox" id="cfg-activo"' + (cfg.activo ? ' checked' : '') + ' onchange="previewAviso()"/> ' +
+        'Avisar del aumento en los remitos' +
+      '</label>' +
+
+      '<div class="campo"><div class="campo-etiq">Producto que aumenta</div>' +
+        '<input class="campo-input" id="cfg-producto" list="opciones-prod" value="' + esc(cfg.producto) + '" oninput="previewAviso()"/>' +
+        '<datalist id="opciones-prod">' +
+          productos().map(function (p) { return '<option value="' + esc(p.nombre) + '">'; }).join('') +
+        '</datalist>' +
+      '</div>' +
+
+      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">' +
+        '<div class="campo"><div class="campo-etiq">Precio actual</div>' +
+          '<input class="campo-input" id="cfg-viejo" type="number" min="0" value="' + (cfg.viejo || '') + '" oninput="previewAviso()"/></div>' +
+        '<div class="campo"><div class="campo-etiq">Precio nuevo</div>' +
+          '<input class="campo-input" id="cfg-nuevo" type="number" min="0" value="' + (cfg.nuevo || '') + '" oninput="previewAviso()"/></div>' +
+      '</div>' +
+
+      '<div id="preview-aviso"></div>' +
+      '<button class="btn btn-primario btn-bloque" style="margin-top:14px" onclick="guardarAumento()">Guardar</button>' +
+    '</div>' +
+  '</details>';
+}
+
 function previewAviso() {
+  if (!porId('cfg-activo')) return;   // el grupo puede estar plegado
   var activo = porId('cfg-activo').checked;
   var nuevo = +porId('cfg-nuevo').value || 0;
   porId('preview-aviso').innerHTML = activo && nuevo
@@ -116,6 +110,30 @@ async function guardarAumento() {
     await guardarConfig(CFG_AUMENTO.nuevo, nuevo);
     toast('Configuración guardada');
   } catch (e) { toast(e.message, 'error'); }
+}
+
+/* Un grupo: encabezado y adentro las tarjetas del tema */
+function grupoConfig(id, titulo, icono, contenido) {
+  return '<details class="tarjeta grupo-config" id="gc-' + id + '">' +
+    '<summary class="tarjeta-cab" style="cursor:pointer">' + ic(icono, 16) + ' ' + esc(titulo) + '</summary>' +
+    '<div class="tarjeta-cuerpo" style="padding:10px">' + contenido + '</div>' +
+  '</details>';
+}
+
+/* Lo que se hace de vez en cuando, junto */
+function tarjetaMantenimiento() {
+  return '<details class="tarjeta">' +
+    '<summary class="tarjeta-cab" style="cursor:pointer">' + ic('refresh', 16) + ' Datos y sesión</summary>' +
+    '<div class="tarjeta-cuerpo">' +
+      '<button class="btn btn-secundario btn-bloque" ' +
+              'onclick="invalidarCache();pintarRuta();toast(\'Datos actualizados\')">' +
+        ic('refresh', 15) + ' Volver a leer la base</button>' +
+      (PEDIR_LOGIN
+        ? '<button class="btn btn-secundario btn-bloque" style="margin-top:8px" onclick="salir()">' +
+          ic('undo', 15) + ' Cerrar sesión</button>'
+        : '') +
+    '</div>' +
+  '</details>';
 }
 
 /* ── Conexión: a qué base apunta la app ──────────────────── */
@@ -200,12 +218,15 @@ function tarjetaAlias() {
     '</summary>' +
     '<div class="tarjeta-cuerpo">' +
       '<div class="campo-ayuda" style="margin-bottom:12px">' +
-        'Uno por línea. Al elegir transferencia, la app sugiere el que viene recibiendo menos ' +
-        'para que los dos queden parejos.' +
+        'Uno por línea, con el titular después de una barra: <code>intencional.f | Franco Pérez</code>. ' +
+        'El titular sale impreso en el aviso de pago, así el cliente sabe a nombre de quién transfiere. ' +
+        'Al elegir transferencia, la app sugiere el alias que viene recibiendo menos.' +
       '</div>' +
       '<div class="campo"><div class="campo-etiq">Alias</div>' +
         '<textarea class="campo-input" id="cfg-alias" rows="3" style="resize:vertical">' +
-          esc(aliasConfigurados().join('\n')) + '</textarea></div>' +
+          esc(String(leerConfig('alias_transferencia', '')).split(',')
+              .map(function (a) { return a.trim(); }).filter(Boolean).join('\n')) +
+        '</textarea></div>' +
       '<div class="campo"><div class="campo-etiq">Teléfono para comprobantes</div>' +
         '<input class="campo-input" id="cfg-tel" value="' + esc(leerConfig('tel_comprobantes', '11-7904-7745')) + '"/></div>' +
       '<div class="campo" style="margin:0"><div class="campo-etiq">Plazo de pago (horas)</div>' +
@@ -665,8 +686,9 @@ function tarjetaImportar() {
 
       '<div class="eyebrow">Descargar</div>' +
       '<div class="campo-ayuda" style="margin-bottom:8px">' +
-        'El CSV incluye un enlace al mapa de cada dirección. La agenda se abre en el ' +
-        'teléfono y los deja como contactos, con la dirección tocable.</div>' +
+        'El CSV incluye un enlace al mapa de cada dirección. La agenda los deja como ' +
+        'contactos del teléfono, con la dirección tocable.' +
+        '<br>En iPhone se abre el menú de compartir: elegí “Contactos” o “Guardar en Archivos”.</div>' +
       '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px">' +
         '<button class="btn btn-secundario" style="flex:1;min-width:120px" onclick="bajarClientesCSV()">' +
           ic('download', 15) + ' Clientes en CSV</button>' +
@@ -698,18 +720,22 @@ function tarjetaImportar() {
 async function bajarClientesCSV() {
   try {
     var clientes = await traerCacheado('clientes');
-    descargar('clientes-intencional-' + hoyISO() + '.csv',
+    var ok = await descargar('clientes-intencional-' + hoyISO() + '.csv',
       armarCSV(clientes, COLUMNAS_CLIENTES), 'text/csv');
-    toast(plural(clientes.length, 'cliente') + ' descargados');
+    if (ok) toast(plural(clientes.length, 'cliente') + ' listos');
   } catch (e) { toast(e.message, 'error'); }
 }
 
 async function bajarAgenda() {
   try {
     var clientes = (await traerCacheado('clientes')).filter(clienteActivo);
-    descargar('clientes-intencional-' + hoyISO() + '.vcf',
+    var ok = await descargar('clientes-intencional-' + hoyISO() + '.vcf',
       armarVCard(clientes), 'text/vcard');
-    toast('Agenda con ' + plural(clientes.length, 'cliente') + ' · abrila en el teléfono');
+    if (ok) {
+      toast(esIOS()
+        ? 'Elegí "Guardar en Archivos" o "Contactos" en el menú'
+        : 'Agenda con ' + plural(clientes.length, 'cliente'));
+    }
   } catch (e) { toast(e.message, 'error'); }
 }
 
@@ -891,6 +917,7 @@ async function importarRutas() {
    NOTIFICACIONES
    ═══════════════════════════════════════════════════════════ */
 var _subPush = null;
+var _filaPush = null;
 
 function tarjetaNotificaciones() {
   var e = estadoNotificaciones();
@@ -905,9 +932,8 @@ function tarjetaNotificaciones() {
 
       (e.puede
         ? (activas
-            ? avisoHTML('ok', 'Este teléfono va a recibir los avisos de deudas por cobrar, ' +
-                'clientes a avisar y gastos sin anotar.', 'check') +
-              '<div style="display:flex;gap:8px;flex-wrap:wrap">' +
+            ? bloqueAvisosDelTelefono() +
+              '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px">' +
                 '<button class="btn btn-secundario" style="flex:1;min-width:120px" onclick="probarNotificacion()">' +
                   ic('eye', 15) + ' Probar</button>' +
                 '<button class="btn btn-secundario" onclick="apagarPush()">' + ic('ban', 15) + ' Apagar</button>' +
@@ -930,11 +956,7 @@ function tarjetaNotificaciones() {
             '<div class="campo-ayuda">Es pública: puede estar en el código. La privada va en Supabase, ' +
               'nunca acá.</div>' +
           '</div>' +
-          '<div class="campo" style="margin:0"><div class="campo-etiq">Hora del aviso diario</div>' +
-            '<input class="campo-input" id="cfg-push-hora" type="number" min="0" max="23" ' +
-                   'style="max-width:110px" value="' + esc(leerConfig('push_hora', '9')) + '"/>' +
-            '<div class="campo-ayuda">Hora de Argentina. La usa la función del servidor.</div>' +
-          '</div>' +
+
           '<button class="btn btn-primario btn-bloque" style="margin-top:10px" onclick="guardarPush()">Guardar</button>' +
           '<button class="btn btn-secundario btn-bloque" style="margin-top:8px" onclick="crearClavesVapid()">' +
             ic('lock', 15) + ' Generar un par de claves</button>' +
@@ -967,7 +989,7 @@ async function guardarPush() {
   }
   try {
     await guardarConfig('push_clave_publica', clave);
-    await guardarConfig('push_hora', String(Math.max(0, Math.min(23, +porId('cfg-push-hora').value || 9))));
+
     toast('Guardado');
     pintarRuta();
   } catch (e) { toast(e.message, 'error'); }
@@ -1021,5 +1043,70 @@ async function usarClavePublica(publica) {
     cerrarModal();
     toast('Clave pública guardada · ahora cargá la privada en Supabase');
     pintarRuta();
+  } catch (e) { toast(e.message, 'error'); }
+}
+
+
+/* ═══════════════════════════════════════════════════════════
+   QUÉ AVISOS RECIBE ESTE TELÉFONO
+   La configuración es de cada dispositivo: Franco y Augusto
+   pueden tener distintas, y cada aviso su propio horario.
+   ═══════════════════════════════════════════════════════════ */
+var _avisosTel = null;
+
+function bloqueAvisosDelTelefono() {
+  if (!_avisosTel) _avisosTel = leerAvisos(_filaPush);
+
+  return '<div class="campo-ayuda" style="margin-bottom:10px">' +
+      'Esto vale solo para <strong>' + esc((_filaPush && _filaPush.dispositivo) || 'este teléfono') +
+      '</strong>. Cada uno elige lo suyo.</div>' +
+
+    TIPOS_AVISO.map(function (t) {
+      var a = _avisosTel[t.id];
+      return '<div style="display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--border)">' +
+        '<input type="checkbox" id="av-' + t.id + '"' + (a.on ? ' checked' : '') + ' ' +
+               'onchange="cambiarAviso(\'' + t.id + '\',\'on\',this.checked)" ' +
+               'style="width:20px;height:20px;flex:0 0 auto"/>' +
+        '<label for="av-' + t.id + '" style="flex:1;min-width:0;cursor:pointer">' +
+          '<div style="font-weight:600;font-size:13px">' + ic(t.icono, 13) + ' ' + esc(t.etiqueta) + '</div>' +
+          '<div class="campo-ayuda" style="margin:0">' + esc(t.detalle) + '</div>' +
+        '</label>' +
+        '<input class="campo-input" type="time" value="' + esc(a.hora) + '" ' +
+               (a.on ? '' : 'disabled ') +
+               'style="width:auto;flex:0 0 auto;min-height:36px" ' +
+               'onchange="cambiarAviso(\'' + t.id + '\',\'hora\',this.value)"/>' +
+      '</div>';
+    }).join('') +
+
+    '<div class="campo-ayuda" style="margin-top:8px">' +
+      'Los horarios son de 24 horas y aceptan minutos (13:30, 22:20). ' +
+      'El servidor revisa cada media hora, así que el aviso llega en esa franja.</div>' +
+
+    '<button class="btn btn-primario btn-bloque" style="margin-top:10px" onclick="guardarAvisosTel()">' +
+      'Guardar mis avisos</button>';
+}
+
+function cambiarAviso(tipo, campo, valor) {
+  if (!_avisosTel) _avisosTel = avisosPorDefecto();
+  if (campo === 'hora') {
+    var h = horaValida(valor);
+    if (!h) { toast('Hora inválida', 'error'); return; }
+    _avisosTel[tipo].hora = h;
+  } else {
+    _avisosTel[tipo].on = !!valor;
+    pintarRuta();   // para habilitar o deshabilitar el reloj
+  }
+}
+
+async function guardarAvisosTel() {
+  var sub = await suscripcionActual();
+  if (!sub) { toast('Este teléfono no está suscripto', 'error'); return; }
+  if (!TIPOS_AVISO.some(function (t) { return _avisosTel[t.id].on; })) {
+    toast('Elegí al menos un aviso, o apagá las notificaciones', 'error');
+    return;
+  }
+  try {
+    await guardarAvisos(sub.endpoint, _avisosTel);
+    toast('Listo · así los va a recibir este teléfono');
   } catch (e) { toast(e.message, 'error'); }
 }

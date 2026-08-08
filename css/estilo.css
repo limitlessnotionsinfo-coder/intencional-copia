@@ -617,3 +617,33 @@ body.fondo-quieto{
   .fila-derecha .pagos{margin-top:2px}
   .fila-derecha .pin{font-size:9.5px;padding:2px 6px}
 }
+
+/* ── Banda de remitos sin subir ──────────────────────────── */
+body.con-banda .app{padding-top:30px}
+.banda-cola{
+  position:fixed;top:0;left:0;right:0;z-index:90;
+  display:flex;align-items:center;justify-content:center;gap:6px;
+  padding:7px 12px;border:none;cursor:pointer;width:100%;
+  background:#d97706;color:#fff;font-size:12px;font-weight:600;
+  font-family:var(--cuerpo);
+}
+.banda-cola:active{opacity:.85}
+
+/* ── Orden de las rutas, arrastrable ─────────────────────── */
+.lista-rutas{border:1px solid var(--border);border-radius:var(--radius);overflow:hidden}
+.ruta-fila{
+  display:flex;align-items:center;gap:10px;padding:10px 12px;
+  border-bottom:1px solid var(--border);background:var(--bg);
+  cursor:grab;user-select:none;
+}
+.ruta-fila:last-child{border-bottom:none}
+.ruta-fila:active{cursor:grabbing}
+.ruta-fila.arrastrando{opacity:.4}
+.ruta-fila.encima{background:var(--rose-light);box-shadow:inset 0 2px 0 var(--rose)}
+.ruta-agarre{color:var(--muted);flex:0 0 auto;touch-action:none}
+
+/* Los grupos de Configuraciones: las tarjetas de adentro sin marco doble */
+.grupo-config > .tarjeta-cuerpo > .tarjeta{
+  border:none;box-shadow:none;margin-bottom:2px;background:var(--subtle);
+}
+.grupo-config > .tarjeta-cuerpo > .tarjeta > .tarjeta-cab{padding:10px 12px;font-size:13px}

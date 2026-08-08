@@ -26,18 +26,11 @@ registrarPagina({
       '<div class="atajos" style="margin:14px 0">' + botonesRapidos() + '</div>' +
       '<div id="g-cuentas"></div>' +
 
-      '<details class="tarjeta" id="det-filtros-gastos">' +
-        '<summary class="tarjeta-cab" style="cursor:pointer">' + ic('shuffle', 16) + ' Período y filtros' +
-          '<span style="margin-left:auto" id="g-chip-filtro"></span>' +
-        '</summary>' +
-        '<div class="tarjeta-cuerpo">' +
-          '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px" id="g-chips"></div>' +
-          '<div id="g-rango"></div>' +
-          '<div id="g-categorias" style="display:flex;gap:6px;flex-wrap:wrap"></div>' +
-        '</div>' +
-      '</details>' +
-
-      '<div id="g-lista"></div>';
+      '<div class="tarjeta"><div class="tarjeta-cuerpo">' +
+        '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px" id="g-chips"></div>' +
+        '<div id="g-rango"></div>' +
+        '<div id="g-categorias" style="display:flex;gap:6px;flex-wrap:wrap"></div>' +
+      '</div></div>';
 
     pintarGastos();
   }
@@ -153,17 +146,17 @@ function pintarGastos() {
   pintarCierre(lista, r);
   pintarCuentas(lista, r);
 
-  var chipF = porId('g-chip-filtro');
-  if (chipF) {
-    chipF.innerHTML = '<span class="pin pin-neutro">' + esc(r.etiqueta) +
-      (G.categoria ? ' · ' + esc(categoriaGasto(G.categoria).etiqueta) : '') + '</span>';
-  }
 
   var porCat = {};
   lista.forEach(function (g) {
     var c = g.categoria || 'otro';
     porCat[c] = (porCat[c] || 0) + montoEmpresa(g);
   });
+
+  /* Una tarjeta por grupo, todas tocables: al abrirlas se ve el
+     detalle con los mismos botones que tenía el desplegable. */
+  var grupos = {};
+  lista.forEach(function (g) { (grupos[grupoDe(g)] = grupos[grupoDe(g)] || []).push(g); });
 
   porId('g-resumen').innerHTML =
     '<div class="grilla-stats" style="margin-top:12px">' +
@@ -173,17 +166,20 @@ function pintarGastos() {
         ? stat('users', 'Ponen los dueños', plata(deSocios), resumenPorSocio(lista), 'var(--violet)',
                "detalleGastos('socios')")
         : '') +
-      Object.keys(porCat).sort(function (a, b2) { return porCat[b2] - porCat[a]; }).slice(0, 2)
-        .map(function (c) {
-          var cat = categoriaGasto(c);
-          return stat(cat.icono, cat.etiqueta, plata(porCat[c]), '', 'var(--text2)',
-                      "detalleGastos('cat:" + c + "')");
-        }).join('') +
-    '</div>';
+      GRUPOS.filter(function (gr) { return grupos[gr.id]; }).map(function (gr) {
+        var items = grupos[gr.id];
+        return stat(gr.icono, gr.etiqueta,
+          plata(items.reduce(function (a, g) { return a + montoEmpresa(g); }, 0)),
+          plural(items.length, 'gasto'), 'var(--text2)',
+          "detalleGrupo('" + gr.id + "')");
+      }).join('') +
+    '</div>' +
+    (lista.length ? '' :
+      '<div class="tarjeta" style="margin-top:12px"><div class="tarjeta-cuerpo">' +
+      vacio('wallet', 'Sin gastos en este período', 'Cambiá el período o cargá el primero.') +
+      '</div></div>');
 
-  porId('g-lista').innerHTML = lista.length
-    ? porGrupo(lista)
-    : vacio('wallet', 'Sin gastos en este período', 'Cambiá el filtro o cargá el primero.');
+  /* La lista ya no va suelta: cada tarjeta de arriba la abre */
 }
 
 function filaGasto(g) {
@@ -258,27 +254,6 @@ var GRUPOS = [
   { id: 'insumos',     etiqueta: 'Insumos y pedidos',     icono: 'box' },
   { id: 'otros',       etiqueta: 'Otros gastos',          icono: 'tag' }
 ];
-
-function porGrupo(lista) {
-  var grupos = {};
-  lista.forEach(function (g) { (grupos[grupoDe(g)] = grupos[grupoDe(g)] || []).push(g); });
-
-  return GRUPOS.filter(function (gr) { return grupos[gr.id]; }).map(function (gr) {
-    var items = grupos[gr.id];
-    var total = items.reduce(function (a, g) { return a + montoEmpresa(g); }, 0);
-    return '<details class="tarjeta">' +
-      '<summary class="tarjeta-cab" style="cursor:pointer">' + ic(gr.icono, 16) + ' ' + esc(gr.etiqueta) +
-        '<span style="margin-left:auto;display:inline-flex;gap:6px;align-items:center">' +
-          '<span class="pin pin-neutro">' + plural(items.length, 'gasto') + '</span>' +
-          '<strong>' + plata(total) + '</strong>' +
-        '</span>' +
-      '</summary>' +
-      '<div class="tarjeta-cuerpo" style="padding:0">' +
-        '<div class="lista" style="border:none;border-radius:0">' + items.map(filaGasto).join('') + '</div>' +
-      '</div>' +
-    '</details>';
-  }).join('');
-}
 
 async function borrarGasto(id) {
   try {
@@ -1012,6 +987,26 @@ function resumenPorSocio(lista) {
   });
   var claves = Object.keys(por).sort(function (a, b) { return por[b] - por[a]; });
   return claves.map(function (k) { return k + ' ' + plata(por[k]); }).join(' · ');
+}
+
+/* ── Detalle de un grupo, con las mismas acciones de siempre ── */
+function detalleGrupo(id) {
+  var gr = GRUPOS.find(function (x) { return x.id === id; });
+  var items = gastosFiltrados().filter(function (g) { return grupoDe(g) === id; });
+  var r = rangoGastos();
+  var suma = items.reduce(function (a, g) { return a + montoEmpresa(g); }, 0);
+  var totalReal = items.reduce(function (a, g) { return a + (+g.monto || 0); }, 0);
+
+  abrirModal(gr.etiqueta,
+    '<div class="campo-ayuda" style="margin-bottom:10px">' + esc(r.etiqueta) + ' · ' +
+      plural(items.length, 'gasto') + ' · <strong>' + plata(suma) + '</strong>' +
+      (totalReal !== suma ? ' de la empresa, sobre ' + plata(totalReal) + ' en total' : '') + '</div>' +
+    (items.length
+      ? '<div class="lista">' + items.map(filaGasto).join('') + '</div>'
+      : '<div class="campo-ayuda">No hay gastos de este tipo en el período.</div>'),
+
+    '<button class="btn btn-primario btn-bloque" onclick="cerrarModal();nuevoGasto({categoria:\'' +
+      (items[0] ? items[0].categoria : 'otro') + '\'})">' + ic('plus', 15) + ' Cargar uno nuevo</button>');
 }
 
 /* ── Detalle de una tarjeta ──────────────────────────────── */

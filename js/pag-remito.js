@@ -315,6 +315,99 @@ async function confirmarRetiro() {
   }
 }
 
+/* ═══════════════════════════════════════════════════════════
+   REMITO RÁPIDO
+   Para cuando no hay tiempo ni señal: nombre y monto. Si el
+   nombre coincide sin ambigüedad con un cliente, se vincula
+   solo; si no, queda avisado en el inicio para completarlo.
+   ═══════════════════════════════════════════════════════════ */
+function remitoRapido() {
+  abrirModal('Anotarlo rápido',
+    '<div class="campo-ayuda" style="margin-bottom:12px">' +
+      'Se guarda con lo mínimo. Si no hay señal queda en el teléfono y se sube solo. ' +
+      'Después lo podés completar desde Remitos hechos.</div>' +
+
+    '<div class="campo"><div class="campo-etiq">Local</div>' +
+      '<input class="campo-input" id="rr-nombre" value="' + esc(R.nombre || (R.cliente ? R.cliente.local : '')) + '" ' +
+             'placeholder="Nombre del local"/></div>' +
+
+    '<div class="campo"><div class="campo-etiq">Monto</div>' +
+      inputMonto('rr-monto', totalProductos() || '') + '</div>' +
+
+    '<div class="campo"><div class="campo-etiq">Cómo pagó</div>' +
+      '<div style="display:flex;gap:8px;flex-wrap:wrap" id="rr-pagos">' +
+        ['efectivo', 'transferencia', 'deuda'].map(function (t) {
+          var d = TIPOS_PAGO[t];
+          return '<button class="btn btn-secundario rr-pago" data-tipo="' + t + '" ' +
+            'onclick="setPagoRapido(\'' + t + '\')">' + ic(d.icono, 15) + ' ' + esc(d.corta) + '</button>';
+        }).join('') +
+      '</div></div>' +
+
+    '<div class="campo" style="margin:0"><div class="campo-etiq">Nota (opcional)</div>' +
+      '<input class="campo-input" id="rr-nota" placeholder="Ej: zona de Lanús"/></div>',
+
+    '<button class="btn btn-primario btn-bloque" id="btn-rr" onclick="guardarRemitoRapido()">' +
+      ic('check', 16) + ' Guardar</button>');
+  window._pagoRapido = '';
+}
+
+function setPagoRapido(t) {
+  window._pagoRapido = t;
+  $$('.rr-pago').forEach(function (b) {
+    b.className = 'btn rr-pago ' + (b.dataset.tipo === t ? 'btn-primario' : 'btn-secundario');
+  });
+}
+
+async function guardarRemitoRapido() {
+  var nombre = (porId('rr-nombre').value || '').trim();
+  var monto = leerMonto('rr-monto');
+  var pago = window._pagoRapido;
+
+  if (!nombre) { toast('Falta el nombre del local', 'error'); return; }
+  if (!monto) { toast('Falta el monto', 'error'); return; }
+  if (!pago) { toast('Elegí cómo pagó', 'error'); return; }
+
+  var btn = porId('btn-rr');
+  if (btn) { btn.disabled = true; btn.textContent = 'Guardando…'; }
+
+  /* Si el nombre no deja lugar a dudas, se vincula solo */
+  var seguro = clienteSeguroPara({ cliente_nombre: nombre }, _clientesRemito);
+  var c = seguro ? seguro.cliente : null;
+  var nota = (porId('rr-nota').value || '').trim();
+
+  try {
+    await crear('remitos', {
+      fecha: hoyTexto(),
+      cliente_nombre: c ? c.local : nombre,
+      cliente_num: c ? c.num : null,
+      cliente_dir: c ? (c.dir || null) : null,
+      cliente_loc: c ? (c.loc || null) : null,
+      cliente_tel: c ? (c.tel || null) : null,
+      total: monto,
+      unidades: 0,
+      productos: '[]',
+      pago: pago,
+      pagos_detalle: JSON.stringify([{ tipo: pago, monto: monto }]),
+      notas: ['Cargado rápido', nota].filter(Boolean).join(' · '),
+      created_at: new Date().toISOString()
+    });
+
+    cerrarModal();
+    if (pendientesDeSubir()) {
+      toast('Guardado en el teléfono · se sube cuando haya señal');
+    } else if (c) {
+      toast('Guardado y vinculado a ' + c.local);
+    } else {
+      toast('Guardado · quedó sin cliente, avisado en el inicio');
+    }
+    R = remitoVacio();
+    irA('inicio');
+  } catch (e) {
+    if (btn) { btn.disabled = false; btn.textContent = 'Guardar'; }
+    toast(e.message, 'error');
+  }
+}
+
 /* ── Dar de alta al cliente sin salir del remito ──────────────
    Toma los datos que ya escribiste: no hay que cargarlos dos veces.
    ────────────────────────────────────────────────────────── */
@@ -363,7 +456,7 @@ async function confirmarAltaCliente() {
       tel: (porId('gc-tel').value || '').trim() || null,
       rubro: porId('gc-rubro').value,
       ruta: JSON.stringify({ orden: ruta, horarios: [], notas: '' }),
-      exhibidores: 0,
+      exhibidores: 1,
       activo: true,
       /* Se lleva el exhibidor hoy con el precio nuevo: no hay aumento que avisarle */
       aviso_aumento: true,
@@ -487,8 +580,23 @@ function precioInicial() {
 }
 
 /* ── El remito ───────────────────────────────────────────── */
+/* El precio de caja solo se aplica si el renglón tiene el precio
+   de lista. Si se escribió otro a mano, o si es el precio nuevo
+   por el aumento, manda ese: no queremos que la caja lo pise. */
+function usaPrecioDeCaja(f) {
+  var p = buscarProducto(f.prod);
+  if (!p || !p.porCaja || (+f.cant || 0) < p.porCaja) return false;
+  if (f.precioManual) return false;
+  return (+f.precio || 0) === p.precio;
+}
+
+function totalFila(f) {
+  if (usaPrecioDeCaja(f)) return cotizar(f.prod, f.cant).total;
+  return (+f.cant || 0) * (+f.precio || 0);
+}
+
 function totalProductos() {
-  return R.filas.reduce(function (s, f) { return s + (+f.cant || 0) * (+f.precio || 0); }, 0);
+  return R.filas.reduce(function (s, f) { return s + totalFila(f); }, 0);
 }
 /* Lo que se cobra hoy: los productos más la deuda que se salda */
 function totalRemito() {
@@ -601,6 +709,9 @@ function pintarRemito() {
         ic('user', 15) + ' Guardar como cliente nuevo</button>'
       : '') +
 
+    '<button class="btn btn-fantasma btn-bloque" style="margin-bottom:8px;font-size:12.5px" ' +
+      'onclick="remitoRapido()">' + ic('zap', 14) + ' Anotarlo rápido: solo nombre y monto</button>' +
+
     '<button class="btn btn-primario btn-bloque" id="btn-confirmar" onclick="confirmarRemito()">' +
       ic('check', 16) + ' Confirmar y compartir' +
     '</button>' +
@@ -625,18 +736,24 @@ function filaProducto(f, i) {
       return '<option' + (normalizar(p.nombre) === normalizar(f.prod) ? ' selected' : '') + '>' + esc(p.nombre) + '</option>';
     })).join('');
 
-  var subtotal = (+f.cant || 0) * (+f.precio || 0);
+  var conCaja = usaPrecioDeCaja(f);
+  var subtotal = totalFila(f);
 
   return '<div class="fila-prod">' +
     '<select class="campo-input prod" aria-label="Producto" onchange="cambiarProducto(' + i + ',this.value)">' + opciones + '</select>' +
     '<input class="campo-input" type="number" min="0" inputmode="numeric" value="' + (+f.cant || 0) + '" ' +
            'aria-label="Cantidad" oninput="R.filas[' + i + '].cant=+this.value||0;pintarTotales()"/>' +
     '<input class="campo-input" type="number" min="0" inputmode="decimal" value="' + (+f.precio || 0) + '" ' +
-           'aria-label="Precio por unidad" oninput="R.filas[' + i + '].precio=+this.value||0;pintarTotales()"/>' +
+           'aria-label="Precio por unidad" ' +
+      'oninput="R.filas[' + i + '].precio=+this.value||0;R.filas[' + i + '].precioManual=true;pintarTotales()"/>' +
     '<div class="subtotal" id="sub-' + i + '">' + plata(subtotal) + '</div>' +
     (R.filas.length > 1
       ? '<button class="btn btn-fantasma" style="padding:4px" aria-label="Quitar producto" onclick="quitarFila(' + i + ')">✕</button>'
       : '<span></span>') +
+    (conCaja
+      ? '<div class="campo-ayuda" style="grid-column:1/-1;margin:2px 0 0;color:var(--ok)">' +
+        ic('box', 11) + ' ' + esc(textoCotizacion(f.prod, f.cant)) + '</div>'
+      : '') +
   '</div>';
 }
 
@@ -672,7 +789,7 @@ function resumenFilas() {
 function pintarTotales() {
   R.filas.forEach(function (f, i) {
     var el = porId('sub-' + i);
-    if (el) el.textContent = plata((+f.cant || 0) * (+f.precio || 0));
+    if (el) el.textContent = plata(totalFila(f));
   });
   var t = porId('total-remito');
   if (t) t.textContent = plata(totalRemito());
@@ -841,9 +958,18 @@ async function confirmarRemito() {
     alias: aliasDeDeuda() || R.alias1 || null,
     notas: R.notas.trim() || null,
     productos: JSON.stringify(R.filas.filter(function (f) { return f.prod; })
-      .map(function (f) { return { prod: f.prod, cant: +f.cant || 0, precio: +f.precio || 0 }; })),
+      .map(function (f) {
+        var c = usaPrecioDeCaja(f) ? cotizar(f.prod, f.cant) : null;
+        return {
+          prod: f.prod, cant: +f.cant || 0,
+          precio: c ? c.unitario : (+f.precio || 0),
+          cajas: c ? c.cajas : 0
+        };
+      })),
     pagos_detalle: JSON.stringify(partes),
     cobrado_deuda: +R.cobrarDeuda || 0,
+    /* El vínculo con el cliente, que no cambia aunque se renombre */
+    cliente_num: R.cliente ? R.cliente.num : null,
     created_at: new Date().toISOString()
   };
   if (segunda) {
@@ -972,13 +1098,14 @@ function remitoParaImagen(r) {
     '</tbody></table>' +
 
     (+r.cobrado_deuda > 0
-      ? '<div style="margin-top:12px;border:1px solid #ead8e4;background:#fbf2f7;border-radius:10px;padding:10px 13px;font-size:13px;color:#8a2f68">' +
+      ? '<div style="margin-top:12px;border:1px solid #cde9d5;background:#f2fbf5;border-radius:10px;padding:10px 13px;font-size:13px;color:#1c6b3f">' +
         '<div style="display:flex;justify-content:space-between"><span>Productos de hoy</span>' +
           '<strong>' + plata((+r.total || 0) - (+r.cobrado_deuda || 0)) + '</strong></div>' +
-        '<div style="display:flex;justify-content:space-between"><span>Deuda anterior</span>' +
+        '<div style="display:flex;justify-content:space-between"><span>Deuda anterior que se paga hoy</span>' +
           '<strong>' + plata(r.cobrado_deuda) + '</strong></div>' +
-        '<div style="display:flex;justify-content:space-between;margin-top:4px;padding-top:4px;border-top:1px solid #ead8e4">' +
+        '<div style="display:flex;justify-content:space-between;margin-top:4px;padding-top:4px;border-top:1px solid #cde9d5">' +
           '<strong>Total a pagar</strong><strong>' + plata(r.total) + '</strong></div>' +
+        '<div style="text-align:center;margin-top:5px">✓ Con esto la deuda anterior queda saldada</div>' +
       '</div>'
       : '') +
 
@@ -988,8 +1115,13 @@ function remitoParaImagen(r) {
       : '') +
 
     (r.motivo === 'retiro_exhibidor'
-      ? '<div style="margin-top:14px;border:1px solid #ead8e4;background:#fbf2f7;border-radius:10px;padding:10px 12px;font-size:13px;color:#8a2f68;text-align:center">' +
-        '<strong>Se retiró el exhibidor</strong></div>'
+      ? '<div style="margin-top:14px;border:1px solid #ead8e4;background:#fbf2f7;border-radius:10px;padding:10px 13px;font-size:13px;color:#8a2f68">' +
+        '<div style="text-align:center;font-weight:700;margin-bottom:4px">Se retiró el exhibidor</div>' +
+        '<div style="text-align:center">' +
+          (deudaPendiente(r) > 0
+            ? 'Queda una deuda pendiente de <strong>' + plata(deudaPendiente(r)) + '</strong>.'
+            : 'La cuenta queda saldada: el cliente no tiene deuda.') +
+        '</div></div>'
       : '') +
 
     (r.notas

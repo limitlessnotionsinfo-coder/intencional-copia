@@ -103,6 +103,7 @@ function arrancarApp() {
   pintarMarca(porId('marca-lateral'));
   construirMenu();
   construirBarraInferior();
+  arrancarCola();       // sube lo que haya quedado sin señal
   precargar();          // las tablas grandes se bajan mientras mirás el inicio
   cargarFeriados().catch(function () {});   // y los feriados, sin bloquear nada
   cargarConfig().catch(function () { /* si no hay red, se usa lo local */ });

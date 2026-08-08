@@ -240,8 +240,23 @@ function selectorMes(nombreVar, filas, alCambiar) {
 }
 
 /* ── Descargar un archivo armado en el momento ───────────── */
-function descargar(nombre, contenido, tipo) {
-  var blob = new Blob(['\ufeff' + contenido], { type: (tipo || 'text/plain') + ';charset=utf-8' });
+async function descargar(nombre, contenido, tipo) {
+  var mime = (tipo || 'text/plain') + ';charset=utf-8';
+  var blob = new Blob(['\ufeff' + contenido], { type: mime });
+
+  /* Safari en iOS ignora el atributo download y muestra
+     "no puede descargar este archivo". Ahí se comparte, que abre
+     el menú del sistema y deja guardarlo o abrirlo con Contactos. */
+  try {
+    var archivo = new File([blob], nombre, { type: mime });
+    if (navigator.canShare && navigator.canShare({ files: [archivo] })) {
+      await navigator.share({ files: [archivo], title: nombre });
+      return true;
+    }
+  } catch (e) {
+    if (e && e.name === 'AbortError') return false;   // cerró el menú
+  }
+
   var url = URL.createObjectURL(blob);
   var a = document.createElement('a');
   a.href = url;
@@ -250,6 +265,7 @@ function descargar(nombre, contenido, tipo) {
   a.click();
   a.remove();
   setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+  return true;
 }
 
 /* Lee un archivo elegido por el usuario, como texto */

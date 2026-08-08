@@ -185,7 +185,9 @@ function esProductoEnAumento(nombre) {
    Formato: "nombre|costo|venta", separados por punto y coma.
    Se acepta el formato viejo de dos campos (nombre|venta).
    ────────────────────────────────────────────────────────── */
-var PRODUCTOS_DEFAULT = 'Esmalte en Gel|1217|2200; Crema de Ordeñe|4200|6900';
+/* Formato: nombre|costo|venta  ·  o con precio por caja:
+   nombre|costo|venta|unidadesPorCaja|costoCaja|ventaCaja       */
+var PRODUCTOS_DEFAULT = 'Esmalte en Gel|1217|2200; Crema de Ordeñe|4200|6900|12|46800|76000';
 
 function productos() {
   var crudo = leerConfig('productos', PRODUCTOS_DEFAULT);
@@ -194,14 +196,26 @@ function productos() {
   return partes.map(function (t) {
     var c = t.split('|');
     var nombre = (c[0] || '').trim();
-    if (c.length >= 3) return { nombre: nombre, costo: +c[1] || 0, precio: +c[2] || 0 };
-    return { nombre: nombre, costo: 0, precio: +(c[1] || 0) || 0 };   // formato viejo
+    var p = c.length >= 3
+      ? { nombre: nombre, costo: +c[1] || 0, precio: +c[2] || 0 }
+      : { nombre: nombre, costo: 0, precio: +(c[1] || 0) || 0 };   // formato viejo
+    /* Precio por caja, si el producto se vende de las dos formas */
+    if (c.length >= 6 && +c[3] > 1) {
+      p.porCaja = +c[3];
+      p.costoCaja = +c[4] || 0;
+      p.precioCaja = +c[5] || 0;
+    }
+    return p;
   }).filter(function (p) { return p.nombre; });
 }
 
 function guardarProductosConfig(lista) {
   return guardarConfig('productos', lista.map(function (p) {
-    return p.nombre + '|' + (+p.costo || 0) + '|' + (+p.precio || 0);
+    var base = p.nombre + '|' + (+p.costo || 0) + '|' + (+p.precio || 0);
+    if (+p.porCaja > 1) {
+      base += '|' + (+p.porCaja) + '|' + (+p.costoCaja || 0) + '|' + (+p.precioCaja || 0);
+    }
+    return base;
   }).join('; '));
 }
 
@@ -217,6 +231,45 @@ function precioDeLista(nombre) {
 function costoDeLista(nombre) {
   var p = buscarProducto(nombre);
   return p ? p.costo : 0;
+}
+
+/* ── Precio por caja ─────────────────────────────────────────
+   Las cremas se venden sueltas o por caja de 12. Si la cantidad
+   es múltiplo de 12, se cobra el precio de caja por cada una y
+   el resto va suelto.
+   ────────────────────────────────────────────────────────── */
+function cotizar(nombre, cantidad) {
+  var p = buscarProducto(nombre);
+  var cant = Math.max(0, +cantidad || 0);
+  if (!p) return { total: 0, costo: 0, cajas: 0, sueltas: cant, unitario: 0 };
+
+  if (!p.porCaja || cant < p.porCaja) {
+    return {
+      total: cant * p.precio, costo: cant * p.costo,
+      cajas: 0, sueltas: cant, unitario: p.precio, porCaja: p.porCaja || 0
+    };
+  }
+
+  var cajas = Math.floor(cant / p.porCaja);
+  var sueltas = cant % p.porCaja;
+  var total = cajas * p.precioCaja + sueltas * p.precio;
+  return {
+    total: total,
+    costo: cajas * p.costoCaja + sueltas * p.costo,
+    cajas: cajas, sueltas: sueltas,
+    unitario: cant ? Math.round(total / cant) : 0,
+    porCaja: p.porCaja,
+    ahorro: cant * p.precio - total
+  };
+}
+
+/* Cómo explicarlo en una línea */
+function textoCotizacion(nombre, cantidad) {
+  var c = cotizar(nombre, cantidad);
+  if (!c.cajas) return '';
+  var partes = [plural(c.cajas, 'caja') + ' de ' + c.porCaja];
+  if (c.sueltas) partes.push(plural(c.sueltas, 'suelta', 'sueltas'));
+  return partes.join(' + ') + (c.ahorro > 0 ? ' · ahorra ' + plata(c.ahorro) : '');
 }
 
 /* Cuánto queda por unidad y qué porcentaje representa */
@@ -265,11 +318,26 @@ function tipoPendiente(t) { return TIPOS_PENDIENTE[(t && t.tipo) || 'otro'] || T
    viene recibiendo menos, para que los dos queden parejos.
    ═══════════════════════════════════════════════════════════ */
 
+/* Formato: "alias" o "alias|Titular". El titular sale impreso en
+   el aviso de pago: el cliente necesita saber a nombre de quién
+   transfiere. */
 function aliasConfigurados() {
-  var crudo = leerConfig('alias_transferencia', 'intencional.f, intencional.a');
-  return String(crudo).split(',')
-    .map(function (a) { return a.trim(); })
+  return String(leerConfig('alias_transferencia', 'intencional.f, intencional.a'))
+    .split(',')
+    .map(function (a) { return a.split('|')[0].trim(); })
     .filter(Boolean);
+}
+
+function titularDeAlias(alias) {
+  var t = String(leerConfig('alias_transferencia', '')).split(',')
+    .map(function (a) { return a.split('|'); })
+    .find(function (p) { return mismoAlias(p[0], alias); });
+  return t && t[1] ? t[1].trim() : '';
+}
+
+function aliasConTitular(alias) {
+  var t = titularDeAlias(alias);
+  return t ? alias + ', a nombre de ' + t : alias;
 }
 
 /* Los alias se comparan sin distinguir mayúsculas */
@@ -348,11 +416,28 @@ function demoraPromedio(remitosDelCliente) {
 function mensajeCompartir(remito) {
   var plantilla = leerConfig('mensaje_compartir',
     '¡Hola! Te dejo el remito de la reposición de hoy por {total}. ¡Gracias por elegirnos!');
-  return String(plantilla)
+
+  var texto = String(plantilla)
     .replace(/\{cliente\}/g, remito.cliente_nombre || '')
     .replace(/\{total\}/g, plata(remito.total))
     .replace(/\{fecha\}/g, remito.fecha || '')
     .replace(/\{unidades\}/g, String(remito.unidades || 0));
+
+  /* Si algo quedó en deuda, el mensaje lleva adónde transferir:
+     el cliente no debería tener que abrir la imagen para saberlo. */
+  var deuda = deudaPendiente(remito);
+  if (deuda > 0) {
+    var alias = remito.alias || remito.pago2_alias || '';
+    partesPago(remito).forEach(function (p) {
+      if (p.tipo === 'deuda' && p.alias) alias = p.alias;
+    });
+    var horas = leerConfig('horas_pago', '72');
+    texto += '\n\nQuedaron ' + plata(deuda) + ' pendientes. ' +
+      'Podés transferirlos dentro de las ' + horas + ' horas al alias ' +
+      (alias ? aliasConTitular(alias) : '[alias no seleccionado]') +
+      ' y mandarme el comprobante al ' + leerConfig('tel_comprobantes', '11-7904-7745') + '.';
+  }
+  return texto;
 }
 
 /* ── Aviso de pago pendiente que va al pie del remito ─────── */
@@ -361,8 +446,8 @@ function textoPagoPendiente(alias) {
   var horas = leerConfig('horas_pago', '72');
   var dias = Math.round(+horas / 24) || 3;
   return 'Pago pendiente — Por favor, realizá la transferencia dentro de las ' + horas +
-    ' horas (' + dias + ' días) al alias ' + (alias || '[alias no seleccionado]') +
-    ' (no distingue entre mayúsculas y minúsculas) y enviá el comprobante al ' + tel +
+    ' horas (' + dias + ' días) al alias ' + (alias ? aliasConTitular(alias) : '[alias no seleccionado]') +
+    ' (el alias no distingue entre mayúsculas y minúsculas) y enviá el comprobante al ' + tel +
     '. Si el comprobante se envía desde un número o una cuenta distintos, aclarar el nombre del local.';
 }
 
@@ -1499,4 +1584,92 @@ function armarVCard(clientes) {
 function vcardTexto(v) {
   return String(v === null || v === undefined ? '' : v)
     .replace(/\\/g, '\\\\').replace(/;/g, '\\;').replace(/,/g, '\\,').replace(/\n/g, '\\n');
+}
+
+/* ═══════════════════════════════════════════════════════════
+   REMITOS SIN CLIENTE ASOCIADO
+   Un remito cargado a las apuradas —solo nombre y monto— o uno
+   guardado sin señal puede quedar sin vínculo. Se vincula solo
+   cuando no hay ninguna duda; si no, queda a la vista.
+   ═══════════════════════════════════════════════════════════ */
+
+/* Solo devuelve un cliente si es el único candidato posible.
+   Ante cualquier duda devuelve null: es preferible preguntar. */
+function clienteSeguroPara(remito, clientes) {
+  var n = normalizar(remito.cliente_nombre);
+  if (!n) return null;
+
+  var exactos = (clientes || []).filter(function (c) { return normalizar(c.local) === n; });
+  if (exactos.length === 1) return { cliente: exactos[0], como: 'nombre exacto' };
+
+  /* Mismo nombre en varios lados: desempata la localidad, si la hay */
+  if (exactos.length > 1) {
+    var loc = normalizar(remito.cliente_loc);
+    if (loc) {
+      var porLoc = exactos.filter(function (c) { return normalizar(c.loc) === loc; });
+      if (porLoc.length === 1) return { cliente: porLoc[0], como: 'nombre y localidad' };
+    }
+    return null;
+  }
+
+  /* Sin coincidencia de nombre: la dirección exacta también sirve */
+  var dir = claveDireccion(remito.cliente_dir);
+  if (dir) {
+    var porDir = (clientes || []).filter(function (c) {
+      return clienteActivo(c) && claveDireccion(c.dir) === dir;
+    });
+    if (porDir.length === 1) return { cliente: porDir[0], como: 'dirección exacta' };
+  }
+  return null;
+}
+
+/* Los remitos que quedaron sin cliente de la base */
+function remitosSinCliente(remitos, clientes) {
+  return (remitos || []).filter(function (r) {
+    if (r.cliente_num) return false;                 // ya vinculado
+    if (r.motivo === 'cerrado') return false;
+    return !clienteSeguroPara(r, clientes);
+  });
+}
+
+/* Con qué datos del cliente se completa un remito al vincularlo */
+function datosDeVinculo(cliente) {
+  return {
+    cliente_num: cliente.num,
+    cliente_nombre: cliente.local,
+    cliente_dir: cliente.dir || null,
+    cliente_loc: cliente.loc || null,
+    cliente_tel: cliente.tel || null
+  };
+}
+
+/* Sugerencias para vincular a mano, de más a menos parecido */
+function candidatosParaRemito(remito, clientes, tope) {
+  var n = normalizar(remito.cliente_nombre);
+  var loc = normalizar(remito.cliente_loc);
+  if (!n) return [];
+
+  return (clientes || [])
+    .filter(clienteActivo)
+    .map(function (c) {
+      var p = parecido(n, normalizar(c.local));
+      if (loc && normalizar(c.loc) === loc) p += 0.08;
+      return { cliente: c, puntaje: Math.min(1, p) };
+    })
+    .filter(function (x) { return x.puntaje >= 0.55; })
+    .sort(function (a, b) { return b.puntaje - a.puntaje; })
+    .slice(0, tope || 5);
+}
+
+/* Parecido entre dos textos, contando letras en común en orden */
+function parecido(a, b) {
+  if (!a || !b) return 0;
+  if (a === b) return 1;
+  var largo = Math.max(a.length, b.length);
+  var comunes = 0, j = 0;
+  for (var i = 0; i < a.length; i++) {
+    var k = b.indexOf(a[i], j);
+    if (k !== -1) { comunes++; j = k + 1; }
+  }
+  return comunes / largo;
 }

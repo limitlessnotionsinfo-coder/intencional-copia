@@ -1,11 +1,14 @@
-/* Service worker: red primero, caché como respaldo si no hay señal. */
-const CACHE = 'intencional-v43';
+/* Service worker.
+   Los archivos de la app se sirven desde la caché primero: así
+   abre al instante y funciona sin señal. Se actualizan en
+   segundo plano para la próxima vez. */
+const CACHE = 'intencional-v46';
 
 const LOCALES = [
   './', './index.html', './css/estilo.css',
   './js/config.js', './js/logo.js', './js/iconos.js', './js/ui.js',
   './js/api.js', './js/dominio.js', './js/router.js', './js/app.js',
-  './js/push.js', './js/pag-inicio.js', './js/pag-remito.js', './js/pag-hechos.js',
+  './js/cola.js', './js/push.js', './js/pag-inicio.js', './js/pag-remito.js', './js/pag-hechos.js',
   './js/pag-clientes.js', './js/pag-compras.js', './js/pag-gastos.js',
   './js/pag-metricas.js', './js/pag-configuraciones.js',
   './manifest.json', './favicon.ico',
@@ -35,20 +38,28 @@ self.addEventListener('activate', e => {
 self.addEventListener('fetch', e => {
   const req = e.request;
   if (req.method !== 'GET') return;
-  if (new URL(req.url).hostname.includes('supabase.co')) return;  // la base siempre por red
 
+  const url = new URL(req.url);
+  if (url.hostname.includes('supabase.co')) return;   // la base siempre por red
+
+  /* Caché primero. Si está guardado, se devuelve al instante y
+     recién después se busca una versión nueva para la próxima
+     vez. Sin esto, abrir la app sin señal esperaba el timeout. */
   e.respondWith(
-    fetch(req)
-      .then(res => {
-        if (res && res.status === 200 && res.type !== 'opaque') {
-          const copia = res.clone();
-          caches.open(CACHE).then(c => c.put(req, copia));
-        }
-        return res;
-      })
-      .catch(() => caches.match(req).then(c =>
-        c || (req.destination === 'document' ? caches.match('./index.html') : undefined)
-      ))
+    caches.match(req).then(guardado => {
+      const desdeRed = fetch(req)
+        .then(res => {
+          if (res && res.status === 200 && res.type !== 'opaque') {
+            const copia = res.clone();
+            caches.open(CACHE).then(c => c.put(req, copia));
+          }
+          return res;
+        })
+        .catch(() => guardado ||
+          (req.destination === 'document' ? caches.match('./index.html') : undefined));
+
+      return guardado || desdeRed;
+    })
   );
 });
 

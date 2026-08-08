@@ -704,6 +704,20 @@ function capitalizar(s) { return String(s || '').charAt(0).toUpperCase() + Strin
 function bloqueAvisos(remitos, gastos) {
   var html = '';
 
+  /* Remitos que quedaron sin cliente de la base */
+  var huerfanos = remitosSinCliente(remitos, _clientesInicio);
+  if (huerfanos.length) {
+    html += '<div class="aviso aviso-warn" style="align-items:flex-start">' + ic('alert', 16) +
+      '<div style="flex:1">' +
+        '<strong>' + plural(huerfanos.length, 'remito') + ' sin cliente asociado</strong>' +
+        '<br>' + esc(huerfanos.slice(0, 3).map(function (r) { return r.cliente_nombre || 'sin nombre'; }).join(', ')) +
+        (huerfanos.length > 3 ? ' y ' + (huerfanos.length - 3) + ' más' : '') +
+        '<br><button class="btn btn-fantasma" style="padding:2px 0;text-decoration:underline;font-size:12.5px" ' +
+          'onclick="verHuerfanos()">Vincularlos</button>' +
+      '</div>' +
+    '</div>';
+  }
+
   /* Deudas por cobrar: los días elegidos y hasta que lo cierres */
   var d = resumenDeudas(remitos);
   if (d.items.length && tocaHoy('dias_aviso_deudas', '') && !avisoSilenciado('deudas')) {
@@ -768,4 +782,111 @@ function verDeudas() {
     '</div>',
     '<button class="btn btn-secundario btn-bloque" onclick="cerrarModal();irA(\'hechos\',\'filtro=deuda&q=\')">' +
       ic('search', 15) + ' Abrirlas en Remitos hechos para cobrarlas</button>');
+}
+
+
+/* ═══════════════════════════════════════════════════════════
+   REMITOS SIN CLIENTE
+   Se pueden dejar así —el remito vale igual— o vincularlos, y
+   ahí se completan los datos solos.
+   ═══════════════════════════════════════════════════════════ */
+var _huerfanoAbierto = null;
+
+function verHuerfanos() {
+  var lista = remitosSinCliente(_remitosInicio, _clientesInicio);
+  if (!lista.length) { toast('No quedan remitos sin cliente'); return; }
+
+  abrirModal('Remitos sin cliente',
+    '<div class="campo-ayuda" style="margin-bottom:10px">' +
+      'Se cargaron a las apuradas o sin señal. El remito vale igual: ' +
+      'vincularlo sirve para que aparezca en la ficha del cliente y en su deuda.</div>' +
+    '<div class="lista">' +
+      lista.map(function (r) {
+        return '<button class="fila" onclick="vincularHuerfano(' + r.id + ')">' +
+          '<div class="fila-principal">' +
+            '<div class="fila-titulo">' + esc(r.cliente_nombre || 'Sin nombre') + '</div>' +
+            '<div class="fila-sub">' + esc(fechaCorta(r.fecha)) +
+              (r.cliente_loc ? ' · ' + esc(r.cliente_loc) : '') +
+              (r.cliente_dir ? ' · ' + esc(r.cliente_dir) : '') + '</div>' +
+          '</div>' +
+          '<div class="fila-derecha"><div class="fila-titulo">' + plata(r.total) + '</div>' +
+            '<div class="campo-ayuda">vincular →</div></div>' +
+        '</button>';
+      }).join('') +
+    '</div>');
+}
+
+function vincularHuerfano(id) {
+  var r = _remitosInicio.find(function (x) { return String(x.id) === String(id); });
+  if (!r) return;
+  _huerfanoAbierto = r;
+  var cands = candidatosParaRemito(r, _clientesInicio, 5);
+
+  abrirModal('Vincular remito de ' + (r.cliente_nombre || '—'),
+    '<div class="campo-ayuda" style="margin-bottom:10px">' +
+      esc(fechaCorta(r.fecha)) + ' · ' + plata(r.total) +
+      (r.cliente_dir || r.cliente_loc
+        ? '<br>' + esc([r.cliente_dir, r.cliente_loc].filter(Boolean).join(' · '))
+        : '') + '</div>' +
+
+    (cands.length
+      ? '<div class="eyebrow">Puede ser alguno de estos</div>' +
+        '<div class="lista" style="margin-bottom:12px">' +
+          cands.map(function (x) {
+            return '<button class="fila" onclick="confirmarVinculo(\'' + esc(x.cliente.num) + '\')">' +
+              '<span class="num-cliente">' + esc(x.cliente.num_str || x.cliente.num) + '</span>' +
+              '<div class="fila-principal">' +
+                '<div class="fila-titulo">' + esc(x.cliente.local) + '</div>' +
+                '<div class="fila-sub">' + [x.cliente.dir, x.cliente.loc].filter(Boolean).map(esc).join(' · ') + '</div>' +
+              '</div>' +
+              '<span class="pin pin-neutro">' + Math.round(x.puntaje * 100) + '%</span>' +
+            '</button>';
+          }).join('') +
+        '</div>'
+      : '<div class="campo-ayuda" style="margin-bottom:10px">Ningún cliente se parece. Buscalo a mano.</div>') +
+
+    '<div class="campo-etiq">Buscar otro</div>' +
+    '<div class="buscador">' +
+      '<span class="ic-lupa">' + ic('search', 15) + '</span>' +
+      '<input class="campo-input" id="hv-buscar" autocomplete="off" ' +
+             'placeholder="Número, nombre o zona" oninput="buscarParaVincular(this.value)"/>' +
+    '</div>' +
+    '<div id="hv-res"></div>',
+
+    '<button class="btn btn-secundario btn-bloque" onclick="cerrarModal()">Dejarlo sin vincular</button>');
+}
+
+function buscarParaVincular(q) {
+  var cont = porId('hv-res');
+  if (!cont) return;
+  if (!q || q.length < 2) { cont.innerHTML = ''; return; }
+  var res = _clientesInicio.filter(clienteActivo)
+    .filter(function (c) { return coincideCliente(c, q); }).slice(0, 6);
+
+  cont.innerHTML = res.length
+    ? '<div class="lista" style="margin-top:8px">' + res.map(function (c) {
+        return '<button class="fila" onclick="confirmarVinculo(\'' + esc(c.num) + '\')">' +
+          '<span class="num-cliente">' + esc(c.num_str || c.num) + '</span>' +
+          '<div class="fila-principal">' +
+            '<div class="fila-titulo">' + esc(c.local) + '</div>' +
+            '<div class="fila-sub">' + [c.dir, c.loc].filter(Boolean).map(esc).join(' · ') + '</div>' +
+          '</div></button>';
+      }).join('') + '</div>'
+    : '<div class="campo-ayuda" style="margin-top:8px">Sin resultados.</div>';
+}
+
+async function confirmarVinculo(num) {
+  var r = _huerfanoAbierto;
+  var c = _clientesInicio.find(function (x) { return String(x.num) === String(num); });
+  if (!r || !c) return;
+
+  try {
+    var cambios = datosDeVinculo(c);
+    await actualizar('remitos', r.id, cambios);
+    Object.assign(r, cambios);
+    invalidarCache('remitos');
+    cerrarModal();
+    toast('Vinculado a ' + c.local);
+    pintarRuta();
+  } catch (e) { toast(e.message, 'error'); }
 }

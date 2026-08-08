@@ -106,6 +106,70 @@ async function desactivarNotificaciones() {
   }
 }
 
+/* ═══════════════════════════════════════════════════════════
+   QUÉ AVISOS QUIERE CADA TELÉFONO
+   Franco puede querer solo las deudas y los gastos; Augusto,
+   además los avisos de aumento y a otra hora. Se guarda por
+   suscripción, no por cuenta.
+   ═══════════════════════════════════════════════════════════ */
+var TIPOS_AVISO = [
+  { id: 'deudas',  etiqueta: 'Deudas por cobrar', icono: 'clock',
+    detalle: 'Cuánto hay pendiente y hace cuánto es la más vieja' },
+  { id: 'aumento', etiqueta: 'Avisar del aumento', icono: 'megaphone',
+    detalle: 'Clientes que todavía no saben del precio nuevo' },
+  { id: 'gastos',  etiqueta: 'Anotar gastos',      icono: 'wallet',
+    detalle: 'Sueldos y nafta de la semana sin cargar' }
+];
+
+function avisosPorDefecto() {
+  return {
+    deudas:  { on: true,  hora: '09:00' },
+    aumento: { on: false, hora: '09:00' },
+    gastos:  { on: true,  hora: '18:00' }
+  };
+}
+
+function leerAvisos(sub) {
+  var base = avisosPorDefecto();
+  if (!sub || !sub.avisos) return base;
+  try {
+    var g = typeof sub.avisos === 'string' ? JSON.parse(sub.avisos) : sub.avisos;
+    TIPOS_AVISO.forEach(function (t) {
+      if (g && g[t.id]) {
+        base[t.id] = { on: !!g[t.id].on, hora: horaValida(g[t.id].hora) || base[t.id].hora };
+      }
+    });
+  } catch (e) {}
+  return base;
+}
+
+/* Acepta 24 horas con minutos: 09:00, 13:30, 22:20 */
+function horaValida(h) {
+  var m = /^([01]?\d|2[0-3]):([0-5]\d)$/.exec(String(h || '').trim());
+  return m ? String(m[1]).padStart(2, '0') + ':' + m[2] : null;
+}
+
+/* Redondea a la media hora, que es cada cuánto corre el servidor */
+function horaDeEnvio(h) {
+  var v = horaValida(h) || '09:00';
+  var p = v.split(':');
+  return p[0] + ':' + (+p[1] < 30 ? '00' : '30');
+}
+
+async function guardarAvisos(endpoint, avisos) {
+  var previas = await traerTodo('push_subs', 'endpoint=eq.' + encodeURIComponent(endpoint));
+  if (!previas.length) throw new Error('Este teléfono todavía no está suscripto');
+  await actualizar('push_subs', previas[0].id, { avisos: JSON.stringify(avisos) });
+  return previas[0];
+}
+
+async function filaDeEsteTelefono() {
+  var sub = await suscripcionActual();
+  if (!sub) return null;
+  var f = await traerTodo('push_subs', 'endpoint=eq.' + encodeURIComponent(sub.endpoint));
+  return f.length ? f[0] : null;
+}
+
 /* ── Dónde se guardan ────────────────────────────────────────
    El servidor necesita la suscripción para poder mandar el push.
    Se guarda en la base, no en el teléfono.
@@ -121,10 +185,17 @@ async function guardarSuscripcion(sub) {
     created_at: new Date().toISOString()
   };
 
+  /* Los avisos por defecto solo se ponen al suscribirse la primera
+     vez: si el teléfono ya tenía su configuración, se respeta. */
+
   /* Si el mismo teléfono ya estaba, se actualiza en vez de duplicar */
   var previas = await traerTodo('push_subs', 'endpoint=eq.' + encodeURIComponent(j.endpoint));
-  if (previas.length) await actualizar('push_subs', previas[0].id, fila);
-  else await crear('push_subs', fila);
+  if (previas.length) {
+    await actualizar('push_subs', previas[0].id, fila);
+  } else {
+    fila.avisos = JSON.stringify(avisosPorDefecto());
+    await crear('push_subs', fila);
+  }
 }
 
 async function borrarSuscripcion(endpoint) {
