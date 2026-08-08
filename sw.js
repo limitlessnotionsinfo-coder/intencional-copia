@@ -2,7 +2,7 @@
    Los archivos de la app se sirven desde la caché primero: así
    abre al instante y funciona sin señal. Se actualizan en
    segundo plano para la próxima vez. */
-const CACHE = 'intencional-v50';
+const CACHE = 'intencional-v51';
 
 const LOCALES = [
   './', './index.html', './css/estilo.css',

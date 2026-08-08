@@ -1057,7 +1057,8 @@ function bloqueAvisosDelTelefono() {
 
     '<div class="campo-ayuda" style="margin-top:8px">' +
       'Los horarios son de 24 horas y aceptan minutos (13:30, 22:20). ' +
-      'El servidor revisa cada media hora, así que el aviso llega en esa franja.</div>' +
+      'El servidor revisa cada 10 minutos, así que el aviso llega dentro de esa franja: ' +
+      'si ponés 13:27, sale 13:20.</div>' +
 
     '<button class="btn btn-primario btn-bloque" style="margin-top:10px" onclick="guardarAvisosTel()">' +
       'Guardar mis avisos</button>';

@@ -149,11 +149,15 @@ function horaValida(h) {
   return m ? String(m[1]).padStart(2, '0') + ':' + m[2] : null;
 }
 
-/* Redondea a la media hora, que es cada cuánto corre el servidor */
+/* El servidor mira cada 10 minutos: la hora elegida se lleva a
+   su franja. 13:27 sale 13:20. */
+var PASO_AVISOS = 10;
+
 function horaDeEnvio(h) {
   var v = horaValida(h) || '09:00';
   var p = v.split(':');
-  return p[0] + ':' + (+p[1] < 30 ? '00' : '30');
+  var m = Math.floor((+p[1] || 0) / PASO_AVISOS) * PASO_AVISOS;
+  return p[0] + ':' + String(m).padStart(2, '0');
 }
 
 async function guardarAvisos(endpoint, avisos) {
