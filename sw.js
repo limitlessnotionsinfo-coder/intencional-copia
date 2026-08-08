@@ -2,7 +2,7 @@
    Los archivos de la app se sirven desde la caché primero: así
    abre al instante y funciona sin señal. Se actualizan en
    segundo plano para la próxima vez. */
-const CACHE = 'intencional-v46';
+const CACHE = 'intencional-v47';
 
 const LOCALES = [
   './', './index.html', './css/estilo.css',
@@ -23,7 +23,15 @@ const EXTERNOS = [
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE).then(async c => {
     // uno por uno: si falta un archivo, no se cae toda la instalación
-    for (const u of LOCALES.concat(EXTERNOS)) { try { await c.add(u); } catch (err) { console.warn('[SW]', u, err); } }
+    for (const u of LOCALES.concat(EXTERNOS)) {
+      try {
+        /* Se guarda la respuesta final, no el redirect */
+        const res = await fetch(u, { redirect: 'follow' });
+        if (res.ok) await c.put(u, res.redirected ? new Response(await res.blob(), {
+          status: res.status, statusText: res.statusText, headers: res.headers
+        }) : res);
+      } catch (err) { console.warn('[SW]', u, err); }
+    }
   }));
   self.skipWaiting();
 });
@@ -35,6 +43,20 @@ self.addEventListener('activate', e => {
   self.clients.claim();
 });
 
+/* Una respuesta que vino de un redirect no se puede devolver tal
+   cual a una navegación: el navegador la rechaza con
+   "Response served by service worker has redirections".
+   Se copia el cuerpo en una respuesta limpia. */
+async function sinRedirect(res) {
+  if (!res || !res.redirected) return res;
+  const cuerpo = await res.blob();
+  return new Response(cuerpo, {
+    status: res.status,
+    statusText: res.statusText,
+    headers: res.headers
+  });
+}
+
 self.addEventListener('fetch', e => {
   const req = e.request;
   if (req.method !== 'GET') return;
@@ -42,25 +64,28 @@ self.addEventListener('fetch', e => {
   const url = new URL(req.url);
   if (url.hostname.includes('supabase.co')) return;   // la base siempre por red
 
-  /* Caché primero. Si está guardado, se devuelve al instante y
-     recién después se busca una versión nueva para la próxima
-     vez. Sin esto, abrir la app sin señal esperaba el timeout. */
-  e.respondWith(
-    caches.match(req).then(guardado => {
-      const desdeRed = fetch(req)
-        .then(res => {
-          if (res && res.status === 200 && res.type !== 'opaque') {
-            const copia = res.clone();
-            caches.open(CACHE).then(c => c.put(req, copia));
-          }
-          return res;
-        })
-        .catch(() => guardado ||
-          (req.destination === 'document' ? caches.match('./index.html') : undefined));
+  /* Caché primero: abre al instante y funciona sin señal. La
+     versión nueva se busca igual, para la próxima vez. */
+  e.respondWith((async () => {
+    const guardado = await caches.match(req, { ignoreSearch: req.mode === 'navigate' });
+    if (guardado) return sinRedirect(guardado);
 
-      return guardado || desdeRed;
-    })
-  );
+    try {
+      const res = await fetch(req);
+      /* Los redirects no se guardan: al servirlos rompen la app */
+      if (res && res.status === 200 && res.type !== 'opaque' && !res.redirected) {
+        const copia = res.clone();
+        caches.open(CACHE).then(c => c.put(req, copia));
+      }
+      return sinRedirect(res);
+    } catch (err) {
+      if (req.mode === 'navigate' || req.destination === 'document') {
+        const shell = await caches.match('./') || await caches.match('./index.html');
+        if (shell) return sinRedirect(shell);
+      }
+      throw err;
+    }
+  })());
 });
 
 /* ═══════════════════════════════════════════════════════════

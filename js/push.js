@@ -115,17 +115,17 @@ async function desactivarNotificaciones() {
 var TIPOS_AVISO = [
   { id: 'deudas',  etiqueta: 'Deudas por cobrar', icono: 'clock',
     detalle: 'Cuánto hay pendiente y hace cuánto es la más vieja' },
-  { id: 'aumento', etiqueta: 'Avisar del aumento', icono: 'megaphone',
-    detalle: 'Clientes que todavía no saben del precio nuevo' },
-  { id: 'gastos',  etiqueta: 'Anotar gastos',      icono: 'wallet',
+  { id: 'visitas', etiqueta: 'Avisar a los clientes', icono: 'phone',
+    detalle: 'A quiénes hay que avisarles que mañana pasás por el local' },
+  { id: 'gastos',  etiqueta: 'Anotar gastos', icono: 'wallet',
     detalle: 'Sueldos y nafta de la semana sin cargar' }
 ];
 
 function avisosPorDefecto() {
   return {
-    deudas:  { on: true,  hora: '09:00' },
-    aumento: { on: false, hora: '09:00' },
-    gastos:  { on: true,  hora: '18:00' }
+    deudas:  { on: true, hora: '09:00' },
+    visitas: { on: true, hora: '19:00' },   // la tarde anterior a la salida
+    gastos:  { on: true, hora: '18:00' }
   };
 }
 

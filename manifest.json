@@ -2,7 +2,7 @@
   "name": "Intencional",
   "short_name": "Intencional",
   "description": "Remitos, clientes, rutas y gastos de Intencional",
-  "start_url": "./index.html",
+  "start_url": "./",
   "scope": "./",
   "display": "standalone",
   "orientation": "portrait",
@@ -17,8 +17,8 @@
     { "src": "iconos/icono-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
   ],
   "shortcuts": [
-    { "name": "Nuevo remito", "url": "./index.html#/remito" },
-    { "name": "Remitos hechos", "url": "./index.html#/hechos" },
-    { "name": "Clientes", "url": "./index.html#/clientes" }
+    { "name": "Nuevo remito", "url": "./#/remito" },
+    { "name": "Remitos hechos", "url": "./#/hechos" },
+    { "name": "Clientes", "url": "./#/clientes" }
   ]
 }

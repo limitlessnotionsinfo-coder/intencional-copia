@@ -21,16 +21,15 @@ registrarPagina({
     cont.innerHTML =
       /* Primero la plata: cómo viene la semana y si alcanza.
          Después con qué cargar. Al final, el detalle y los filtros. */
+      /* El período va arriba de todo: es lo que define qué muestran
+         las tarjetas de abajo. Las categorías ya no son chips:
+         cada una tiene su tarjeta. */
+      '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px" id="g-chips"></div>' +
+      '<div id="g-rango"></div>' +
       '<div id="g-cierre"></div>' +
       '<div id="g-resumen"></div>' +
       '<div class="atajos" style="margin:14px 0">' + botonesRapidos() + '</div>' +
-      '<div id="g-cuentas"></div>' +
-
-      '<div class="tarjeta"><div class="tarjeta-cuerpo">' +
-        '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px" id="g-chips"></div>' +
-        '<div id="g-rango"></div>' +
-        '<div id="g-categorias" style="display:flex;gap:6px;flex-wrap:wrap"></div>' +
-      '</div></div>';
+      '<div id="g-cuentas"></div>';
 
     pintarGastos();
   }
@@ -126,15 +125,6 @@ function pintarGastos() {
           '<input class="campo-input" type="date" value="' + esc(G.hasta) + '" onchange="setFechaGasto(\'hasta\',this.value)"/></div>' +
       '</div>'
     : '';
-
-  porId('g-categorias').innerHTML =
-    '<button class="btn ' + (!G.categoria ? 'btn-primario' : 'btn-secundario') + '" ' +
-      'style="padding:5px 12px;font-size:12px" onclick="setCategoriaGasto(\'\')">Todas</button>' +
-    CATEGORIAS_GASTO.map(function (c) {
-      return '<button class="btn ' + (G.categoria === c.id ? 'btn-primario' : 'btn-secundario') + '" ' +
-        'style="padding:5px 12px;font-size:12px" onclick="setCategoriaGasto(\'' + c.id + '\')">' +
-        ic(c.icono, 13) + ' ' + esc(c.etiqueta) + '</button>';
-    }).join('');
 
   var lista = gastosFiltrados();
   /* Lo que sale de la caja de la empresa. Un gasto que ponen los
