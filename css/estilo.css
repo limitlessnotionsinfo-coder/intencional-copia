@@ -618,16 +618,25 @@ body.fondo-quieto{
   .fila-derecha .pin{font-size:9.5px;padding:2px 6px}
 }
 
-/* ── Banda de remitos sin subir ──────────────────────────── */
-body.con-banda .app{padding-top:30px}
+/* ── Banda de remitos sin subir ──────────────────────────────
+   Va abajo, apoyada sobre la barra de navegación: arriba tapaba
+   el botón de configuraciones.
+   ────────────────────────────────────────────────────────── */
 .banda-cola{
-  position:fixed;top:0;left:0;right:0;z-index:90;
+  position:fixed;left:0;right:0;z-index:70;
+  bottom:calc(62px + env(safe-area-inset-bottom));
   display:flex;align-items:center;justify-content:center;gap:6px;
-  padding:7px 12px;border:none;cursor:pointer;width:100%;
+  padding:8px 12px;border:none;cursor:pointer;width:100%;
   background:#d97706;color:#fff;font-size:12px;font-weight:600;
-  font-family:var(--cuerpo);
+  font-family:var(--cuerpo);box-shadow:0 -2px 8px rgba(0,0,0,.12);
 }
+.banda-cola.con-error{background:#b91c1c}
 .banda-cola:active{opacity:.85}
+body.con-banda .contenido{padding-bottom:calc(120px + env(safe-area-inset-bottom))}
+@media (min-width:861px){
+  .banda-cola{bottom:0}
+  body.con-banda .contenido{padding-bottom:70px}
+}
 
 /* ── Orden de las rutas, arrastrable ─────────────────────── */
 .lista-rutas{border:1px solid var(--border);border-radius:var(--radius);overflow:hidden}

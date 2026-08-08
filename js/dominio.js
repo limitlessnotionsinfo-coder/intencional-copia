@@ -1627,6 +1627,7 @@ function clienteSeguroPara(remito, clientes) {
 function remitosSinCliente(remitos, clientes) {
   return (remitos || []).filter(function (r) {
     if (r.cliente_num) return false;                 // ya vinculado
+    if (bool(r.sin_cliente)) return false;           // se decidió dejarlo así
     if (r.motivo === 'cerrado') return false;
     return !clienteSeguroPara(r, clientes);
   });

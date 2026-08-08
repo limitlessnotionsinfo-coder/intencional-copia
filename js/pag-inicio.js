@@ -853,7 +853,11 @@ function vincularHuerfano(id) {
     '</div>' +
     '<div id="hv-res"></div>',
 
-    '<button class="btn btn-secundario btn-bloque" onclick="cerrarModal()">Dejarlo sin vincular</button>');
+    '<div style="display:flex;gap:8px;flex-wrap:wrap">' +
+      '<button class="btn btn-primario" style="flex:1;min-width:120px" onclick="altaDesdeRemito()">' +
+        ic('user', 15) + ' Darlo de alta como cliente</button>' +
+      '<button class="btn btn-secundario" onclick="dejarSinCliente()">Dejarlo así</button>' +
+    '</div>');
 }
 
 function buscarParaVincular(q) {
@@ -873,6 +877,94 @@ function buscarParaVincular(q) {
           '</div></button>';
       }).join('') + '</div>'
     : '<div class="campo-ayuda" style="margin-top:8px">Sin resultados.</div>';
+}
+
+/* Marcarlo como revisado: no vuelve a aparecer en la lista */
+async function dejarSinCliente() {
+  var r = _huerfanoAbierto;
+  if (!r) return;
+  try {
+    await actualizar('remitos', r.id, { sin_cliente: true });
+    r.sin_cliente = true;
+    invalidarCache('remitos');
+    cerrarModal();
+    toast('Listo, no vuelve a aparecer');
+    pintarRuta();
+  } catch (e) { toast(e.message, 'error'); }
+}
+
+/* Dar de alta al cliente con los datos del propio remito y
+   vincularlo en el mismo paso. */
+function altaDesdeRemito() {
+  var r = _huerfanoAbierto;
+  if (!r) return;
+
+  abrirModal('Nuevo cliente desde el remito',
+    '<div class="campo"><div class="campo-etiq">Nombre del local</div>' +
+      '<input class="campo-input" id="ar-local" value="' + esc(r.cliente_nombre || '') + '"/></div>' +
+    '<div class="campo"><div class="campo-etiq">Dirección</div>' +
+      '<input class="campo-input" id="ar-dir" value="' + esc(r.cliente_dir || '') + '"/></div>' +
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">' +
+      '<div class="campo"><div class="campo-etiq">Localidad</div>' +
+        '<input class="campo-input" id="ar-loc" value="' + esc(r.cliente_loc || '') + '"/></div>' +
+      '<div class="campo"><div class="campo-etiq">Teléfono</div>' +
+        '<input class="campo-input" id="ar-tel" inputmode="tel" value="' + esc(r.cliente_tel || '') + '"/></div>' +
+    '</div>' +
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">' +
+      '<div class="campo"><div class="campo-etiq">Hoja de ruta</div>' +
+        '<input class="campo-input" id="ar-ruta" type="number" min="0" placeholder="Ej: 14"/></div>' +
+      '<div class="campo"><div class="campo-etiq">Exhibidores</div>' +
+        '<input class="campo-input" id="ar-exhib" type="number" min="0" value="1"/></div>' +
+    '</div>',
+
+    '<button class="btn btn-primario btn-bloque" id="btn-ar" onclick="confirmarAltaDesdeRemito()">' +
+      'Crear y vincular</button>');
+}
+
+async function confirmarAltaDesdeRemito() {
+  var r = _huerfanoAbierto;
+  var local = (porId('ar-local').value || '').trim();
+  if (!local) { toast('Falta el nombre del local', 'error'); return; }
+
+  var btn = porId('btn-ar');
+  if (btn) { btn.disabled = true; btn.textContent = 'Creando…'; }
+
+  try {
+    var todos = await traerCacheado('clientes');
+    var num = todos.reduce(function (m, c) { return Math.max(m, +c.num || 0); }, 0) + 1;
+    var ruta = (porId('ar-ruta').value || '').trim();
+
+    var nuevo = {
+      num: num,
+      num_str: ruta ? codigoCliente(ruta, siguienteEnRuta(todos, ruta)) : String(num),
+      local: local,
+      dir: (porId('ar-dir').value || '').trim() || null,
+      loc: (porId('ar-loc').value || '').trim() || null,
+      tel: (porId('ar-tel').value || '').trim() || null,
+      ruta: JSON.stringify({ orden: ruta, horarios: [], notas: '' }),
+      exhibidores: +porId('ar-exhib').value || 1,
+      activo: true,
+      fecha: hoyTexto(),
+      created_at: new Date().toISOString()
+    };
+
+    await crear('clientes', nuevo);
+    invalidarCache('clientes');
+    _clientesInicio = await traerCacheado('clientes');
+
+    /* Y el remito queda vinculado al cliente recién creado */
+    var cambios = datosDeVinculo(nuevo);
+    await actualizar('remitos', r.id, cambios);
+    Object.assign(r, cambios);
+    invalidarCache('remitos');
+
+    cerrarModal();
+    toast('Cliente creado y remito vinculado');
+    pintarRuta();
+  } catch (e) {
+    if (btn) { btn.disabled = false; btn.textContent = 'Crear y vincular'; }
+    toast(e.message, 'error');
+  }
 }
 
 async function confirmarVinculo(num) {

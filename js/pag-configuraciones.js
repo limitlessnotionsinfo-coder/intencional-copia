@@ -28,8 +28,8 @@ registrarPagina({
       grupoConfig('plata', 'Cobranzas y gastos', 'wallet',
         tarjetaAlias() + tarjetaEmpleado() + tarjetaMensaje()) +
 
-      grupoConfig('rutas', 'Rutas y feriados', 'map',
-        tarjetaRutas() + tarjetaFeriados()) +
+      /* El orden de las rutas vive en Clientes, donde se arrastra */
+      grupoConfig('rutas', 'Feriados', 'calendar', tarjetaFeriados()) +
 
       grupoConfig('app', 'La app', 'settings',
         tarjetaNotificaciones() + tarjetaAvisos() + tarjetaTema() +
@@ -42,7 +42,7 @@ registrarPagina({
     $$('.grupo-config').forEach(function (g) {
       g.addEventListener('toggle', function () {
         if (!g.open) return;
-        previewAviso(); previewCalendario(); previewMensaje(); previewDeuda();
+        previewAviso(); previewMensaje(); previewDeuda();
         ['cfg-alias', 'cfg-tel', 'cfg-horas'].forEach(function (id) {
           var el = porId(id); if (el) el.oninput = previewDeuda;
         });
@@ -390,60 +390,6 @@ async function guardarProductos() {
 }
 
 /* ── Calendario de rutas ─────────────────────────────────── */
-function tarjetaRutas() {
-  var cola = colaRutas();
-  return '<details class="tarjeta">' +
-    '<summary class="tarjeta-cab" style="cursor:pointer">' + ic('map', 16) + ' Calendario de rutas' +
-      '<span style="margin-left:auto"><span class="pin pin-neutro">' +
-        (cola.length ? plural(cola.length, 'ruta') + ' en cola' : 'sin cargar') + '</span></span>' +
-    '</summary>' +
-    '<div class="tarjeta-cuerpo">' +
-      '<div class="campo-ayuda" style="margin-bottom:12px">' +
-        'El orden en que vas a recorrer las hojas, una por día hábil. ' +
-        'La app saltea sábados, domingos y feriados sola. Si un día no salís, ' +
-        'todo corre un lugar desde el inicio.' +
-      '</div>' +
-      '<div class="campo"><div class="campo-etiq">Orden de las hojas</div>' +
-        '<textarea class="campo-input" id="cfg-cola" rows="4" style="resize:vertical;font-family:ui-monospace,monospace;font-size:13px" ' +
-          'placeholder="14, 12, 5, 8">' + esc(cola.join(', ')) + '</textarea>' +
-        '<div class="campo-ayuda">Separadas por coma, en el orden en que las hacés.</div>' +
-      '</div>' +
-      '<div class="campo"><div class="campo-etiq">Arranca el</div>' +
-        '<input class="campo-input" type="date" id="cfg-inicio" value="' + esc(inicioCola()) + '"/></div>' +
-      '<button class="btn btn-primario btn-bloque" onclick="guardarColaRutas()">Guardar</button>' +
-      '<div id="preview-cal" style="margin-top:14px"></div>' +
-    '</div>' +
-  '</details>';
-}
-
-function previewCalendario() {
-  var el = porId('preview-cal');
-  if (!el) return;
-  var cal = calendarioRutas(10);
-  if (!cal.length) { el.innerHTML = '<div class="campo-ayuda">Cargá el orden de las hojas para ver el calendario.</div>'; return; }
-  el.innerHTML = '<div class="campo-ayuda" style="margin-bottom:6px">Así quedan los próximos días:</div>' +
-    '<div class="lista">' + cal.map(function (e) {
-      var d = fechaDeIso(e.iso);
-      return '<div class="fila" style="cursor:default;padding:8px 14px">' +
-        '<div class="fila-principal">' +
-          '<div class="fila-titulo">Ruta ' + esc(e.ruta) + '</div>' +
-          '<div class="fila-sub">' + capitalizar(DIAS[d.getDay()]) + ' ' + esc(fechaCorta(e.iso)) + '</div>' +
-        '</div></div>';
-    }).join('') + '</div>';
-}
-
-async function guardarColaRutas() {
-  var cola = (porId('cfg-cola').value || '').split(',')
-    .map(function (r) { return r.trim(); }).filter(Boolean);
-  var inicio = porId('cfg-inicio').value || hoyISO();
-  try {
-    await guardarCola(cola, inicio);
-    toast('Calendario guardado');
-    pintarRuta();
-  } catch (e) { toast(e.message, 'error'); }
-}
-
-/* ── Feriados ────────────────────────────────────────────── */
 function tarjetaFeriados() {
   var deEsteAnio = Object.keys(FERIADOS)
     .filter(function (f) { return f >= hoyISO(); }).sort().slice(0, 8);
@@ -937,7 +883,9 @@ function tarjetaNotificaciones() {
                 '<button class="btn btn-secundario" style="flex:1;min-width:120px" onclick="probarNotificacion()">' +
                   ic('eye', 15) + ' Probar</button>' +
                 '<button class="btn btn-secundario" onclick="apagarPush()">' + ic('ban', 15) + ' Apagar</button>' +
-              '</div>'
+              '</div>' +
+              '<button class="btn btn-fantasma btn-bloque" style="margin-top:6px;font-size:12px" ' +
+                'onclick="verDiagnosticoPush()">¿No te llegan? Revisá qué falta</button>'
             : '<div class="campo-ayuda" style="margin-bottom:10px">' +
                 'Avisos de deudas por cobrar, clientes a los que hay que avisar del aumento ' +
                 'y gastos de la semana sin anotar.</div>' +
@@ -1109,4 +1057,41 @@ async function guardarAvisosTel() {
     await guardarAvisos(sub.endpoint, _avisosTel);
     toast('Listo · así los va a recibir este teléfono');
   } catch (e) { toast(e.message, 'error'); }
+}
+
+
+/* ── Por qué no llegan las notificaciones ────────────────── */
+async function verDiagnosticoPush() {
+  abrirModal('Revisión de notificaciones', cargando('Revisando…'));
+  var pasos = await diagnosticoPush();
+  var fallan = pasos.filter(function (p) { return !p.ok; });
+
+  abrirModal('Revisión de notificaciones',
+    (fallan.length
+      ? avisoHTML('warn', '<strong>' + plural(fallan.length, 'cosa') + ' por resolver.</strong> ' +
+          'Los pasos en rojo son los que hay que arreglar, de arriba hacia abajo.', 'alert')
+      : avisoHTML('ok', 'Del lado del teléfono está todo bien. Si igual no llegan, ' +
+          'el problema está en el servidor: mirá los logs de la función <code>avisos</code> ' +
+          'en Supabase.', 'check')) +
+
+    '<div class="lista" style="margin-top:10px">' +
+      pasos.map(function (p) {
+        return '<div class="fila" style="cursor:default;align-items:flex-start">' +
+          '<span style="flex:0 0 auto;color:' + (p.ok ? 'var(--ok)' : 'var(--danger)') + '">' +
+            ic(p.ok ? 'check' : 'x', 16) + '</span>' +
+          '<div class="fila-principal">' +
+            '<div class="fila-titulo" style="font-weight:' + (p.ok ? '500' : '700') + '">' +
+              esc(p.titulo) + '</div>' +
+            (p.detalle ? '<div class="fila-sub">' + esc(p.detalle) + '</div>' : '') +
+          '</div>' +
+        '</div>';
+      }).join('') +
+    '</div>' +
+
+    '<div class="campo-ayuda" style="margin-top:12px">' +
+      'Si cambiaste las claves VAPID, todas las suscripciones anteriores dejan de servir: ' +
+      'hay que apagar y volver a activar las notificaciones en cada teléfono.</div>',
+
+    '<button class="btn btn-secundario btn-bloque" onclick="probarNotificacion()">' +
+      ic('eye', 15) + ' Probar una notificación local</button>');
 }

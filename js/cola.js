@@ -48,44 +48,104 @@ async function sincronizarCola(silencioso) {
   if (_sincronizando) return { subidos: 0, quedan: pendientesDeSubir() };
   var cola = leerCola();
   if (!cola.length) return { subidos: 0, quedan: 0 };
-  if (navigator.onLine === false) return { subidos: 0, quedan: cola.length };
+
+  if (navigator.onLine === false) {
+    if (!silencioso) toast('El teléfono está sin conexión', 'error');
+    return { subidos: 0, quedan: cola.length };
+  }
 
   _sincronizando = true;
-  var subidos = 0, fallados = 0;
+  if (!silencioso) actualizarBandaCola('Subiendo…');
 
-  for (var i = 0; i < cola.length; i++) {
-    var item = cola[i];
-    try {
-      await crearDirecto(item.tabla, item.fila);
-      sacarDeCola(item.id);
-      invalidarCache(item.tabla);
-      subidos++;
-    } catch (e) {
-      /* Si el error es de red, se reintenta después. Si es de datos,
-         no tiene sentido insistir para siempre. */
-      item.intentos++;
-      item.ultimoError = e.message;
-      fallados++;
-      if (item.intentos >= 8) item.trabado = true;
-      var actual = leerCola();
-      var j = actual.findIndex(function (x) { return x.id === item.id; });
-      if (j !== -1) { actual[j] = item; escribirCola(actual); }
+  var subidos = 0, fallados = 0, ultimoError = '';
+
+  try {
+    for (var i = 0; i < cola.length; i++) {
+      var item = cola[i];
+      try {
+        await crearDirecto(item.tabla, item.fila);
+        sacarDeCola(item.id);
+        subidos++;
+      } catch (e) {
+        item.intentos++;
+        item.ultimoError = e.message;
+        ultimoError = e.message;
+        fallados++;
+        /* Si el error no es de red, no se arregla insistiendo:
+           se marca para que se vea qué pasó. */
+        if (!esErrorDeRed(e) || item.intentos >= 8) item.trabado = true;
+        var actual = leerCola();
+        var j = actual.findIndex(function (x) { return x.id === item.id; });
+        if (j !== -1) { actual[j] = item; escribirCola(actual); }
+      }
+    }
+  } finally {
+    _sincronizando = false;
+    actualizarBandaCola();
+  }
+
+  if (!silencioso) {
+    if (subidos) {
+      toast(subidos === 1 ? 'Se subió el remito que había quedado pendiente'
+                          : 'Se subieron ' + subidos + ' remitos');
+    } else if (fallados) {
+      toast('No se pudo subir: ' + (ultimoError || 'error desconocido'), 'error');
     }
   }
+  if (subidos && typeof pintarRuta === 'function') pintarRuta();
 
-  _sincronizando = false;
-  actualizarBandaCola();
-
-  if (subidos && !silencioso) {
-    toast(subidos === 1 ? 'Se subió 1 remito que había quedado pendiente'
-                        : 'Se subieron ' + subidos + ' guardados sin conexión');
-    if (typeof pintarRuta === 'function') pintarRuta();
-  }
   return { subidos: subidos, quedan: pendientesDeSubir(), fallados: fallados };
 }
 
+/* Qué pasó con lo que no se pudo subir */
+function verDetalleCola() {
+  var cola = leerCola();
+  if (!cola.length) { toast('No queda nada por subir'); return; }
+
+  abrirModal(plural(cola.length, 'remito') + ' sin subir',
+    '<div class="campo-ayuda" style="margin-bottom:10px">' +
+      (navigator.onLine === false
+        ? 'El teléfono está sin conexión. Se suben solos en cuanto vuelva.'
+        : 'Se reintentan solos cada dos minutos y al volver la conexión.') + '</div>' +
+
+    '<div class="lista">' +
+      cola.map(function (x) {
+        var f = x.fila || {};
+        return '<div class="fila" style="cursor:default;align-items:flex-start">' +
+          '<div class="fila-principal">' +
+            '<div class="fila-titulo">' + esc(f.cliente_nombre || x.tabla) + '</div>' +
+            '<div class="fila-sub">' + esc(f.fecha || '') +
+              (x.intentos ? ' · ' + plural(x.intentos, 'intento') : '') +
+              (x.trabado
+                ? '<br><span style="color:var(--danger)">Trabado: ' + esc(x.ultimoError || '') + '</span>'
+                : '') +
+            '</div>' +
+          '</div>' +
+          '<div class="fila-derecha">' +
+            (f.total != null ? '<div class="fila-titulo">' + plata(f.total) + '</div>' : '') +
+            (x.trabado
+              ? '<button class="btn btn-fantasma" style="padding:2px 6px;font-size:11px" ' +
+                'onclick="descartarDeCola(\'' + esc(x.id) + '\')">Descartar</button>'
+              : '') +
+          '</div>' +
+        '</div>';
+      }).join('') +
+    '</div>',
+
+    '<button class="btn btn-primario btn-bloque" onclick="cerrarModal();sincronizarCola()">' +
+      ic('upload', 15) + ' Reintentar ahora</button>');
+}
+
+function descartarDeCola(id) {
+  sacarDeCola(id);
+  cerrarModal();
+  toast('Descartado');
+}
+
 /* ── La banda de arriba ──────────────────────────────────── */
-function actualizarBandaCola() {
+/* La banda va abajo, sobre la barra de navegación: arriba tapaba
+   el botón de configuraciones. */
+function actualizarBandaCola(texto) {
   var n = pendientesDeSubir();
   var b = porId('banda-cola');
 
@@ -95,13 +155,18 @@ function actualizarBandaCola() {
     b = document.createElement('button');
     b.id = 'banda-cola';
     b.className = 'banda-cola';
-    b.onclick = function () { sincronizarCola(); };
-    document.body.insertBefore(b, document.body.firstChild);
+    b.onclick = verDetalleCola;
+    document.body.appendChild(b);
     document.body.classList.add('con-banda');
   }
-  b.innerHTML = ic('upload', 14) + ' ' +
-    (n === 1 ? '1 remito sin subir' : n + ' remitos sin subir') +
-    (navigator.onLine === false ? ' · sin conexión' : ' · tocá para reintentar');
+
+  var trabados = leerCola().filter(function (x) { return x.trabado; }).length;
+  b.innerHTML = ic('upload', 14) + ' ' + (texto ||
+    ((n === 1 ? '1 remito sin subir' : n + ' remitos sin subir') +
+     (navigator.onLine === false ? ' · sin conexión'
+      : trabados ? ' · ' + trabados + ' con error, tocá para ver'
+      : ' · subiendo solos')));
+  b.classList.toggle('con-error', trabados > 0);
 }
 
 /* ── Arranque ────────────────────────────────────────────── */
@@ -115,6 +180,12 @@ function arrancarCola() {
   });
   window.addEventListener('offline', actualizarBandaCola);
 
-  /* Por si el evento no llega: se reintenta cada dos minutos */
-  setInterval(function () { sincronizarCola(true); }, 120000);
+  /* Al volver a la app desde segundo plano */
+  document.addEventListener('visibilitychange', function () {
+    if (!document.hidden) sincronizarCola(true);
+  });
+  window.addEventListener('focus', function () { sincronizarCola(true); });
+
+  /* Y por las dudas, cada minuto */
+  setInterval(function () { sincronizarCola(true); }, 60000);
 }

@@ -240,3 +240,66 @@ async function generarClavesVapid() {
   var privada = await crypto.subtle.exportKey('jwk', par.privateKey);
   return { publica: bytesABase64Url(publica), privada: privada.d };
 }
+
+/* ═══════════════════════════════════════════════════════════
+   DIAGNÓSTICO
+   Cuando no llega nada, la cadena tiene seis eslabones y falla
+   en silencio. Esto revisa los cinco que se pueden ver desde
+   el teléfono; el sexto, el servidor, queda en sus logs.
+   ═══════════════════════════════════════════════════════════ */
+async function diagnosticoPush() {
+  var pasos = [];
+  var agregar = function (ok, titulo, detalle) { pasos.push({ ok: ok, titulo: titulo, detalle: detalle }); };
+
+  agregar(soportaPush(), 'El navegador soporta notificaciones',
+    soportaPush() ? '' : 'Probá desde Safari en iPhone o Chrome en Android.');
+
+  var instalada = !esIOS() || appInstalada();
+  agregar(instalada, 'La app está instalada en la pantalla de inicio',
+    instalada ? '' : 'En iPhone no funcionan desde una pestaña. Compartir → Agregar a inicio.');
+
+  var permiso = ('Notification' in window) ? Notification.permission : 'no soportado';
+  agregar(permiso === 'granted', 'Diste permiso para notificar',
+    permiso === 'granted' ? '' : 'Permiso: ' + permiso + '. Se pide al activar.');
+
+  var clave = clavePublicaPush();
+  agregar(!!clave, 'Está cargada la clave pública',
+    clave ? clave.slice(0, 14) + '…' : 'Falta pegarla en Configuración del servidor.');
+
+  var sub = await suscripcionActual();
+  agregar(!!sub, 'Este teléfono está suscripto',
+    sub ? '' : 'Tocá "Activar en este teléfono".');
+
+  /* Que la suscripción coincida con la clave actual: si se
+     generaron claves nuevas, las suscripciones viejas ya no
+     sirven y hay que rehacerlas. */
+  if (sub && clave) {
+    var suya = '';
+    try {
+      var k = sub.options && sub.options.applicationServerKey;
+      if (k) suya = bytesABase64Url(k);
+    } catch (e) {}
+    var coincide = !suya || suya === clave;
+    agregar(coincide, 'La suscripción usa la clave actual',
+      coincide ? '' : 'Se generaron claves nuevas después de suscribirte. ' +
+        'Apagá y volvé a activar las notificaciones en este teléfono.');
+  }
+
+  var fila = null;
+  try { fila = await filaDeEsteTelefono(); } catch (e) {}
+  agregar(!!fila, 'El servidor tiene este teléfono anotado',
+    fila ? 'Guardado como ' + (fila.dispositivo || '—') : 'No aparece en la base.');
+
+  if (fila) {
+    var a = leerAvisos(fila);
+    var prendidos = TIPOS_AVISO.filter(function (t) { return a[t.id].on; });
+    agregar(prendidos.length > 0, 'Hay avisos prendidos',
+      prendidos.map(function (t) { return t.etiqueta + ' a las ' + a[t.id].hora; }).join(' · ') ||
+      'Están todos apagados.');
+    agregar(bool(fila.activa), 'La suscripción está activa',
+      bool(fila.activa) ? '' : 'El servidor la dio de baja porque los envíos fallaban. ' +
+        'Apagá y volvé a activar.');
+  }
+
+  return pasos;
+}
