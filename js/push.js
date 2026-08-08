@@ -194,7 +194,9 @@ async function guardarSuscripcion(sub) {
     await actualizar('push_subs', previas[0].id, fila);
   } else {
     fila.avisos = JSON.stringify(avisosPorDefecto());
-    await crear('push_subs', fila);
+    /* Directo, sin pasar por la cola: si esto falla, el teléfono
+       queda suscripto de un lado y no del otro, y hay que saberlo. */
+    await crearDirecto('push_subs', fila);
   }
 }
 
@@ -285,10 +287,21 @@ async function diagnosticoPush() {
         'Apagá y volvé a activar las notificaciones en este teléfono.');
   }
 
-  var fila = null;
-  try { fila = await filaDeEsteTelefono(); } catch (e) {}
+  var fila = null, errorTabla = '';
+  try {
+    fila = await filaDeEsteTelefono();
+  } catch (e) {
+    errorTabla = e.message || '';
+  }
+
   agregar(!!fila, 'El servidor tiene este teléfono anotado',
-    fila ? 'Guardado como ' + (fila.dispositivo || '—') : 'No aparece en la base.');
+    fila ? 'Guardado como ' + (fila.dispositivo || '—')
+    : /push_subs|does not exist|schema cache|404/i.test(errorTabla)
+      ? 'Falta la tabla push_subs en la base: corré el SQL de notificaciones.'
+      : errorTabla
+        ? 'La base respondió: ' + errorTabla
+        : 'La suscripción no se guardó. Apagá y volvé a activar las notificaciones ' +
+          'para que se reintente.');
 
   if (fila) {
     var a = leerAvisos(fila);

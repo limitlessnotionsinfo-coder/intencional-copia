@@ -128,6 +128,8 @@ function tarjetaMantenimiento() {
       '<button class="btn btn-secundario btn-bloque" ' +
               'onclick="invalidarCache();pintarRuta();toast(\'Datos actualizados\')">' +
         ic('refresh', 15) + ' Volver a leer la base</button>' +
+      '<button class="btn btn-secundario btn-bloque" style="margin-top:8px" onclick="revisarEsquema()">' +
+        ic('db', 15) + ' ¿La base está al día?</button>' +
       (PEDIR_LOGIN
         ? '<button class="btn btn-secundario btn-bloque" style="margin-top:8px" onclick="salir()">' +
           ic('undo', 15) + ' Cerrar sesión</button>'
@@ -1094,4 +1096,63 @@ async function verDiagnosticoPush() {
 
     '<button class="btn btn-secundario btn-bloque" onclick="probarNotificacion()">' +
       ic('eye', 15) + ' Probar una notificación local</button>');
+}
+
+
+/* ═══════════════════════════════════════════════════════════
+   ¿LA BASE ESTÁ AL DÍA?
+   Escribe y borra una fila de prueba para ver qué columnas
+   existen. Es la forma de saberlo sin adivinar.
+   ═══════════════════════════════════════════════════════════ */
+var ESPERADO = [
+  { tabla: 'remitos',   columna: 'cliente_num',   para: 'vincular el remito con su cliente' },
+  { tabla: 'remitos',   columna: 'sin_cliente',   para: 'dejar un remito sin cliente a propósito' },
+  { tabla: 'remitos',   columna: 'cobrado_deuda', para: 'cobrar una deuda vieja en un remito nuevo' },
+  { tabla: 'gastos',    columna: 'reintegrado',   para: 'marcar lo que la empresa ya devolvió' },
+  { tabla: 'clientes',  columna: 'num_str',       para: 'el código R14-0010' },
+  { tabla: 'push_subs', columna: 'avisos',        para: 'los avisos de cada teléfono' }
+];
+
+async function revisarEsquema() {
+  abrirModal('Revisión de la base', cargando('Consultando…'));
+  var faltan = [], hay = [];
+
+  for (var i = 0; i < ESPERADO.length; i++) {
+    var e = ESPERADO[i];
+    try {
+      await rest(e.tabla + '?select=' + e.columna + '&limit=1');
+      hay.push(e);
+    } catch (err) {
+      e.error = err.message || '';
+      faltan.push(e);
+    }
+  }
+
+  abrirModal('Revisión de la base',
+    (faltan.length
+      ? avisoHTML('warn',
+          '<strong>Faltan ' + plural(faltan.length, 'columna') + '.</strong> ' +
+          'Hasta que corras el SQL, esas funciones no guardan: la app avisa y sigue ' +
+          'andando sin ellas.', 'alert')
+      : avisoHTML('ok', 'La base tiene todo lo que la app necesita.', 'check')) +
+
+    '<div class="lista" style="margin-top:10px">' +
+      faltan.concat(hay).map(function (e) {
+        var ok = hay.indexOf(e) !== -1;
+        return '<div class="fila" style="cursor:default;align-items:flex-start">' +
+          '<span style="flex:0 0 auto;color:' + (ok ? 'var(--ok)' : 'var(--danger)') + '">' +
+            ic(ok ? 'check' : 'x', 16) + '</span>' +
+          '<div class="fila-principal">' +
+            '<div class="fila-titulo">' + esc(e.tabla) + '.' + esc(e.columna) + '</div>' +
+            '<div class="fila-sub">' + esc(e.para) + '</div>' +
+          '</div>' +
+        '</div>';
+      }).join('') +
+    '</div>' +
+
+    (faltan.length
+      ? '<div class="campo-ayuda" style="margin-top:12px">' +
+        'En Supabase → SQL Editor, corré <code>sql/al-dia.sql</code> del zip. ' +
+        'Se puede correr las veces que quieras: no rompe nada de lo que ya está.</div>'
+      : ''));
 }

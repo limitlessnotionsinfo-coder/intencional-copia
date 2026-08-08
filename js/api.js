@@ -258,8 +258,43 @@ function invalidarCache(tabla) {
 
 /* ── Escrituras ──────────────────────────────────────────── */
 /* La escritura directa, sin red de contención. La usa la cola. */
+/* Si la base todavía no tiene una columna, PostgREST devuelve
+   PGRST204 con su nombre. En vez de perder el remito entero, se
+   saca ese dato y se reintenta: es preferible guardarlo sin el
+   vínculo que no guardarlo. */
+function columnaQueFalta(e) {
+  var m = /Could not find the '([a-z_0-9]+)' column/i.exec(String((e && e.message) || ''));
+  return m ? m[1] : null;
+}
+
+async function escribirTolerante(hacer, fila) {
+  var copia = Object.assign({}, fila);
+  var quitadas = [];
+
+  for (var i = 0; i < 6; i++) {
+    try {
+      var r = await hacer(copia);
+      if (quitadas.length) {
+        console.warn('Faltan columnas en la base:', quitadas.join(', '));
+        if (typeof toast === 'function') {
+          toast('Guardado, pero falta correr el SQL: no existe ' + quitadas.join(', '), 'error');
+        }
+      }
+      return r;
+    } catch (e) {
+      var col = columnaQueFalta(e);
+      if (!col || !(col in copia)) throw e;
+      delete copia[col];
+      quitadas.push(col);
+    }
+  }
+  throw new Error('Faltan demasiadas columnas: hay que correr el SQL de la base');
+}
+
 async function crearDirecto(tabla, fila) {
-  var r = await rest(tabla, { method: 'POST', body: JSON.stringify(fila) });
+  var r = await escribirTolerante(function (f) {
+    return rest(tabla, { method: 'POST', body: JSON.stringify(f) });
+  }, fila);
   invalidarCache(tabla);
   return r;
 }
@@ -290,9 +325,11 @@ async function crear(tabla, fila) {
 
 async function actualizar(tabla, valorPk, cambios) {
   var pk = TABLAS[tabla] || 'id';
-  var r = await rest(tabla + '?' + pk + '=eq.' + encodeURIComponent(valorPk), {
-    method: 'PATCH', body: JSON.stringify(cambios)
-  });
+  var r = await escribirTolerante(function (c) {
+    return rest(tabla + '?' + pk + '=eq.' + encodeURIComponent(valorPk), {
+      method: 'PATCH', body: JSON.stringify(c)
+    });
+  }, cambios);
   invalidarCache(tabla);
   return r;
 }
