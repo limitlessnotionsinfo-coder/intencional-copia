@@ -163,8 +163,20 @@ function horaDeEnvio(h) {
 async function guardarAvisos(endpoint, avisos) {
   var previas = await traerTodo('push_subs', 'endpoint=eq.' + encodeURIComponent(endpoint));
   if (!previas.length) throw new Error('Este teléfono todavía no está suscripto');
+
   await actualizar('push_subs', previas[0].id, { avisos: JSON.stringify(avisos) });
-  return previas[0];
+
+  /* Se relee de la base: si la columna no existiera, la escritura
+     se descarta en silencio y hay que enterarse acá. */
+  invalidarCache('push_subs');
+  var después = await traerTodo('push_subs', 'endpoint=eq.' + encodeURIComponent(endpoint));
+  var fila = después[0] || previas[0];
+
+  if (!fila.avisos) {
+    throw new Error('No se pudieron guardar los horarios. ' +
+      'Falta la columna "avisos": corré al-dia.sql en Supabase.');
+  }
+  return fila;
 }
 
 async function filaDeEsteTelefono() {

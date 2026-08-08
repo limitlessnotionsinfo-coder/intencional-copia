@@ -14,7 +14,7 @@ registrarPagina({
     _prods = null;
     _subPush = await suscripcionActual();
     _filaPush = _subPush ? await filaDeEsteTelefono() : null;
-    _avisosTel = leerAvisos(_filaPush);
+    _avisosTel = _subPush ? leerAvisos(_filaPush) : null;
     await cargarConfig().catch(function () {});
     if (!_feriadosCargados) cargarFeriados().catch(function () {});
     var cfg = aumentoConfig();
@@ -1048,9 +1048,10 @@ function bloqueAvisosDelTelefono() {
           '<div style="font-weight:600;font-size:13px">' + ic(t.icono, 13) + ' ' + esc(t.etiqueta) + '</div>' +
           '<div class="campo-ayuda" style="margin:0">' + esc(t.detalle) + '</div>' +
         '</label>' +
-        '<input class="campo-input" type="time" value="' + esc(a.hora) + '" ' +
+        '<input class="campo-input" type="time" id="hora-' + t.id + '" value="' + esc(a.hora) + '" ' +
                (a.on ? '' : 'disabled ') +
                'style="width:auto;flex:0 0 auto;min-height:36px" ' +
+               'oninput="cambiarAviso(\'' + t.id + '\',\'hora\',this.value)" ' +
                'onchange="cambiarAviso(\'' + t.id + '\',\'hora\',this.value)"/>' +
       '</div>';
     }).join('') +
@@ -1064,28 +1065,55 @@ function bloqueAvisosDelTelefono() {
       'Guardar mis avisos</button>';
 }
 
+/* Sin repintar: antes esto redibujaba la pantalla entera y se
+   perdía la hora que acababas de escribir. */
 function cambiarAviso(tipo, campo, valor) {
   if (!_avisosTel) _avisosTel = avisosPorDefecto();
+
   if (campo === 'hora') {
     var h = horaValida(valor);
     if (!h) { toast('Hora inválida', 'error'); return; }
     _avisosTel[tipo].hora = h;
-  } else {
-    _avisosTel[tipo].on = !!valor;
-    pintarRuta();   // para habilitar o deshabilitar el reloj
+    return;
   }
+
+  _avisosTel[tipo].on = !!valor;
+  /* Solo se habilita o deshabilita el reloj de esa fila */
+  var reloj = porId('hora-' + tipo);
+  if (reloj) reloj.disabled = !valor;
 }
 
 async function guardarAvisosTel() {
   var sub = await suscripcionActual();
   if (!sub) { toast('Este teléfono no está suscripto', 'error'); return; }
+
+  /* Se leen los relojes de la pantalla, no la copia en memoria:
+     en iOS el input de hora a veces no dispara el evento. */
+  TIPOS_AVISO.forEach(function (t) {
+    var reloj = porId('hora-' + t.id);
+    var casilla = porId('av-' + t.id);
+    if (casilla) _avisosTel[t.id].on = casilla.checked;
+    if (reloj && reloj.value) {
+      var h = horaValida(reloj.value);
+      if (h) _avisosTel[t.id].hora = h;
+    }
+  });
+
   if (!TIPOS_AVISO.some(function (t) { return _avisosTel[t.id].on; })) {
     toast('Elegí al menos un aviso, o apagá las notificaciones', 'error');
     return;
   }
+
   try {
-    await guardarAvisos(sub.endpoint, _avisosTel);
-    toast('Listo · así los va a recibir este teléfono');
+    var fila = await guardarAvisos(sub.endpoint, _avisosTel);
+    _filaPush = fila;                       // para que no vuelva a lo viejo
+    _avisosTel = leerAvisos(fila);          // y se muestre lo que quedó guardado
+
+    var resumen = TIPOS_AVISO.filter(function (t) { return _avisosTel[t.id].on; })
+      .map(function (t) { return t.etiqueta.toLowerCase() + ' ' + _avisosTel[t.id].hora; })
+      .join(' · ');
+    toast('Guardado: ' + resumen);
+    pintarRuta();
   } catch (e) { toast(e.message, 'error'); }
 }
 
