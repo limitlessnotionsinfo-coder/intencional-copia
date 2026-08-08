@@ -185,9 +185,11 @@ function esProductoEnAumento(nombre) {
    Formato: "nombre|costo|venta", separados por punto y coma.
    Se acepta el formato viejo de dos campos (nombre|venta).
    ────────────────────────────────────────────────────────── */
-/* Formato: nombre|costo|venta  ·  o con precio por caja:
-   nombre|costo|venta|unidadesPorCaja|costoCaja|ventaCaja       */
-var PRODUCTOS_DEFAULT = 'Esmalte en Gel|1217|2200; Crema de Ordeñe|4200|6900|12|46800|76000';
+/* Formato: nombre|costo|venta  ·  o con precio mayorista:
+   nombre|costo|venta|desdeCuantas|costoMayorista|ventaMayorista
+   A partir de "desdeCuantas" unidades, TODAS se cobran al precio
+   mayorista. No es por caja: es un umbral. */
+var PRODUCTOS_DEFAULT = 'Esmalte en Gel|1217|2200; Crema de Ordeñe|4200|6900|12|3900|6300';
 
 function productos() {
   var crudo = leerConfig('productos', PRODUCTOS_DEFAULT);
@@ -199,11 +201,11 @@ function productos() {
     var p = c.length >= 3
       ? { nombre: nombre, costo: +c[1] || 0, precio: +c[2] || 0 }
       : { nombre: nombre, costo: 0, precio: +(c[1] || 0) || 0 };   // formato viejo
-    /* Precio por caja, si el producto se vende de las dos formas */
+    /* Precio mayorista a partir de cierta cantidad */
     if (c.length >= 6 && +c[3] > 1) {
-      p.porCaja = +c[3];
-      p.costoCaja = +c[4] || 0;
-      p.precioCaja = +c[5] || 0;
+      p.desde = +c[3];
+      p.costoMayor = +c[4] || 0;
+      p.precioMayor = +c[5] || 0;
     }
     return p;
   }).filter(function (p) { return p.nombre; });
@@ -212,8 +214,8 @@ function productos() {
 function guardarProductosConfig(lista) {
   return guardarConfig('productos', lista.map(function (p) {
     var base = p.nombre + '|' + (+p.costo || 0) + '|' + (+p.precio || 0);
-    if (+p.porCaja > 1) {
-      base += '|' + (+p.porCaja) + '|' + (+p.costoCaja || 0) + '|' + (+p.precioCaja || 0);
+    if (+p.desde > 1 && +p.precioMayor > 0) {
+      base += '|' + (+p.desde) + '|' + (+p.costoMayor || 0) + '|' + (+p.precioMayor || 0);
     }
     return base;
   }).join('; '));
@@ -233,44 +235,45 @@ function costoDeLista(nombre) {
   return p ? p.costo : 0;
 }
 
-/* ── Precio por caja ─────────────────────────────────────────
-   Las cremas se venden sueltas o por caja de 12. Si la cantidad
-   es múltiplo de 12, se cobra el precio de caja por cada una y
-   el resto va suelto.
+/* ── Precio mayorista ────────────────────────────────────────
+   Menos de la cantidad mínima: precio por unidad. A partir de
+   ahí, todas al precio mayorista.
    ────────────────────────────────────────────────────────── */
 function cotizar(nombre, cantidad) {
   var p = buscarProducto(nombre);
   var cant = Math.max(0, +cantidad || 0);
-  if (!p) return { total: 0, costo: 0, cajas: 0, sueltas: cant, unitario: 0 };
+  if (!p) return { total: 0, costo: 0, mayorista: false, unitario: 0, cant: cant };
 
-  if (!p.porCaja || cant < p.porCaja) {
-    return {
-      total: cant * p.precio, costo: cant * p.costo,
-      cajas: 0, sueltas: cant, unitario: p.precio, porCaja: p.porCaja || 0
-    };
-  }
+  var mayorista = !!(p.desde && p.precioMayor && cant >= p.desde);
+  var unitario = mayorista ? p.precioMayor : p.precio;
+  var costoUnit = mayorista ? (p.costoMayor || p.costo) : p.costo;
 
-  var cajas = Math.floor(cant / p.porCaja);
-  var sueltas = cant % p.porCaja;
-  var total = cajas * p.precioCaja + sueltas * p.precio;
   return {
-    total: total,
-    costo: cajas * p.costoCaja + sueltas * p.costo,
-    cajas: cajas, sueltas: sueltas,
-    unitario: cant ? Math.round(total / cant) : 0,
-    porCaja: p.porCaja,
-    ahorro: cant * p.precio - total
+    total: cant * unitario,
+    costo: cant * costoUnit,
+    mayorista: mayorista,
+    unitario: unitario,
+    desde: p.desde || 0,
+    precioUnidad: p.precio,
+    ahorro: mayorista ? cant * (p.precio - p.precioMayor) : 0,
+    faltan: (p.desde && !mayorista) ? p.desde - cant : 0,
+    cant: cant
   };
 }
 
 /* Cómo explicarlo en una línea */
 function textoCotizacion(nombre, cantidad) {
   var c = cotizar(nombre, cantidad);
-  if (!c.cajas) return '';
-  var partes = [plural(c.cajas, 'caja') + ' de ' + c.porCaja];
-  if (c.sueltas) partes.push(plural(c.sueltas, 'suelta', 'sueltas'));
-  return partes.join(' + ') + (c.ahorro > 0 ? ' · ahorra ' + plata(c.ahorro) : '');
+  if (c.mayorista) {
+    return 'Precio mayorista desde ' + c.desde + ' · ' + plata(c.unitario) + ' c/u' +
+      (c.ahorro > 0 ? ' · ahorra ' + plata(c.ahorro) : '');
+  }
+  if (c.faltan > 0 && c.cant > 0) {
+    return 'Con ' + plural(c.faltan, 'unidad', 'unidades') + ' más entra el precio mayorista';
+  }
+  return '';
 }
+
 
 /* Cuánto queda por unidad y qué porcentaje representa */
 function ganancia(producto) {
@@ -435,7 +438,9 @@ function mensajeCompartir(remito) {
     texto += '\n\nQuedaron ' + plata(deuda) + ' pendientes. ' +
       'Podés transferirlos dentro de las ' + horas + ' horas al alias ' +
       (alias ? aliasConTitular(alias) : '[alias no seleccionado]') +
-      ' y mandarme el comprobante al ' + leerConfig('tel_comprobantes', '11-7904-7745') + '.';
+      ', y mandarme el comprobante al ' + leerConfig('tel_comprobantes', '11-7904-7745') + '.' +
+      '\n\nSi transferís desde otro número o desde una cuenta a otro nombre, ' +
+      'aclarame el nombre del local: sin eso no puedo dar de baja la deuda del sistema.';
   }
   return texto;
 }
@@ -448,7 +453,8 @@ function textoPagoPendiente(alias) {
   return 'Pago pendiente — Por favor, realizá la transferencia dentro de las ' + horas +
     ' horas (' + dias + ' días) al alias ' + (alias ? aliasConTitular(alias) : '[alias no seleccionado]') +
     ' (el alias no distingue entre mayúsculas y minúsculas) y enviá el comprobante al ' + tel +
-    '. Si el comprobante se envía desde un número o una cuenta distintos, aclarar el nombre del local.';
+    '. Si transferís desde otro número o desde una cuenta a otro nombre, aclarános el nombre del local: ' +
+    'sin eso no podemos dar de baja la deuda del sistema.';
 }
 
 /* ═══════════════════════════════════════════════════════════

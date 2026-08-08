@@ -275,13 +275,24 @@ button,input,select,textarea{font-family:inherit;font-size:inherit;color:inherit
 /* ── Toast ───────────────────────────────────────────────── */
 .toast{
   position:fixed;left:50%;bottom:26px;transform:translate(-50%,12px);
-  background:var(--text);color:#fff;border-radius:var(--radius);
+  /* Colores fijos, no tokens: en modo oscuro --text es casi
+     blanco y el mensaje quedaba blanco sobre blanco. */
+  background:#2b2327;color:#fff;border-radius:var(--radius);
   padding:11px 18px;font-size:13px;font-weight:500;z-index:900;
   opacity:0;pointer-events:none;transition:opacity .18s,transform .18s;
   max-width:calc(100vw - 32px);box-shadow:var(--sombra-alta);
+  border:1px solid rgba(255,255,255,.14);
 }
 .toast.visible{opacity:1;transform:translate(-50%,0)}
-.toast.error{background:var(--danger)}
+.toast.error{background:#b91c1c;border-color:rgba(255,255,255,.2)}
+html[data-tema="oscuro"] .toast{background:#f4eef1;color:#1e1a1a;border-color:rgba(0,0,0,.15)}
+html[data-tema="oscuro"] .toast.error{background:#dc2626;color:#fff}
+@media (prefers-color-scheme:dark){
+  html[data-tema="auto"] .toast{background:#f4eef1;color:#1e1a1a;border-color:rgba(0,0,0,.15)}
+  html[data-tema="auto"] .toast.error{background:#dc2626;color:#fff}
+}
+/* Con la banda de la cola abajo, el mensaje sube para no taparla */
+body.con-banda .toast{bottom:calc(112px + env(safe-area-inset-bottom))}
 
 /* ── Responsive ──────────────────────────────────────────── */
 @media (max-width:860px){

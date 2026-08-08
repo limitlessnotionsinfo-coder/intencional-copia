@@ -308,7 +308,12 @@ async function guardarMensaje() {
 var _prods = null;   // se edita en memoria y se guarda de una
 
 function tarjetaProductos() {
-  if (!_prods) _prods = productos().map(function (p) { return { nombre: p.nombre, costo: p.costo, precio: p.precio }; });
+  if (!_prods) _prods = productos().map(function (p) {
+    return {
+      nombre: p.nombre, costo: p.costo, precio: p.precio,
+      desde: p.desde || 0, costoMayor: p.costoMayor || 0, precioMayor: p.precioMayor || 0
+    };
+  });
   return '<details class="tarjeta">' +
     '<summary class="tarjeta-cab" style="cursor:pointer">' + ic('tag', 16) + ' Productos y precios' +
       '<span style="margin-left:auto"><span class="pin pin-neutro">' +
@@ -316,8 +321,9 @@ function tarjetaProductos() {
     '</summary>' +
     '<div class="tarjeta-cuerpo">' +
       '<div class="campo-ayuda" style="margin-bottom:12px">' +
-        'Lo que te cuesta cada unidad y a cuánto se la vendés al cliente. ' +
-        'La ganancia se calcula sola.' +
+        'Lo que te cuesta cada unidad y a cuánto se la vendés. La ganancia se calcula sola. ' +
+        'Si el producto tiene precio mayorista, poné desde cuántas unidades arranca: ' +
+        'a partir de ahí <strong>todas</strong> se cobran a ese precio.' +
       '</div>' +
       '<div id="lista-prods">' + _prods.map(filaProductoConfig).join('') + '</div>' +
       '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px">' +
@@ -349,6 +355,27 @@ function filaProductoConfig(p, i) {
     '<button class="btn btn-fantasma" style="padding:4px;align-self:end;margin-bottom:6px" ' +
             'aria-label="Quitar" onclick="quitarProducto(' + i + ')">✕</button>' +
     '<div class="prod-ganancia" id="gan-' + i + '">' + textoGanancia(g) + '</div>' +
+
+    /* Plegado: el resumen ya dice el precio mayorista */
+    '<details class="prod-mayor" style="grid-column:1/-1">' +
+      '<summary style="cursor:pointer;font-size:11.5px;color:var(--rose);font-weight:600;padding:4px 0">' +
+        (+p.desde > 1
+          ? 'Mayorista desde ' + p.desde + ' unidades · ' + plata(p.precioMayor) + ' c/u'
+          : 'Agregar precio mayorista') +
+      '</summary>' +
+      '<div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:6px">' +
+        '<div><div class="campo-etiq">Desde</div>' +
+          '<input class="campo-input" type="number" min="0" inputmode="numeric" value="' + (+p.desde || '') + '" ' +
+                 'placeholder="12" oninput="editarProducto(' + i + ',\'desde\',this.value)"/></div>' +
+        '<div><div class="campo-etiq">Nos cuesta</div>' +
+          '<input class="campo-input" type="number" min="0" inputmode="decimal" value="' + (+p.costoMayor || '') + '" ' +
+                 'oninput="editarProducto(' + i + ',\'costoMayor\',this.value)"/></div>' +
+        '<div><div class="campo-etiq">Lo cobramos</div>' +
+          '<input class="campo-input" type="number" min="0" inputmode="decimal" value="' + (+p.precioMayor || '') + '" ' +
+                 'oninput="editarProducto(' + i + ',\'precioMayor\',this.value)"/></div>' +
+      '</div>' +
+      '<div class="campo-ayuda" style="margin-top:4px">Dejalo vacío si este producto no tiene precio mayorista.</div>' +
+    '</details>' +
   '</div>';
 }
 
@@ -369,7 +396,7 @@ function editarProducto(i, campo, valor) {
 }
 
 function agregarProducto() {
-  _prods.push({ nombre: '', costo: 0, precio: 0 });
+  _prods.push({ nombre: '', costo: 0, precio: 0, desde: 0, costoMayor: 0, precioMayor: 0 });
   porId('lista-prods').innerHTML = _prods.map(filaProductoConfig).join('');
 }
 

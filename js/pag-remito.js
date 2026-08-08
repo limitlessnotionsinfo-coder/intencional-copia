@@ -583,9 +583,13 @@ function precioInicial() {
 /* El precio de caja solo se aplica si el renglón tiene el precio
    de lista. Si se escribió otro a mano, o si es el precio nuevo
    por el aumento, manda ese: no queremos que la caja lo pise. */
+/* El precio mayorista solo se aplica si el renglón tiene el
+   precio de lista. Si se escribió otro a mano, o si es el precio
+   nuevo por el aumento, manda ese. */
 function usaPrecioDeCaja(f) {
   var p = buscarProducto(f.prod);
-  if (!p || !p.porCaja || (+f.cant || 0) < p.porCaja) return false;
+  if (!p || !p.desde || !p.precioMayor) return false;
+  if ((+f.cant || 0) < p.desde) return false;
   if (f.precioManual) return false;
   return (+f.precio || 0) === p.precio;
 }
@@ -1052,6 +1056,19 @@ async function compartirRemito(remito) {
 }
 
 /* Versión estática del remito, solo para la foto */
+/* Los teléfonos y los alias no se parten a mitad de línea: al
+   generar la imagen quedaban con el guion suelto. */
+function sinCortar(html) {
+  return String(html)
+    /* Primero los guiones de los teléfonos, por uno que no rompe
+       línea. Se hace antes de envolver, para no tocar el CSS. */
+    .replace(/\d(?:[-\u2011]\d+){1,3}/g, function (t) { return t.replace(/-/g, '\u2011'); })
+    /* Y después teléfonos y alias quedan en una sola pieza */
+    .replace(/\d[\d\u2011]{6,}/g, '<span style="white-space:nowrap">$&</span>')
+    .replace(/(^|[\s(])([a-z0-9]+\.[a-z0-9]+)(?=[\s.,)]|$)/gi,
+             '$1<span style="white-space:nowrap">$2</span>');
+}
+
 function remitoParaImagen(r) {
   var prods = [];
   try { prods = JSON.parse(r.productos || '[]'); } catch (e) {}
@@ -1147,9 +1164,11 @@ function remitoParaImagen(r) {
       : '') +
 
     (visibles.some(function (p) { return p.tipo === 'deuda'; })
-      ? '<div style="margin-top:12px;border:1px solid #fed7aa;background:#fff7ed;border-radius:10px;padding:10px 13px;font-size:12.5px;color:#9a3412;line-height:1.5">' +
+      ? '<div style="margin-top:12px;border:1px solid #fed7aa;background:#fff7ed;border-radius:10px;' +
+        'padding:10px 13px;font-size:12.5px;color:#9a3412;line-height:1.55;text-align:left">' +
         '⚠️ <strong>Pago pendiente</strong> — ' +
-        esc(textoPagoPendiente(r.alias || r.pago2_alias).replace('Pago pendiente — ', '')) + '</div>'
+        sinCortar(esc(textoPagoPendiente(r.alias || r.pago2_alias).replace('Pago pendiente — ', ''))) +
+        '</div>'
       : '') +
 
     (aumentoConfig().activo && !!R.cliente && !clienteAvisado(R.cliente) && !clienteReciente(R.cliente)
