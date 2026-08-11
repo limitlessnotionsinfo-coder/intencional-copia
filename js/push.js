@@ -160,7 +160,7 @@ function horaDeEnvio(h) {
   return p[0] + ':' + String(m).padStart(2, '0');
 }
 
-async function guardarAvisos(endpoint, avisos) {
+async function guardarAvisosDelTelefono(endpoint, avisos) {
   var previas = await traerTodo('push_subs', 'endpoint=eq.' + encodeURIComponent(endpoint));
   if (!previas.length) throw new Error('Este teléfono todavía no está suscripto');
 

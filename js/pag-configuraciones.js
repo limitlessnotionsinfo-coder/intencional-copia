@@ -559,7 +559,7 @@ function tarjetaAvisos() {
       '<div class="campo-ayuda" style="margin-bottom:14px">' +
         'En el inicio se puede cerrar con la cruz y no vuelve hasta el día siguiente.</div>' +
 
-      '<button class="btn btn-primario btn-bloque" onclick="guardarAvisos()">Guardar</button>' +
+      '<button class="btn btn-primario btn-bloque" onclick="guardarDiasDeAviso()">Guardar</button>' +
     '</div>' +
   '</details>';
 }
@@ -593,7 +593,7 @@ function diasElegidos(id) {
     .join(',');
 }
 
-async function guardarAvisos() {
+async function guardarDiasDeAviso() {
   try {
     await guardarConfig('dia_aviso_gastos', diasElegidos('gastos'));
     await guardarConfig('dias_aviso_deudas', diasElegidos('deudas'));
@@ -1105,7 +1105,7 @@ async function guardarAvisosTel() {
   }
 
   try {
-    var fila = await guardarAvisos(sub.endpoint, _avisosTel);
+    var fila = await guardarAvisosDelTelefono(sub.endpoint, _avisosTel);
     _filaPush = fila;                       // para que no vuelva a lo viejo
     _avisosTel = leerAvisos(fila);          // y se muestre lo que quedó guardado
 
