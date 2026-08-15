@@ -1320,7 +1320,7 @@ function pintarGastosFijos() {
 
   cont.innerHTML = _fijos.length
     ? _fijos.map(filaGastoFijo).join('') +
-      '<div class="campo-ayuda" style="margin-top:6px;text-align:right">' +
+      '<div class="campo-ayuda" id="total-fijos" style="margin-top:6px;text-align:right">' +
         'Todos juntos: <strong>' + plata(totalFijosEditando()) + '</strong> por mes</div>'
     : '<div class="campo-ayuda">Todavía no cargaste ninguno.</div>';
 }
@@ -1349,10 +1349,10 @@ function filaGastoFijo(g, i) {
     '</div>' +
     (apagado
       ? '<div class="fijo-mensual" style="color:var(--muted)">Apagado: no se cuenta en los números</div>'
-      : (g.frecuencia !== 'mensual' && +g.monto
-          ? '<div class="fijo-mensual">' + plata(Math.round(g.monto * FRECUENCIAS[g.frecuencia].alMes)) +
-            ' por mes</div>'
-          : '')) +
+      : '<div class="fijo-mensual" id="eq-fijo-' + i + '">' +
+        ((g.frecuencia !== 'mensual' && +g.monto)
+          ? plata(Math.round(g.monto * FRECUENCIAS[g.frecuencia].alMes)) + ' por mes'
+          : '') + '</div>') +
   '</div>';
 }
 
@@ -1363,11 +1363,26 @@ function totalFijosEditando() {
     }, 0);
 }
 
-/* Sin repintar la fila: se perdería lo que se está escribiendo */
+/* Escribir no repinta nada: si se redibuja la fila, el campo se
+   reemplaza y hay que volver a tocarlo en cada tecla. Solo se
+   actualiza el total, que es un texto aparte. */
 function editarFijo(i, campo, valor) {
   if (!_fijos[i]) return;
   _fijos[i][campo] = campo === 'monto' ? (+valor || 0) : valor;
-  if (campo !== 'nombre') pintarGastosFijos();
+
+  if (campo === 'activo') { pintarGastosFijos(); return; }   // cambia toda la fila
+
+  var tot = porId('total-fijos');
+  if (tot) tot.innerHTML = 'Todos juntos: <strong>' + plata(totalFijosEditando()) + '</strong> por mes';
+
+  /* La equivalencia mensual de esa fila, si la frecuencia no es mensual */
+  var eq = porId('eq-fijo-' + i);
+  if (eq) {
+    var g = _fijos[i];
+    eq.innerHTML = (g.frecuencia !== 'mensual' && +g.monto)
+      ? plata(Math.round(g.monto * FRECUENCIAS[g.frecuencia].alMes)) + ' por mes'
+      : '';
+  }
 }
 
 function agregarGastoFijo() {

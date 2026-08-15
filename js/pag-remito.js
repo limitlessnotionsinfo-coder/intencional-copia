@@ -614,10 +614,52 @@ function ajustarPrecioPorCantidad(f) {
   return true;
 }
 
+/* Al escribir la cantidad se actualiza el precio y el subtotal
+   sin redibujar la fila: si se redibuja, el campo se reemplaza y
+   el teclado se cierra a cada tecla. */
 function cambiarCantidad(i, valor) {
-  R.filas[i].cant = +valor || 0;
-  ajustarPrecioPorCantidad(R.filas[i]);
-  pintarRemito();
+  var f = R.filas[i];
+  f.cant = +valor || 0;
+
+  var cambio = ajustarPrecioPorCantidad(f);
+  if (cambio) {
+    var campo = document.querySelector('#fila-prod-' + i + ' .precio-fila');
+    if (campo && document.activeElement !== campo) campo.value = f.precio;
+  }
+
+  pintarTotales();
+  pintarAvisoMayorista(i);
+}
+
+/* El recuadro del precio mayorista, solo esa parte */
+function pintarAvisoMayorista(i) {
+  var cont = porId('mayor-' + i);
+  if (!cont) return;
+  cont.innerHTML = avisoMayoristaHTML(R.filas[i]);
+}
+
+function avisoMayoristaHTML(f) {
+  if (usaPrecioDeCaja(f)) {
+    var c = cotizar(f.prod, f.cant);
+    return '<div class="aviso-mayorista">' +
+      ic('box', 12) +
+      '<div>' +
+        '<strong>Precio mayorista</strong> desde ' + c.desde + ' unidades.<br>' +
+        'Por unidad pagaría <span class="tachado">' + plata(c.precioUnidad) + '</span> ' +
+        'y paga <strong>' + plata(c.unitario) + '</strong>.<br>' +
+        'En total serían <span class="tachado">' + plata(c.cant * c.precioUnidad) + '</span>, ' +
+        'paga <strong>' + plata(c.total) + '</strong>' +
+        (c.ahorro > 0 ? ' · se ahorra ' + plata(c.ahorro) : '') + '.' +
+      '</div>' +
+    '</div>';
+  }
+
+  /* Cuando falta poco, conviene decirlo: puede cerrar la venta */
+  var q = cotizar(f.prod, f.cant);
+  if (!q.faltan || q.faltan > 4 || !q.cant) return '';
+  return '<div class="campo-ayuda" style="margin:2px 0 0;color:var(--warn)">' +
+    ic('alert', 11) + ' Con ' + plural(q.faltan, 'unidad', 'unidades') + ' más entra el ' +
+    'precio mayorista: ' + plata(q.precioUnidad - q.unitarioMayor) + ' menos por unidad.</div>';
 }
 
 /* El subtotal es siempre cantidad × el precio que se ve en el
@@ -772,40 +814,18 @@ function filaProducto(f, i) {
   var conCaja = usaPrecioDeCaja(f);
   var subtotal = totalFila(f);
 
-  return '<div class="fila-prod">' +
+  return '<div class="fila-prod" id="fila-prod-' + i + '">' +
     '<select class="campo-input prod" aria-label="Producto" onchange="cambiarProducto(' + i + ',this.value)">' + opciones + '</select>' +
     '<input class="campo-input" type="number" min="0" inputmode="numeric" value="' + (+f.cant || 0) + '" ' +
            'aria-label="Cantidad" oninput="cambiarCantidad(' + i + ',this.value)"/>' +
-    '<input class="campo-input" type="number" min="0" inputmode="decimal" value="' + (+f.precio || 0) + '" ' +
+    '<input class="campo-input precio-fila" type="number" min="0" inputmode="decimal" value="' + (+f.precio || 0) + '" ' +
            'aria-label="Precio por unidad" ' +
-      'oninput="R.filas[' + i + '].precio=+this.value||0;R.filas[' + i + '].precioManual=true;pintarTotales()"/>' +
+      'oninput="R.filas[' + i + '].precio=+this.value||0;R.filas[' + i + '].precioManual=true;pintarTotales();pintarAvisoMayorista(' + i + ')"/>' +
     '<div class="subtotal" id="sub-' + i + '">' + plata(subtotal) + '</div>' +
     (R.filas.length > 1
       ? '<button class="btn btn-fantasma" style="padding:4px" aria-label="Quitar producto" onclick="quitarFila(' + i + ')">✕</button>'
       : '<span></span>') +
-    (conCaja
-      ? (function () {
-          var c = cotizar(f.prod, f.cant);
-          return '<div class="aviso-mayorista">' +
-            ic('box', 12) +
-            '<div>' +
-              '<strong>Precio mayorista</strong> desde ' + c.desde + ' unidades.<br>' +
-              'Por unidad pagaría <span class="tachado">' + plata(c.precioUnidad) + '</span> ' +
-              'y paga <strong>' + plata(c.unitario) + '</strong>.<br>' +
-              'En total serían <span class="tachado">' + plata(c.cant * c.precioUnidad) + '</span>, ' +
-              'paga <strong>' + plata(c.total) + '</strong>' +
-              (c.ahorro > 0 ? ' · se ahorra ' + plata(c.ahorro) : '') + '.' +
-            '</div>' +
-          '</div>';
-        })()
-      : (function () {
-          /* Cuando falta poco, conviene decirlo: puede cerrar la venta */
-          var c = cotizar(f.prod, f.cant);
-          if (!c.faltan || c.faltan > 4 || !c.cant) return '';
-          return '<div class="campo-ayuda" style="grid-column:1/-1;margin:2px 0 0;color:var(--warn)">' +
-            ic('alert', 11) + ' Con ' + plural(c.faltan, 'unidad', 'unidades') + ' más entra el ' +
-            'precio mayorista: ' + plata(c.precioUnidad - c.unitarioMayor) + ' menos por unidad.</div>';
-        })()) +
+    '<div id="mayor-' + i + '" style="grid-column:1/-1">' + avisoMayoristaHTML(f) + '</div>' +
   '</div>';
 }
 
@@ -1077,31 +1097,130 @@ async function confirmarRemito() {
    Con el número del remito, esté agendado o no. La imagen ya se
    compartió; acá va el mensaje con el alias y el total.
    ────────────────────────────────────────────────────────── */
-function ofrecerWhatsapp(remito) {
+var _remitoParaEnviar = null;
+
+function ofrecerWhatsapp(remito, blob) {
   var enlace = enlaceWhatsapp(remito.cliente_tel, mensajeCompartir(remito));
   if (!enlace) return;
+  _remitoParaEnviar = { remito: remito, blob: blob, enlace: enlace };
 
-  abrirModal('¿Se lo mandás por WhatsApp?',
-    '<div class="campo-ayuda" style="margin-bottom:10px">' +
-      'Se abre el chat de <strong>' + esc(remito.cliente_nombre) + '</strong> con el mensaje escrito. ' +
-      'Funciona aunque el número no esté agendado.' +
-      '<br>La imagen del remito ya la tenés en el portapapeles del menú de compartir: ' +
-      'pegala en el chat.</div>' +
+  abrirModal('Mandarle el remito',
+    '<div class="aviso aviso-ok" style="margin-bottom:12px">' + ic('phone', 15) +
+      '<div><strong>' + esc(remito.cliente_nombre) + '</strong><br>' +
+      esc(remito.cliente_tel) + '</div></div>' +
 
-    '<div class="aviso aviso-ok">' + ic('phone', 15) +
-      '<div>' + esc(remito.cliente_tel) + '</div></div>',
+    '<div class="campo-ayuda">' +
+      'Se copia el remito y se abre el chat con el mensaje ya escrito. ' +
+      'Ahí solo tenés que mantener apretado y pegar la imagen.' +
+      '<br>Funciona aunque el número no esté agendado.</div>',
 
     '<div style="display:flex;gap:8px;flex-wrap:wrap">' +
-      '<button class="btn btn-primario" style="flex:1;min-width:140px" ' +
-              'onclick="abrirWhatsapp(\'' + esc(enlace).replace(/'/g, "\\'") + '\')">' +
-        ic('phone', 16) + ' Abrir el chat</button>' +
-      '<button class="btn btn-secundario" onclick="cerrarModal()">Ahora no</button>' +
+      '<button class="btn btn-primario btn-bloque" id="btn-wa" onclick="copiarYAbrirChat()">' +
+        ic('phone', 16) + ' Copiar y abrir el chat</button>' +
+      '<button class="btn btn-secundario" style="flex:1;min-width:120px" onclick="soloCompartir()">' +
+        ic('upload', 15) + ' Compartir de otra forma</button>' +
+      '<button class="btn btn-fantasma" onclick="cerrarModal()">Ahora no</button>' +
     '</div>');
 }
 
-function abrirWhatsapp(enlace) {
+/* Todo en el mismo toque: iOS no deja copiar al portapapeles si
+   antes hubo una espera. */
+async function copiarYAbrirChat() {
+  var d = _remitoParaEnviar;
+  if (!d) return;
+
+  var btn = porId('btn-wa');
+  if (btn) btn.textContent = 'Copiando…';
+
+  var copiado = false;
+  try {
+    if (navigator.clipboard && typeof ClipboardItem !== 'undefined') {
+      var blob = d.blob
+        ? Promise.resolve(d.blob)
+        : imagenDelRemito(d.remito).then(function (r) { return r.blob; });
+      await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+      copiado = true;
+    }
+  } catch (e) {
+    console.warn('portapapeles:', e.message);
+  }
+
   cerrarModal();
-  window.open(enlace, '_blank');
+  toast(copiado
+    ? 'Remito copiado · pegalo en el chat'
+    : 'No se pudo copiar la imagen: usá el botón de compartir', copiado ? '' : 'error');
+
+  window.open(d.enlace, '_blank');
+}
+
+/* El menú de compartir del teléfono, por si prefiere ese camino */
+async function soloCompartir() {
+  var d = _remitoParaEnviar;
+  if (!d) return;
+  cerrarModal();
+  try {
+    var img = d.blob
+      ? { archivo: new File([d.blob], 'remito.png', { type: 'image/png' }) }
+      : await imagenDelRemito(d.remito);
+    if (navigator.canShare && navigator.canShare({ files: [img.archivo] })) {
+      await navigator.share({
+        files: [img.archivo],
+        title: 'Remito de ' + d.remito.cliente_nombre,
+        text: mensajeCompartir(d.remito)
+      });
+    } else {
+      var a = document.createElement('a');
+      a.href = URL.createObjectURL(img.archivo);
+      a.download = img.archivo.name;
+      a.click();
+      URL.revokeObjectURL(a.href);
+    }
+  } catch (e) {
+    if (e && e.name !== 'AbortError') toast(e.message, 'error');
+  }
+}
+
+/* La imagen del remito, como archivo listo para compartir */
+async function imagenDelRemito(remito) {
+  var caja = document.createElement('div');
+  caja.style.cssText = 'position:fixed;left:-9999px;top:0;width:520px;background:#fff';
+  caja.innerHTML = remitoParaImagen(remito);
+  document.body.appendChild(caja);
+
+  try {
+    if (typeof html2canvas !== 'function') throw new Error('No se pudo cargar el generador de imágenes');
+    var lienzo = await html2canvas(caja.firstChild, {
+      scale: 3,                 // alta resolución para que se lea en el celular
+      backgroundColor: '#ffffff',
+      useCORS: true,
+      logging: false
+    });
+    var blob = await new Promise(function (r) { lienzo.toBlob(r, 'image/png'); });
+    var nombre = 'remito-' + normalizar(remito.cliente_nombre).replace(/\s+/g, '-') + '-' +
+                 claveFecha(remito.fecha) + '.png';
+    return { blob: blob, nombre: nombre, archivo: new File([blob], nombre, { type: 'image/png' }) };
+  } finally {
+    caja.remove();
+  }
+}
+
+/* ── Copiar la imagen al portapapeles ────────────────────────
+   Hay que hacerlo en el mismo toque del usuario: si se pone un
+   await antes, iOS lo rechaza por seguridad. Por eso se le pasa
+   la promesa del blob, no el blob ya resuelto.
+   ────────────────────────────────────────────────────────── */
+async function copiarImagenRemito(remito) {
+  if (!navigator.clipboard || typeof ClipboardItem === 'undefined') return false;
+  try {
+    var item = new ClipboardItem({
+      'image/png': imagenDelRemito(remito).then(function (r) { return r.blob; })
+    });
+    await navigator.clipboard.write([item]);
+    return true;
+  } catch (e) {
+    console.warn('copiar imagen:', e.message);
+    return false;
+  }
 }
 
 async function compartirRemito(remito) {
@@ -1123,15 +1242,16 @@ async function compartirRemito(remito) {
                  claveFecha(remito.fecha) + '.png';
     var archivo = new File([blob], nombre, { type: 'image/png' });
 
-    if (navigator.canShare && navigator.canShare({ files: [archivo] })) {
+    /* Con teléfono cargado, el camino corto: copiar y abrir el
+       chat. Sin teléfono, el menú de compartir de siempre. */
+    if (enlaceWhatsapp(remito.cliente_tel, '')) {
+      ofrecerWhatsapp(remito, blob);
+    } else if (navigator.canShare && navigator.canShare({ files: [archivo] })) {
       await navigator.share({
         files: [archivo],
         title: 'Remito de ' + remito.cliente_nombre,
         text: mensajeCompartir(remito)
       });
-      /* Compartir manda la imagen, pero el chat hay que elegirlo a
-         mano. Si el remito tiene teléfono, se ofrece abrirlo. */
-      ofrecerWhatsapp(remito);
     } else {
       var a = document.createElement('a');
       a.href = URL.createObjectURL(blob);

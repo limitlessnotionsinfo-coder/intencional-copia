@@ -422,11 +422,15 @@ async function confirmarBorrado() {
 }
 
 /* ── Reenviar: misma imagen que se mandó la primera vez ──── */
-/* Abre el chat del cliente con el mensaje del remito */
-function chatDelRemito() {
-  var enlace = enlaceWhatsapp(_remitoAbierto.cliente_tel, mensajeCompartir(_remitoAbierto));
-  if (!enlace) { toast('Ese remito no tiene un teléfono válido', 'error'); return; }
-  window.open(enlace, '_blank');
+/* Copia el remito y abre el chat, igual que al crearlo */
+async function chatDelRemito() {
+  if (!enlaceWhatsapp(_remitoAbierto.cliente_tel, '')) {
+    toast('Ese remito no tiene un teléfono válido', 'error');
+    return;
+  }
+  var r = _remitoAbierto;
+  cerrarModal();
+  ofrecerWhatsapp(r);
 }
 
 async function reenviarRemito() {

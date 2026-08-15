@@ -628,18 +628,24 @@ body.fondo-quieto{
 @media (max-width:620px){
   .fila{
     display:grid;grid-template-columns:auto minmax(0,1fr) auto;
-    grid-template-areas:"num principal monto" "num pagos pagos";
-    align-items:center;column-gap:9px;row-gap:5px;
+    grid-template-areas:
+      "num principal monto"
+      "num principal accion"
+      "num pagos    pagos";
+    align-items:center;column-gap:9px;row-gap:3px;
   }
   .fila > input[type="checkbox"],.fila > .num-cliente,.fila > .nav-ic{grid-area:num}
   .fila-principal{grid-area:principal;min-width:0}
+
   /* Los hijos de la derecha entran en la grilla como si no
-     estuvieran envueltos: así el monto y las etiquetas se
-     pueden ubicar por separado. */
+     estuvieran envueltos, para poder ubicarlos por separado.
+     Cada tipo tiene su celda: si comparten, se superponen. */
   .fila-derecha{display:contents}
-  .fila-derecha > *{grid-area:monto;text-align:right;justify-self:end}
-  .fila-derecha .pagos{
-    grid-area:pagos;justify-content:flex-start;margin-top:0;
+  .fila-derecha > *{grid-area:accion;text-align:right;justify-self:end}
+  .fila-derecha > .fila-titulo,
+  .fila-derecha > .stat-val{grid-area:monto;text-align:right;justify-self:end}
+  .fila-derecha > .pagos{
+    grid-area:pagos;justify-content:flex-start;margin-top:2px;
     justify-self:stretch;
   }
   .fila-derecha .pin{font-size:9.5px;padding:2px 6px}
