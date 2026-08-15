@@ -2,7 +2,7 @@
    Los archivos de la app se sirven desde la caché primero: así
    abre al instante y funciona sin señal. Se actualizan en
    segundo plano para la próxima vez. */
-const CACHE = 'intencional-v57';
+const CACHE = 'intencional-v59';
 
 const LOCALES = [
   './', './index.html', './css/estilo.css',
@@ -10,7 +10,7 @@ const LOCALES = [
   './js/api.js', './js/dominio.js', './js/router.js', './js/app.js',
   './js/cola.js', './js/push.js', './js/pag-inicio.js', './js/pag-remito.js', './js/pag-hechos.js',
   './js/pag-clientes.js', './js/pag-compras.js', './js/pag-gastos.js',
-  './js/finanzas.js', './js/pag-numeros.js', './js/pag-metricas.js', './js/pag-configuraciones.js',
+  './js/finanzas.js', './js/pag-numeros.js', './js/pag-configuraciones.js',
   './manifest.json', './favicon.ico',
   './iconos/icono-192.png', './iconos/icono-512.png',
   './iconos/apple-touch-icon.png', './iconos/badge-96.png'

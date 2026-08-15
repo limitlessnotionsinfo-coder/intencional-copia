@@ -254,7 +254,8 @@ function cotizar(nombre, cantidad) {
     mayorista: mayorista,
     unitario: unitario,
     desde: p.desde || 0,
-    precioUnidad: p.precio,
+    precioUnidad: p.precio,           // lo que sale de a una
+    unitarioMayor: p.precioMayor || p.precio,
     ahorro: mayorista ? cant * (p.precio - p.precioMayor) : 0,
     faltan: (p.desde && !mayorista) ? p.desde - cant : 0,
     cant: cant
@@ -1858,4 +1859,85 @@ function sugerenciaCRM(f) {
     return 'Compra cada ' + f.ritmo + ' días sin fallar. Es de los que sostienen el negocio.';
   }
   return '';
+}
+
+/* ═══════════════════════════════════════════════════════════
+   CLIENTES QUE QUEDARON SIN VISITAR
+   Cuando se hace una hoja de ruta, los clientes que no tienen
+   ningún remito de ese día quedaron sin atender. Se anotan para
+   avisarlos la próxima vez que toque esa hoja.
+   ═══════════════════════════════════════════════════════════ */
+
+/* Un cliente está "hecho" si tiene cualquier remito de ese día:
+   una venta, un "estaba cerrado" o un "no vendió". */
+function tieneRemitoDelDia(cliente, remitos, iso) {
+  var n = normalizar(cliente.local);
+  return (remitos || []).some(function (r) {
+    if (claveFecha(r.fecha || r.created_at) !== iso) return false;
+    if (r.cliente_num) return String(r.cliente_num) === String(cliente.num);
+    return normalizar(r.cliente_nombre) === n;
+  });
+}
+
+/* Cómo quedó una hoja de ruta en un día: quiénes se atendieron
+   y quiénes no. */
+function balanceDeHoja(ruta, clientes, remitos, iso) {
+  var dia = iso || hoyISO();
+  var suyos = (clientes || []).filter(function (c) {
+    return clienteActivo(c) && String(rutaDe(c)) === String(ruta);
+  });
+
+  var hechos = [], faltan = [];
+  suyos.forEach(function (c) {
+    if (tieneRemitoDelDia(c, remitos, dia)) hechos.push(c);
+    else faltan.push(c);
+  });
+
+  return {
+    ruta: String(ruta), fecha: dia,
+    total: suyos.length, hechos: hechos, faltan: faltan,
+    completa: suyos.length > 0 && faltan.length === 0
+  };
+}
+
+/* ── Lo que quedó pendiente de la última vez ─────────────────
+   Se guarda en config, una entrada por hoja: la fecha y los
+   números de los clientes que no se visitaron.
+   ────────────────────────────────────────────────────────── */
+function pendientesDeRuta() {
+  try {
+    var g = JSON.parse(leerConfig('pendientes_rutas', '{}') || '{}');
+    return (g && typeof g === 'object') ? g : {};
+  } catch (e) { return {}; }
+}
+
+function pendientesDeLaHoja(ruta) {
+  var g = pendientesDeRuta()[String(ruta)];
+  return g && Array.isArray(g.clientes) ? g : null;
+}
+
+async function anotarPendientesDeHoja(ruta, faltan, iso) {
+  var g = pendientesDeRuta();
+  if (!faltan || !faltan.length) delete g[String(ruta)];
+  else {
+    g[String(ruta)] = {
+      fecha: iso || hoyISO(),
+      clientes: faltan.map(function (c) { return c.num; })
+    };
+  }
+  await guardarConfig('pendientes_rutas', JSON.stringify(g));
+  return g;
+}
+
+/* Los clientes que quedaron pendientes la última vez que se hizo
+   esta hoja, resueltos contra la lista actual. */
+function clientesPendientesDeHoja(ruta, clientes) {
+  var g = pendientesDeLaHoja(ruta);
+  if (!g) return [];
+  return g.clientes
+    .map(function (num) {
+      return (clientes || []).find(function (c) { return String(c.num) === String(num); });
+    })
+    .filter(function (c) { return c && clienteActivo(c); })
+    .map(function (c) { return { cliente: c, desde: g.fecha, dias: diasEntre(g.fecha, hoyISO()) }; });
 }

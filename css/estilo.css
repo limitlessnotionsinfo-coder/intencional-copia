@@ -619,13 +619,29 @@ body.fondo-quieto{
 }
 .modal-cuerpo{overscroll-behavior:contain;-webkit-overflow-scrolling:touch}
 
-/* En pantallas chicas, las etiquetas de pago bajan a su propio
-   renglón: así el nombre del cliente siempre se lee entero. */
+/* ── La fila en pantallas chicas ─────────────────────────────
+   Con flex y wrap, una fila con dos etiquetas de pago hacía que
+   el monto se fuera a su propia línea y quedara flotando al
+   medio. Con grilla, cada parte tiene su lugar fijo: el monto
+   siempre arriba a la derecha y las etiquetas abajo.
+   ────────────────────────────────────────────────────────── */
 @media (max-width:620px){
-  .fila{flex-wrap:wrap;row-gap:6px}
-  .fila-principal{flex:1 1 60%;min-width:110px}
-  .fila-derecha{max-width:100%;flex:0 1 auto}
-  .fila-derecha .pagos{margin-top:2px}
+  .fila{
+    display:grid;grid-template-columns:auto minmax(0,1fr) auto;
+    grid-template-areas:"num principal monto" "num pagos pagos";
+    align-items:center;column-gap:9px;row-gap:5px;
+  }
+  .fila > input[type="checkbox"],.fila > .num-cliente,.fila > .nav-ic{grid-area:num}
+  .fila-principal{grid-area:principal;min-width:0}
+  /* Los hijos de la derecha entran en la grilla como si no
+     estuvieran envueltos: así el monto y las etiquetas se
+     pueden ubicar por separado. */
+  .fila-derecha{display:contents}
+  .fila-derecha > *{grid-area:monto;text-align:right;justify-self:end}
+  .fila-derecha .pagos{
+    grid-area:pagos;justify-content:flex-start;margin-top:0;
+    justify-self:stretch;
+  }
   .fila-derecha .pin{font-size:9.5px;padding:2px 6px}
 }
 
@@ -700,3 +716,46 @@ body.con-banda .contenido{padding-bottom:calc(120px + env(safe-area-inset-bottom
 .menu-mas-ic{color:var(--rose);display:flex}
 .menu-mas-txt{font-size:11.5px;font-weight:600;text-align:center;line-height:1.2}
 @media (min-width:861px){ .menu-mas{display:none} }
+
+/* ── Campos de a dos ─────────────────────────────────────────
+   Cuando dos campos van lado a lado, sus etiquetas y sus ayudas
+   pueden tener distinto alto y los inputs quedan desnivelados.
+   Con grilla por filas, cada parte se alinea con su par.
+   ────────────────────────────────────────────────────────── */
+.par-campos{
+  display:grid;grid-template-columns:1fr 1fr;
+  grid-template-rows:auto auto auto;
+  gap:0 10px;margin-bottom:14px;
+}
+.par-campos > *{display:contents}
+.par-campos .campo-etiq{grid-row:1;align-self:end;margin-bottom:5px}
+.par-campos .campo-input{grid-row:2}
+.par-campos .campo-ayuda{grid-row:3;margin-top:4px}
+.par-campos .pc-1 .campo-etiq,.par-campos .pc-1 .campo-input,.par-campos .pc-1 .campo-ayuda{grid-column:1}
+.par-campos .pc-2 .campo-etiq,.par-campos .pc-2 .campo-input,.par-campos .pc-2 .campo-ayuda{grid-column:2}
+
+/* ── Una fila por gasto fijo ─────────────────────────────── */
+.fila-fijo{
+  display:grid;grid-template-columns:1fr 100px 108px auto;
+  gap:6px;align-items:center;margin-bottom:8px;
+}
+.fila-fijo .campo-input{min-height:38px;font-size:14px;padding:7px 9px}
+.fila-fijo .fijo-mensual{
+  grid-column:1/-1;font-size:10.5px;color:var(--ok);margin:-4px 0 2px;
+}
+@media (max-width:620px){
+  .fila-fijo{grid-template-columns:1fr 1fr;gap:6px}
+  .fila-fijo .campo-input:first-child{grid-column:1/-1}
+  .fila-fijo > button{grid-column:2;justify-self:end}
+}
+
+/* ── Aviso de precio mayorista en el remito ──────────────── */
+.aviso-mayorista{
+  grid-column:1/-1;display:flex;gap:7px;align-items:flex-start;
+  margin:4px 0 0;padding:8px 10px;border-radius:9px;
+  background:var(--ok-bg);border:1px solid var(--ok-border);
+  color:var(--ok);font-size:11.5px;line-height:1.45;
+}
+.aviso-mayorista svg{flex:0 0 auto;margin-top:1px}
+.aviso-mayorista .tachado{text-decoration:line-through;opacity:.65}
+.fila-fijo.apagado .campo-input{opacity:.5}

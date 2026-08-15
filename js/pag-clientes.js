@@ -177,10 +177,10 @@ function nuevoCliente(rutaFija) {
       '<input class="campo-input" id="nc-loc" placeholder="Ciudad o partido"/></div>' +
     '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">' +
       '<div class="campo"><div class="campo-etiq">Hoja de ruta</div>' +
-        '<input class="campo-input" id="nc-ruta" type="number" min="0" placeholder="Ej: 14" ' +
+        '<input class="campo-input" id="nc-ruta" type="number" inputmode="numeric" min="0" placeholder="Ej: 14" ' +
                'value="' + esc(rutaFija || '') + '"/></div>' +
       '<div class="campo"><div class="campo-etiq">Exhibidores</div>' +
-        '<input class="campo-input" id="nc-exhib" type="number" min="0" value="1"/></div>' +
+        '<input class="campo-input" id="nc-exhib" type="number" inputmode="numeric" min="0" value="1"/></div>' +
     '</div>' +
     '<div class="campo"><div class="campo-etiq">Teléfono</div>' +
       '<input class="campo-input" id="nc-tel" inputmode="tel" placeholder="11-1234-5678"/></div>' +
@@ -298,12 +298,12 @@ function editarHoja(ruta) {
           '<a href="#/configuraciones">Configuraciones</a>.', 'map')) +
 
     '<div class="campo"><div class="campo-etiq">Número de la hoja</div>' +
-      '<input class="campo-input" id="eh-numero" type="number" min="0" value="' + esc(ruta) + '"/>' +
+      '<input class="campo-input" id="eh-numero" type="number" inputmode="numeric" min="0" value="' + esc(ruta) + '"/>' +
       '<div class="campo-ayuda">Si lo cambiás, los ' + plural(g.length, 'cliente') + ' pasan a la hoja nueva.</div>' +
     '</div>' +
 
     '<div class="campo"><div class="campo-etiq">Exhibidores para todos</div>' +
-      '<input class="campo-input" id="eh-exhib" type="number" min="0" placeholder="dejar como está"/>' +
+      '<input class="campo-input" id="eh-exhib" type="number" inputmode="numeric" min="0" placeholder="dejar como está"/>' +
       '<div class="campo-ayuda">Solo si querés ponerles a todos el mismo número.</div>' +
     '</div>' +
 
@@ -429,12 +429,12 @@ function cuerpoFicha(c) {
     '<div class="campo-etiq" style="margin-top:6px">Hoja de ruta</div>' +
     '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px">' +
       '<div class="campo" style="margin:0"><div class="campo-etiq">Ruta</div>' +
-        '<input class="campo-input" id="fc-ruta" type="number" min="0" value="' + esc(FC.ruta) + '" ' +
+        '<input class="campo-input" id="fc-ruta" type="number" inputmode="numeric" min="0" value="' + esc(FC.ruta) + '" ' +
                'oninput="FC.ruta=this.value;refrescarProxima()"/></div>' +
       '<div class="campo" style="margin:0"><div class="campo-etiq">Exhibidores</div>' +
-        '<input class="campo-input" id="fc-exhib" type="number" min="0" value="' + (+c.exhibidores || 0) + '"/></div>' +
+        '<input class="campo-input" id="fc-exhib" type="number" inputmode="numeric" min="0" value="' + (+c.exhibidores || 0) + '"/></div>' +
       '<div class="campo" style="margin:0"><div class="campo-etiq">Avisar antes</div>' +
-        '<input class="campo-input" id="fc-avisar" type="number" min="0" value="' + (+c.avisar_antes || 0) + '"/></div>' +
+        '<input class="campo-input" id="fc-avisar" type="number" inputmode="numeric" min="0" value="' + (+c.avisar_antes || 0) + '"/></div>' +
     '</div>' +
     '<div class="campo-ayuda" id="fc-proxima" style="margin-bottom:12px">' + textoProxima(proxima) + '</div>' +
 
@@ -713,7 +713,7 @@ function moverClientes(ruta) {
 
   abrirModal('Mover clientes de la hoja ' + ruta,
     '<div class="campo"><div class="campo-etiq">¿A qué hoja pasan?</div>' +
-      '<input class="campo-input" id="mc-destino" type="number" min="0" placeholder="Número de la hoja"/>' +
+      '<input class="campo-input" id="mc-destino" type="number" inputmode="numeric" min="0" placeholder="Número de la hoja"/>' +
       '<div class="campo-ayuda">Dejalo vacío para sacarlos de toda hoja de ruta.</div>' +
     '</div>' +
 
@@ -871,7 +871,7 @@ function abrirCalendarioRutas() {
 
     '<div class="campo" style="margin-top:12px"><div class="campo-etiq">Agregar una hoja</div>' +
       '<div style="display:flex;gap:8px">' +
-        '<input class="campo-input" id="cal-nueva" type="number" min="0" placeholder="Número"/>' +
+        '<input class="campo-input" id="cal-nueva" type="number" inputmode="numeric" min="0" placeholder="Número"/>' +
         '<button class="btn btn-secundario" onclick="agregarAlCalendario()">' + ic('plus', 15) + '</button>' +
       '</div></div>',
 

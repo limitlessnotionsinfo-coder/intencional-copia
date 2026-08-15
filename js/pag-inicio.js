@@ -104,6 +104,19 @@ function bloqueRuta(clientes, pendientes) {
         : 'Fin de semana: las rutas siguen el lunes.', 'calendar');
   }
 
+  /* Lo que quedó pendiente la última vez que se hizo esta hoja */
+  var pend = clientesPendientesDeHoja(hoy || (man.ruta || ''), clientes);
+  if (pend.length) {
+    html += '<div class="aviso aviso-warn" style="align-items:flex-start;margin-bottom:10px">' +
+      ic('alert', 15) +
+      '<div><strong>' + plural(pend.length, 'cliente') + ' sin visitar la vez pasada</strong>' +
+      '<br>' + esc(pend.slice(0, 3).map(function (x) { return x.cliente.local; }).join(', ')) +
+      (pend.length > 3 ? ' y ' + (pend.length - 3) + ' más' : '') +
+      ' · hace ' + plural(pend[0].dias, 'día') +
+      '<br><button class="btn btn-fantasma" style="padding:2px 0;text-decoration:underline;font-size:12.5px" ' +
+        'onclick="verPendientesDeHoja(\'' + esc(hoy || man.ruta || '') + '\')">Ver cuáles</button></div></div>';
+  }
+
   html += '<div class="rutas-mini">' +
       '<div class="ruta-mini">' +
         '<span class="rm-etiq">' + ic('truck', 13) + ' Hoy</span>' +
@@ -207,7 +220,57 @@ async function aplicarCola(nueva, mensaje) {
   } catch (e) { toast(e.message, 'error'); }
 }
 
-function rutaHecha()   { aplicarCola(colaAvanzada(), 'Ruta marcada como hecha'); }
+/* Antes de cerrar la hoja se mira quién quedó sin visitar: si
+   falta alguien, se pregunta en vez de perder el dato. */
+function rutaHecha() {
+  var hoy = rutaDelDia();
+  if (!hoy) { aplicarCola(colaAvanzada(), 'Ruta marcada como hecha'); return; }
+
+  var b = balanceDeHoja(hoy, _clientesInicio, _remitosInicio, hoyISO());
+  if (!b.faltan.length) {
+    cerrarHoja(hoy, []);
+    return;
+  }
+
+  abrirModal('Ruta ' + hoy + ' · faltan ' + plural(b.faltan.length, 'cliente'),
+    '<div class="campo-ayuda" style="margin-bottom:10px">' +
+      'Se atendieron ' + b.hechos.length + ' de ' + b.total + '. Estos no tienen ningún remito de hoy, ' +
+      'ni siquiera “estaba cerrado”.</div>' +
+
+    '<div class="lista">' +
+      b.faltan.map(function (c) {
+        return '<div class="fila" style="cursor:default">' +
+          '<span class="num-cliente">' + esc(c.num_str || c.num) + '</span>' +
+          '<div class="fila-principal">' +
+            '<div class="fila-titulo">' + esc(c.local) + '</div>' +
+            '<div class="fila-sub">' + esc([c.dir, c.loc].filter(Boolean).join(' · ')) + '</div>' +
+          '</div>' +
+        '</div>';
+      }).join('') +
+    '</div>' +
+
+    '<div class="campo-ayuda" style="margin-top:10px">' +
+      'Si los dejás pendientes, te los recuerdo la próxima vez que toque esta hoja.</div>',
+
+    '<div style="display:flex;gap:8px;flex-wrap:wrap">' +
+      '<button class="btn btn-primario" style="flex:1;min-width:120px" ' +
+              'onclick="cerrarHoja(\'' + esc(hoy) + '\', true)">Dejarlos pendientes</button>' +
+      '<button class="btn btn-secundario" onclick="cerrarHoja(\'' + esc(hoy) + '\', false)">' +
+        'No hacía falta ir</button>' +
+    '</div>');
+}
+
+async function cerrarHoja(ruta, dejarPendientes) {
+  try {
+    var b = balanceDeHoja(ruta, _clientesInicio, _remitosInicio, hoyISO());
+    await anotarPendientesDeHoja(ruta, dejarPendientes ? b.faltan : [], hoyISO());
+    cerrarModal();
+    aplicarCola(colaAvanzada(),
+      dejarPendientes && b.faltan.length
+        ? plural(b.faltan.length, 'cliente') + ' anotados para la próxima'
+        : 'Ruta marcada como hecha');
+  } catch (e) { toast(e.message, 'error'); }
+}
 function rutaNoSalio() { aplicarCola(colaAtrasada(), 'Todo corrió un día hábil'); }
 function adelantar(r)  { aplicarCola(colaConAdelanto(r), 'Ruta ' + r + ' pasa a ser la próxima'); }
 
@@ -912,9 +975,9 @@ function altaDesdeRemito() {
     '</div>' +
     '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">' +
       '<div class="campo"><div class="campo-etiq">Hoja de ruta</div>' +
-        '<input class="campo-input" id="ar-ruta" type="number" min="0" placeholder="Ej: 14"/></div>' +
+        '<input class="campo-input" id="ar-ruta" type="number" inputmode="numeric" min="0" placeholder="Ej: 14"/></div>' +
       '<div class="campo"><div class="campo-etiq">Exhibidores</div>' +
-        '<input class="campo-input" id="ar-exhib" type="number" min="0" value="1"/></div>' +
+        '<input class="campo-input" id="ar-exhib" type="number" inputmode="numeric" min="0" value="1"/></div>' +
     '</div>',
 
     '<button class="btn btn-primario btn-bloque" id="btn-ar" onclick="confirmarAltaDesdeRemito()">' +
@@ -979,6 +1042,42 @@ async function confirmarVinculo(num) {
     invalidarCache('remitos');
     cerrarModal();
     toast('Vinculado a ' + c.local);
+    pintarRuta();
+  } catch (e) { toast(e.message, 'error'); }
+}
+
+
+/* ── Los que quedaron sin visitar ────────────────────────── */
+function verPendientesDeHoja(ruta) {
+  var pend = clientesPendientesDeHoja(ruta, _clientesInicio);
+  if (!pend.length) { toast('No quedó nadie pendiente'); return; }
+
+  abrirModal('Sin visitar en la hoja ' + ruta,
+    '<div class="campo-ayuda" style="margin-bottom:10px">' +
+      'De la última vez que se hizo esta hoja, hace ' + plural(pend[0].dias, 'día') + '.</div>' +
+    '<div class="lista">' +
+      pend.map(function (x) {
+        return '<button class="fila" onclick="cerrarModal();irA(\'remito\',\'cliente=' +
+          esc(x.cliente.num) + '\')">' +
+          '<span class="num-cliente">' + esc(x.cliente.num_str || x.cliente.num) + '</span>' +
+          '<div class="fila-principal">' +
+            '<div class="fila-titulo">' + esc(x.cliente.local) + '</div>' +
+            '<div class="fila-sub">' + esc([x.cliente.dir, x.cliente.loc].filter(Boolean).join(' · ')) + '</div>' +
+          '</div>' +
+          '<div class="fila-derecha"><div class="campo-ayuda">hacerle el remito →</div></div>' +
+        '</button>';
+      }).join('') +
+    '</div>',
+
+    '<button class="btn btn-secundario btn-bloque" onclick="limpiarPendientesDeHoja(\'' + esc(ruta) + '\')">' +
+      'Ya no hacen falta, borrarlos</button>');
+}
+
+async function limpiarPendientesDeHoja(ruta) {
+  try {
+    await anotarPendientesDeHoja(ruta, [], hoyISO());
+    cerrarModal();
+    toast('Listo');
     pintarRuta();
   } catch (e) { toast(e.message, 'error'); }
 }

@@ -14,11 +14,67 @@
    ────────────────────────────────────────────────────────── */
 var CATEGORIAS_FIJAS = ['empleado', 'alquiler', 'servicios', 'impuestos', 'seguros', 'contador', 'software'];
 
+/* ── Los gastos fijos cargados a mano ────────────────────────
+   Formato en config: "nombre|monto|frecuencia; ..."
+   La frecuencia puede ser semanal, mensual o anual, y todo se
+   lleva a un valor mensual para poder compararlo.
+   ────────────────────────────────────────────────────────── */
+var FRECUENCIAS = {
+  semanal:  { etiqueta: 'Por semana', alMes: 4.33 },
+  mensual:  { etiqueta: 'Por mes',    alMes: 1 },
+  bimestral:{ etiqueta: 'Cada 2 meses', alMes: 0.5 },
+  anual:    { etiqueta: 'Por año',    alMes: 1 / 12 }
+};
+
+/* nombre|monto|frecuencia|activo  ·  el activo permite apagar
+   un gasto sin borrarlo, para cuando deja de pagarse un tiempo. */
+function gastosFijosConfig(incluirApagados) {
+  return String(leerConfig('gastos_fijos', '')).split(';')
+    .map(function (t) { return t.trim(); }).filter(Boolean)
+    .map(function (t) {
+      var p = t.split('|');
+      var frec = (p[2] || 'mensual').trim();
+      return {
+        nombre: (p[0] || '').trim(),
+        monto: +p[1] || 0,
+        frecuencia: FRECUENCIAS[frec] ? frec : 'mensual',
+        activo: p[3] === undefined ? true : p[3].trim() !== 'no'
+      };
+    })
+    .filter(function (g) { return g.nombre && (incluirApagados || g.activo); });
+}
+
+function guardarGastosFijosConfig(lista) {
+  return guardarConfig('gastos_fijos', (lista || [])
+    .filter(function (g) { return String(g.nombre || '').trim(); })
+    .map(function (g) {
+      return String(g.nombre).trim() + '|' + (+g.monto || 0) + '|' +
+        (g.frecuencia || 'mensual') + '|' + (g.activo === false ? 'no' : 'si');
+    }).join('; '));
+}
+
+/* Lo que suman todos los fijos en un mes */
+function fijosMensuales() {
+  return gastosFijosConfig().reduce(function (a, g) {
+    return a + Math.round(g.monto * FRECUENCIAS[g.frecuencia].alMes);
+  }, 0);
+}
+
+/* Lo que corresponde a un período de tantos días */
+function fijosDelPeriodo(dias) {
+  return Math.round(fijosMensuales() / 30 * (dias || 30));
+}
+
+/* Un gasto anotado es fijo si su categoría lo es, o si su
+   descripción coincide con uno de los fijos configurados. */
 function esGastoFijo(g) {
-  var extra = String(leerConfig('categorias_fijas', '')).split(',')
-    .map(function (x) { return normalizar(x); }).filter(Boolean);
   var cat = normalizar(g.categoria || 'otro');
-  return CATEGORIAS_FIJAS.indexOf(cat) !== -1 || extra.indexOf(cat) !== -1;
+  if (CATEGORIAS_FIJAS.indexOf(cat) !== -1) return true;
+
+  var d = normalizar(g.descripcion);
+  return gastosFijosConfig().some(function (f) {
+    return d && d.indexOf(normalizar(f.nombre)) !== -1;
+  });
 }
 
 /* ── El período ──────────────────────────────────────────── */
@@ -131,6 +187,27 @@ function egresos(gastos, compras, r) {
     porCategoria[c] = (porCategoria[c] || 0) + m;
   });
 
+  /* A los fijos anotados se les suman los configurados que no
+     aparecen anotados en el período: el alquiler existe aunque
+     nadie lo haya cargado como gasto. */
+  var anotados = {};
+  delRango.forEach(function (g) {
+    if (esGastoFijo(g)) anotados[normalizar(g.descripcion)] = true;
+  });
+
+  var estimados = [];
+  gastosFijosConfig().forEach(function (f) {
+    var yaEsta = Object.keys(anotados).some(function (d) {
+      return d.indexOf(normalizar(f.nombre)) !== -1;
+    });
+    if (yaEsta) return;
+    var monto = Math.round(f.monto * FRECUENCIAS[f.frecuencia].alMes / 30 * r.dias);
+    if (monto > 0) {
+      fijos += monto;
+      estimados.push({ nombre: f.nombre, monto: monto });
+    }
+  });
+
   var reposicion = (compras || []).filter(function (c) { return enRangoFecha(c, r); })
     .reduce(function (a, c) { return a + (+c.total_costo || 0); }, 0);
   var unidadesRepuestas = (compras || []).filter(function (c) { return enRangoFecha(c, r); })
@@ -141,6 +218,8 @@ function egresos(gastos, compras, r) {
     variables: variables,
     total: fijos + variables,
     porCategoria: porCategoria,
+    /* Los que se contaron sin estar anotados, para poder decirlo */
+    fijosEstimados: estimados,
     reposicion: reposicion,
     unidadesRepuestas: unidadesRepuestas,
     gastos: delRango

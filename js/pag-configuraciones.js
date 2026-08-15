@@ -12,6 +12,7 @@ registrarPagina({
 
   async montar(cont) {
     _prods = null;
+    _fijos = null;
     _subPush = await suscripcionActual();
     _filaPush = _subPush ? await filaDeEsteTelefono() : null;
     _avisosTel = _subPush ? leerAvisos(_filaPush) : null;
@@ -22,18 +23,27 @@ registrarPagina({
     cont.innerHTML =
       /* Cuatro grupos en vez de diez tarjetas sueltas: se entra a
          uno y adentro está todo lo de ese tema. */
-      grupoConfig('negocio', 'Precios y productos', 'tag',
+      /* Ordenadas por con qué frecuencia se tocan: arriba lo que
+         se cambia seguido, abajo lo que se configura una vez. */
+      grupoConfig('vender', 'Lo que vendo', 'tag',
+        'Precios, productos y el aviso de aumento',
         tarjetaProductos() + tarjetaAumento()) +
 
-      grupoConfig('plata', 'Cobranzas y gastos', 'wallet',
-        tarjetaAlias() + tarjetaEmpleado() + tarjetaFinanzas() + tarjetaMensaje()) +
+      grupoConfig('cobrar', 'Cómo cobro', 'cash',
+        'Alias, plazos y el mensaje que se manda con el remito',
+        tarjetaAlias() + tarjetaMensaje()) +
 
-      /* El orden de las rutas vive en Clientes, donde se arrastra */
-      grupoConfig('rutas', 'Feriados', 'calendar', tarjetaFeriados()) +
+      grupoConfig('costos', 'Lo que me cuesta', 'wallet',
+        'Sueldos, gastos fijos y objetivos del negocio',
+        tarjetaEmpleado() + tarjetaFinanzas()) +
+
+      grupoConfig('avisos', 'Recordatorios', 'megaphone',
+        'Qué te avisa la app y cuándo',
+        tarjetaNotificaciones() + tarjetaAvisos() + tarjetaFeriados()) +
 
       grupoConfig('app', 'La app', 'settings',
-        tarjetaNotificaciones() + tarjetaAvisos() + tarjetaTema() +
-        tarjetaImportar() + tarjetaMantenimiento()) +
+        'Apariencia, importar y exportar, datos',
+        tarjetaTema() + tarjetaImportar() + tarjetaMantenimiento()) +
 
       (MOSTRAR_AVANZADO ? tarjetaConexion() : botonAvanzado());
 
@@ -42,7 +52,7 @@ registrarPagina({
     $$('.grupo-config').forEach(function (g) {
       g.addEventListener('toggle', function () {
         if (!g.open) return;
-        previewAviso(); previewMensaje(); previewDeuda();
+        previewAviso(); previewMensaje(); previewDeuda(); pintarGastosFijos();
         ['cfg-alias', 'cfg-tel', 'cfg-horas'].forEach(function (id) {
           var el = porId(id); if (el) el.oninput = previewDeuda;
         });
@@ -74,9 +84,9 @@ function tarjetaAumento() {
 
       '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">' +
         '<div class="campo"><div class="campo-etiq">Precio actual</div>' +
-          '<input class="campo-input" id="cfg-viejo" type="number" min="0" value="' + (cfg.viejo || '') + '" oninput="previewAviso()"/></div>' +
+          '<input class="campo-input" id="cfg-viejo" type="number" inputmode="numeric" min="0" value="' + (cfg.viejo || '') + '" oninput="previewAviso()"/></div>' +
         '<div class="campo"><div class="campo-etiq">Precio nuevo</div>' +
-          '<input class="campo-input" id="cfg-nuevo" type="number" min="0" value="' + (cfg.nuevo || '') + '" oninput="previewAviso()"/></div>' +
+          '<input class="campo-input" id="cfg-nuevo" type="number" inputmode="numeric" min="0" value="' + (cfg.nuevo || '') + '" oninput="previewAviso()"/></div>' +
       '</div>' +
 
       '<div id="preview-aviso"></div>' +
@@ -113,9 +123,15 @@ async function guardarAumento() {
 }
 
 /* Un grupo: encabezado y adentro las tarjetas del tema */
-function grupoConfig(id, titulo, icono, contenido) {
+function grupoConfig(id, titulo, icono, ayuda, contenido) {
   return '<details class="tarjeta grupo-config" id="gc-' + id + '">' +
-    '<summary class="tarjeta-cab" style="cursor:pointer">' + ic(icono, 16) + ' ' + esc(titulo) + '</summary>' +
+    '<summary class="tarjeta-cab" style="cursor:pointer;align-items:flex-start">' +
+      '<span style="margin-top:1px">' + ic(icono, 16) + '</span>' +
+      '<span style="flex:1;min-width:0">' + esc(titulo) +
+        '<span class="campo-ayuda" style="display:block;margin:1px 0 0;font-weight:400">' +
+          esc(ayuda) + '</span>' +
+      '</span>' +
+    '</summary>' +
     '<div class="tarjeta-cuerpo" style="padding:10px">' + contenido + '</div>' +
   '</details>';
 }
@@ -232,7 +248,7 @@ function tarjetaAlias() {
       '<div class="campo"><div class="campo-etiq">Teléfono para comprobantes</div>' +
         '<input class="campo-input" id="cfg-tel" value="' + esc(leerConfig('tel_comprobantes', '11-7904-7745')) + '"/></div>' +
       '<div class="campo" style="margin:0"><div class="campo-etiq">Plazo de pago (horas)</div>' +
-        '<input class="campo-input" id="cfg-horas" type="number" min="1" value="' + esc(leerConfig('horas_pago', '72')) + '"/></div>' +
+        '<input class="campo-input" id="cfg-horas" type="number" inputmode="numeric" min="1" value="' + esc(leerConfig('horas_pago', '72')) + '"/></div>' +
       '<div class="campo-ayuda" style="margin-top:10px">Así queda el aviso en el remito con deuda:</div>' +
       '<div class="aviso aviso-warn" id="preview-deuda" style="margin-top:6px"></div>' +
       '<button class="btn btn-primario btn-bloque" onclick="guardarAlias()">Guardar</button>' +
@@ -1226,7 +1242,7 @@ function tarjetaFinanzas() {
 
       '<div class="campo"><div class="campo-etiq">Reserva de seguridad</div>' +
         '<div style="display:flex;align-items:center;gap:8px">' +
-          '<input class="campo-input" id="cfg-reserva" type="number" min="0" max="100" ' +
+          '<input class="campo-input" id="cfg-reserva" type="number" inputmode="numeric" min="0" max="100" ' +
                  'style="max-width:100px" value="' + esc(leerConfig('reserva_seguridad', '15')) + '"/>' +
           '<span style="font-size:13px;color:var(--muted)">% de los gastos del mes</span>' +
         '</div>' +
@@ -1234,29 +1250,35 @@ function tarjetaFinanzas() {
           'Es el colchón para un mes flojo.</div>' +
       '</div>' +
 
-      '<div class="campo"><div class="campo-etiq">Categorías de gasto fijo</div>' +
-        '<input class="campo-input" id="cfg-fijas" value="' + esc(leerConfig('categorias_fijas', '')) + '" ' +
-               'placeholder="alquiler, servicios, contador"/>' +
-        '<div class="campo-ayuda">Separadas por coma. Ya cuentan como fijas: ' +
-          esc(CATEGORIAS_FIJAS.join(', ')) + '. ' +
-          'Un gasto fijo se paga haya o no ventas, y es lo que define el punto de equilibrio.</div>' +
-      '</div>' +
+      '<div class="campo-etiq">Gastos fijos</div>' +
+      '<div class="campo-ayuda" style="margin-bottom:8px">' +
+        'Lo que se paga haya o no ventas. Es lo que define el punto de equilibrio. ' +
+        'Si además lo cargás en Gastos, no se cuenta dos veces.</div>' +
+      '<div id="lista-fijos"></div>' +
+      '<button class="btn btn-secundario btn-bloque" style="margin:8px 0 16px" onclick="agregarGastoFijo()">' +
+        ic('plus', 15) + ' Agregar un gasto fijo</button>' +
 
       '<div class="campo"><div class="campo-etiq">Semanas para las proyecciones</div>' +
-        '<input class="campo-input" id="cfg-semanas" type="number" min="3" max="26" ' +
+        '<input class="campo-input" id="cfg-semanas" type="number" inputmode="numeric" min="3" max="26" ' +
                'style="max-width:100px" value="' + esc(leerConfig('semanas_proyeccion', '8')) + '"/>' +
         '<div class="campo-ayuda">Cuántas semanas se promedian. Más semanas, estimación más ' +
           'estable pero menos sensible a un cambio reciente.</div>' +
       '</div>' +
 
-      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">' +
-        '<div class="campo"><div class="campo-etiq">Objetivo de facturación</div>' +
+      /* Los dos objetivos, con las etiquetas y las ayudas
+         alineadas entre sí aunque midan distinto. */
+      '<div class="par-campos">' +
+        '<div class="pc-1">' +
+          '<div class="campo-etiq">Facturación mensual</div>' +
           inputMonto('cfg-obj-facturacion', leerConfig('objetivo_facturacion', '') || '') +
-          '<div class="campo-ayuda">Por mes</div></div>' +
-        '<div class="campo"><div class="campo-etiq">Objetivo de margen</div>' +
-          '<input class="campo-input" id="cfg-obj-margen" type="number" min="0" max="100" ' +
-                 'value="' + esc(leerConfig('objetivo_margen', '')) + '"/>' +
-          '<div class="campo-ayuda">En porcentaje</div></div>' +
+          '<div class="campo-ayuda">Cuánto querés facturar por mes</div>' +
+        '</div>' +
+        '<div class="pc-2">' +
+          '<div class="campo-etiq">Margen</div>' +
+          '<input class="campo-input" id="cfg-obj-margen" type="number" inputmode="numeric" ' +
+                 'min="0" max="100" value="' + esc(leerConfig('objetivo_margen', '')) + '"/>' +
+          '<div class="campo-ayuda">En porcentaje sobre lo facturado</div>' +
+        '</div>' +
       '</div>' +
 
       '<button class="btn btn-primario btn-bloque" onclick="guardarFinanzas()">Guardar</button>' +
@@ -1268,7 +1290,7 @@ async function guardarFinanzas() {
   try {
     await guardarConfig('reserva_seguridad',
       String(Math.max(0, Math.min(100, +porId('cfg-reserva').value || 0))));
-    await guardarConfig('categorias_fijas', (porId('cfg-fijas').value || '').trim());
+    await guardarGastosFijosConfig(_fijos);
     await guardarConfig('semanas_proyeccion',
       String(Math.max(3, Math.min(26, +porId('cfg-semanas').value || 8))));
     await guardarConfig('objetivo_facturacion', String(leerMonto('cfg-obj-facturacion') || ''));
@@ -1276,4 +1298,79 @@ async function guardarFinanzas() {
     toast('Guardado');
     pintarRuta();
   } catch (e) { toast(e.message, 'error'); }
+}
+
+
+/* ═══════════════════════════════════════════════════════════
+   GASTOS FIJOS
+   Una fila por gasto: nombre, monto y cada cuánto se paga.
+   ═══════════════════════════════════════════════════════════ */
+var _fijos = null;
+
+function pintarGastosFijos() {
+  var cont = porId('lista-fijos');
+  if (!cont) return;
+  if (!_fijos) _fijos = gastosFijosConfig(true);
+
+  cont.innerHTML = _fijos.length
+    ? _fijos.map(filaGastoFijo).join('') +
+      '<div class="campo-ayuda" style="margin-top:6px;text-align:right">' +
+        'Todos juntos: <strong>' + plata(totalFijosEditando()) + '</strong> por mes</div>'
+    : '<div class="campo-ayuda">Todavía no cargaste ninguno.</div>';
+}
+
+function filaGastoFijo(g, i) {
+  var apagado = g.activo === false;
+  return '<div class="fila-fijo' + (apagado ? ' apagado' : '') + '">' +
+    '<input class="campo-input" value="' + esc(g.nombre) + '" placeholder="Alquiler" ' +
+           'aria-label="Nombre del gasto" oninput="editarFijo(' + i + ',\'nombre\',this.value)"/>' +
+    inputMonto('fijo-' + i, g.monto, 'editarFijo(' + i + ',\'monto\',leerMonto(this))') +
+    '<select class="campo-input" aria-label="Cada cuánto" ' +
+            'onchange="editarFijo(' + i + ',\'frecuencia\',this.value)">' +
+      Object.keys(FRECUENCIAS).map(function (k) {
+        return '<option value="' + k + '"' + (g.frecuencia === k ? ' selected' : '') + '>' +
+          esc(FRECUENCIAS[k].etiqueta) + '</option>';
+      }).join('') +
+    '</select>' +
+    '<div style="display:flex;gap:2px">' +
+      '<button class="btn btn-fantasma" style="padding:4px 6px" ' +
+              'aria-label="' + (apagado ? 'Volver a contarlo' : 'Dejar de contarlo') + '" ' +
+              'title="' + (apagado ? 'Volver a contarlo' : 'Dejar de contarlo') + '" ' +
+              'onclick="editarFijo(' + i + ',\'activo\',' + (apagado ? 'true' : 'false') + ')">' +
+        ic(apagado ? 'undo' : 'ban', 15) + '</button>' +
+      '<button class="btn btn-fantasma" style="padding:4px 6px" aria-label="Borrar" ' +
+              'onclick="quitarGastoFijo(' + i + ')">' + ic('trash', 15) + '</button>' +
+    '</div>' +
+    (apagado
+      ? '<div class="fijo-mensual" style="color:var(--muted)">Apagado: no se cuenta en los números</div>'
+      : (g.frecuencia !== 'mensual' && +g.monto
+          ? '<div class="fijo-mensual">' + plata(Math.round(g.monto * FRECUENCIAS[g.frecuencia].alMes)) +
+            ' por mes</div>'
+          : '')) +
+  '</div>';
+}
+
+function totalFijosEditando() {
+  return (_fijos || []).filter(function (g) { return g.activo !== false; })
+    .reduce(function (a, g) {
+      return a + Math.round((+g.monto || 0) * FRECUENCIAS[g.frecuencia || 'mensual'].alMes);
+    }, 0);
+}
+
+/* Sin repintar la fila: se perdería lo que se está escribiendo */
+function editarFijo(i, campo, valor) {
+  if (!_fijos[i]) return;
+  _fijos[i][campo] = campo === 'monto' ? (+valor || 0) : valor;
+  if (campo !== 'nombre') pintarGastosFijos();
+}
+
+function agregarGastoFijo() {
+  if (!_fijos) _fijos = gastosFijosConfig(true);
+  _fijos.push({ nombre: '', monto: 0, frecuencia: 'mensual', activo: true });
+  pintarGastosFijos();
+}
+
+function quitarGastoFijo(i) {
+  _fijos.splice(i, 1);
+  pintarGastosFijos();
 }

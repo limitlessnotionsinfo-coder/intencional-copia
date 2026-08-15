@@ -428,7 +428,7 @@ function guardarComoCliente() {
     '</div>' +
     '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">' +
       '<div class="campo"><div class="campo-etiq">Hoja de ruta</div>' +
-        '<input class="campo-input" id="gc-ruta" type="number" min="0" placeholder="Ej: 14"/></div>' +
+        '<input class="campo-input" id="gc-ruta" type="number" inputmode="numeric" min="0" placeholder="Ej: 14"/></div>' +
       '<div class="campo"><div class="campo-etiq">Rubro</div>' +
         '<select class="campo-input" id="gc-rubro">' +
           RUBROS.map(function (r) { return '<option>' + esc(r) + '</option>'; }).join('') +
@@ -586,12 +586,37 @@ function precioInicial() {
 /* El precio mayorista solo se aplica si el renglón tiene el
    precio de lista. Si se escribió otro a mano, o si es el precio
    nuevo por el aumento, manda ese. */
+/* El precio mayorista se aplica salvo que el precio se haya
+   escrito a mano o venga del aumento. */
 function usaPrecioDeCaja(f) {
   var p = buscarProducto(f.prod);
   if (!p || !p.desde || !p.precioMayor) return false;
   if ((+f.cant || 0) < p.desde) return false;
   if (f.precioManual) return false;
-  return (+f.precio || 0) === p.precio;
+  return (+f.precio || 0) === p.precio || (+f.precio || 0) === p.precioMayor;
+}
+
+/* Al cruzar el umbral el precio del renglón cambia solo, y al
+   bajar de él vuelve al de unidad. */
+function ajustarPrecioPorCantidad(f) {
+  var p = buscarProducto(f.prod);
+  if (!p || !p.desde || !p.precioMayor || f.precioManual) return false;
+
+  var deberia = (+f.cant || 0) >= p.desde ? p.precioMayor : p.precio;
+  if ((+f.precio || 0) === deberia) return false;
+
+  /* Solo se toca si el precio actual es uno de los dos de lista:
+     un precio puesto a mano no se pisa. */
+  if ((+f.precio || 0) !== p.precio && (+f.precio || 0) !== p.precioMayor) return false;
+
+  f.precio = deberia;
+  return true;
+}
+
+function cambiarCantidad(i, valor) {
+  R.filas[i].cant = +valor || 0;
+  ajustarPrecioPorCantidad(R.filas[i]);
+  pintarRemito();
 }
 
 function totalFila(f) {
@@ -755,9 +780,28 @@ function filaProducto(f, i) {
       ? '<button class="btn btn-fantasma" style="padding:4px" aria-label="Quitar producto" onclick="quitarFila(' + i + ')">✕</button>'
       : '<span></span>') +
     (conCaja
-      ? '<div class="campo-ayuda" style="grid-column:1/-1;margin:2px 0 0;color:var(--ok)">' +
-        ic('box', 11) + ' ' + esc(textoCotizacion(f.prod, f.cant)) + '</div>'
-      : '') +
+      ? (function () {
+          var c = cotizar(f.prod, f.cant);
+          return '<div class="aviso-mayorista">' +
+            ic('box', 12) +
+            '<div>' +
+              '<strong>Precio mayorista</strong> desde ' + c.desde + ' unidades.<br>' +
+              'Por unidad pagaría <span class="tachado">' + plata(c.precioUnidad) + '</span> ' +
+              'y paga <strong>' + plata(c.unitario) + '</strong>.<br>' +
+              'En total serían <span class="tachado">' + plata(c.cant * c.precioUnidad) + '</span>, ' +
+              'paga <strong>' + plata(c.total) + '</strong>' +
+              (c.ahorro > 0 ? ' · se ahorra ' + plata(c.ahorro) : '') + '.' +
+            '</div>' +
+          '</div>';
+        })()
+      : (function () {
+          /* Cuando falta poco, conviene decirlo: puede cerrar la venta */
+          var c = cotizar(f.prod, f.cant);
+          if (!c.faltan || c.faltan > 4 || !c.cant) return '';
+          return '<div class="campo-ayuda" style="grid-column:1/-1;margin:2px 0 0;color:var(--warn)">' +
+            ic('alert', 11) + ' Con ' + plural(c.faltan, 'unidad', 'unidades') + ' más entra el ' +
+            'precio mayorista: ' + plata(c.precioUnidad - c.unitarioMayor) + ' menos por unidad.</div>';
+        })()) +
   '</div>';
 }
 
