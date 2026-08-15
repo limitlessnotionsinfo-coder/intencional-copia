@@ -261,6 +261,10 @@ function verRemito(id) {
         ? '<button class="btn btn-primario" style="flex:1;min-width:120px" onclick="abrirCobro()">' +
           ic('cash', 15) + ' Cobrar ' + plata(deuda) + '</button>'
         : '') +
+      (deuda > 0 && enlaceReclamo(r)
+        ? '<a class="btn btn-secundario" href="' + esc(enlaceReclamo(r)) + '" ' +
+          'target="_blank" rel="noopener">' + ic('phone', 15) + ' Reclamar</a>'
+        : '') +
       '<button class="btn btn-secundario" onclick="verImagenRemito()">' +
         ic('eye', 15) + ' Ver imagen</button>' +
       '<button class="btn btn-secundario" onclick="enviarRemito()">' +
@@ -271,6 +275,27 @@ function verRemito(id) {
 }
 
 /* ── Cobrar una deuda ────────────────────────────────────── */
+/* ── El teléfono del cliente ─────────────────────────────────
+   El remito guarda el teléfono del día que se emitió, pero 180
+   de los 1029 quedaron sin él. Si falta, se busca en la ficha
+   del cliente: el número es del cliente, no del remito.
+   ────────────────────────────────────────────────────────── */
+function telDelRemito(r) {
+  if (!r) return '';
+  if (enlaceWhatsapp(r.cliente_tel, '')) return r.cliente_tel;
+
+  var c = _porNombre[normalizar(r.cliente_nombre)];
+  if (c && enlaceWhatsapp(c.tel, '')) return c.tel;
+  if (c && enlaceWhatsapp(c.tel2, '')) return c.tel2;
+  return '';
+}
+
+/* El enlace para reclamar una deuda, o vacío si no hay teléfono */
+function enlaceReclamo(r) {
+  var tel = telDelRemito(r);
+  return tel ? enlaceWhatsapp(tel, mensajeCobroDeuda(r)) : '';
+}
+
 function abrirCobro() {
   var r = _remitoAbierto; if (!r) return;
   var deuda = deudaPendiente(r);
@@ -293,16 +318,16 @@ function abrirCobro() {
     '<div id="cobro-estado"></div>' +
 
     /* Antes de cobrar, la opción de reclamarlo */
-    (enlaceWhatsapp(r.cliente_tel, '')
+    (enlaceReclamo(r)
       ? '<div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--border)">' +
           '<div class="campo-etiq" style="margin:0 0 6px">¿Todavía no pagó?</div>' +
-          '<a class="btn btn-secundario btn-bloque" ' +
-             'href="' + esc(enlaceWhatsapp(r.cliente_tel, mensajeCobroDeuda(r))) + '" ' +
+          '<a class="btn btn-secundario btn-bloque" href="' + esc(enlaceReclamo(r)) + '" ' +
              'target="_blank" rel="noopener">' +
             ic('phone', 15) + ' Reclamarle por WhatsApp</a>' +
           '<div class="campo-ayuda">Con el alias al que se le pidió transferir y hace cuántos días.</div>' +
         '</div>'
-      : ''),
+      : '<div class="campo-ayuda" style="margin-top:12px">' +
+        'Para reclamarle por WhatsApp hace falta el teléfono: cargalo en su ficha.</div>'),
 
     '<button class="btn btn-primario btn-bloque" id="btn-cobrar" onclick="confirmarCobro()" disabled>Registrar el cobro</button>');
 
@@ -543,15 +568,22 @@ function detalleDeuda() {
       plural(d.clientes, 'cliente') + ' · <strong>' + plata(d.total) + '</strong></div>' +
     '<div class="lista">' +
       d.items.map(function (x) {
-        return '<button class="fila" onclick="cerrarModal();verRemito(' + x.remito.id + ')">' +
-          '<div class="fila-principal">' +
+        var reclamo = enlaceReclamo(x.remito);
+        return '<div class="fila" style="cursor:default">' +
+          '<button class="fila-principal" style="background:none;border:none;text-align:left;padding:0;cursor:pointer" ' +
+                  'onclick="cerrarModal();verRemito(' + x.remito.id + ')">' +
             '<div class="fila-titulo">' + esc(x.cliente) + '</div>' +
             '<div class="fila-sub">' + esc(fechaCorta(x.fecha)) + ' · hace ' + plural(x.dias, 'día') +
               (x.alias ? ' · a ' + esc(x.alias) : '') + '</div>' +
+          '</button>' +
+          '<div class="fila-derecha">' +
+            '<div class="fila-titulo">' + plata(x.monto) + '</div>' +
+            (reclamo
+              ? '<a class="ir-a" href="' + esc(reclamo) + '" target="_blank" rel="noopener">' +
+                ic('phone', 11) + ' Reclamar</a>'
+              : '<span class="ir-a" style="color:var(--muted)">sin teléfono</span>') +
           '</div>' +
-          '<div class="fila-derecha"><div class="fila-titulo">' + plata(x.monto) + '</div>' +
-            '<div class="ir-a">Cobrar ' + ic('chevron', 11) + '</div></div>' +
-        '</button>';
+        '</div>';
       }).join('') +
     '</div>');
 }
