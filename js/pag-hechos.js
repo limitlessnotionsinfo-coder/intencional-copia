@@ -261,12 +261,11 @@ function verRemito(id) {
         ? '<button class="btn btn-primario" style="flex:1;min-width:120px" onclick="abrirCobro()">' +
           ic('cash', 15) + ' Cobrar ' + plata(deuda) + '</button>'
         : '') +
+      '<button class="btn btn-secundario" onclick="verImagenRemito()">' +
+        ic('eye', 15) + ' Ver imagen</button>' +
+      '<button class="btn btn-secundario" onclick="enviarRemito()">' +
+        ic('upload', 15) + ' Enviar</button>' +
       '<button class="btn btn-secundario" onclick="editarRemito()">' + ic('edit', 15) + ' Editar</button>' +
-      '<button class="btn btn-secundario" onclick="reenviarRemito()">' + ic('upload', 15) + ' Reenviar</button>' +
-      (enlaceWhatsapp(_remitoAbierto.cliente_tel, '')
-        ? '<button class="btn btn-secundario" onclick="chatDelRemito()">' +
-          ic('phone', 15) + ' WhatsApp</button>'
-        : '') +
       '<button class="btn btn-peligro" onclick="borrarRemito()">' + ic('trash', 15) + ' Borrar</button>' +
     '</div>');
 }
@@ -291,7 +290,20 @@ function abrirCobro() {
     '<div id="cobro-alias"></div>' +
     '<div class="campo"><div class="campo-etiq">Fecha del cobro</div>' +
       '<input class="campo-input" type="date" id="cobro-fecha" value="' + hoyISO() + '"/></div>' +
-    '<div id="cobro-estado"></div>',
+    '<div id="cobro-estado"></div>' +
+
+    /* Antes de cobrar, la opción de reclamarlo */
+    (enlaceWhatsapp(r.cliente_tel, '')
+      ? '<div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--border)">' +
+          '<div class="campo-etiq" style="margin:0 0 6px">¿Todavía no pagó?</div>' +
+          '<a class="btn btn-secundario btn-bloque" ' +
+             'href="' + esc(enlaceWhatsapp(r.cliente_tel, mensajeCobroDeuda(r))) + '" ' +
+             'target="_blank" rel="noopener">' +
+            ic('phone', 15) + ' Reclamarle por WhatsApp</a>' +
+          '<div class="campo-ayuda">Con el alias al que se le pidió transferir y hace cuántos días.</div>' +
+        '</div>'
+      : ''),
+
     '<button class="btn btn-primario btn-bloque" id="btn-cobrar" onclick="confirmarCobro()" disabled>Registrar el cobro</button>');
 
   window._medioCobro = '';
@@ -423,17 +435,57 @@ async function confirmarBorrado() {
 
 /* ── Reenviar: misma imagen que se mandó la primera vez ──── */
 /* Copia el remito y abre el chat, igual que al crearlo */
-function chatDelRemito() {
+/* ── Ver el comprobante en pantalla ──────────────────────────
+   En la computadora no hay menú de compartir, así que sin esto
+   no había forma de ver la imagen.
+   ────────────────────────────────────────────────────────── */
+function verImagenRemito() {
   var r = _remitoAbierto;
-  if (!r || !enlaceWhatsapp(r.cliente_tel, '')) {
-    toast('Ese remito no tiene un teléfono válido', 'error');
-    return;
-  }
-  cerrarModal();
-  ofrecerWhatsapp(r);
+  if (!r) return;
+
+  abrirModal('Remito de ' + (r.cliente_nombre || ''),
+    '<div class="visor-remito" id="visor-remito">' + remitoParaImagen(r) + '</div>',
+
+    '<div style="display:flex;gap:8px;flex-wrap:wrap">' +
+      '<button class="btn btn-primario" style="flex:1;min-width:130px" onclick="enviarRemito()">' +
+        ic('upload', 15) + ' Enviar</button>' +
+      '<button class="btn btn-secundario" onclick="bajarImagenRemito()">' +
+        ic('download', 15) + ' Descargar</button>' +
+    '</div>');
+
+  ajustarVisor();
 }
 
-async function reenviarRemito() {
+/* El comprobante se dibuja a 520px de ancho. Se escala para que
+   entre, y se le fija el alto: si no, queda un hueco abajo del
+   tamaño de lo que se achicó. */
+function ajustarVisor() {
+  var visor = porId('visor-remito');
+  if (!visor || !visor.firstElementChild) return;
+
+  var ancho = visor.clientWidth || 520;
+  var escala = Math.min(1, ancho / 520);
+  visor.style.setProperty('--escala-remito', escala);
+  visor.style.height = Math.ceil(visor.firstElementChild.offsetHeight * escala) + 'px';
+}
+
+async function bajarImagenRemito() {
+  var r = _remitoAbierto;
+  if (!r) return;
+  try {
+    var img = await imagenDelRemito(r);
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(img.blob);
+    a.download = img.nombre;
+    a.click();
+    setTimeout(function () { URL.revokeObjectURL(a.href); }, 1000);
+    toast('Descargado');
+  } catch (e) { toast(e.message, 'error'); }
+}
+
+/* Un solo camino de envío: antes "Reenviar" y "WhatsApp"
+   terminaban los dos acá y hacían exactamente lo mismo. */
+async function enviarRemito() {
   var r = _remitoAbierto; if (!r) return;
   cerrarModal();
   await compartirRemito(r);
@@ -503,3 +555,9 @@ function detalleDeuda() {
       }).join('') +
     '</div>');
 }
+
+
+/* Si se gira el teléfono, el visor se recalcula */
+window.addEventListener('resize', function () {
+  if (porId('visor-remito')) ajustarVisor();
+});

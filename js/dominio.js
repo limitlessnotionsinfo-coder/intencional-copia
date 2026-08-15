@@ -418,32 +418,18 @@ function demoraPromedio(remitosDelCliente) {
 
 /* ── Mensaje que acompaña al remito al compartirlo ────────── */
 function mensajeCompartir(remito) {
-  var plantilla = leerConfig('mensaje_compartir',
-    '¡Hola! Te dejo el remito de la reposición de hoy por {total}. ¡Gracias por elegirnos!');
+  var datos = datosDelMensaje(remito);
 
-  var texto = String(plantilla)
-    .replace(/\{cliente\}/g, remito.cliente_nombre || '')
-    .replace(/\{total\}/g, plata(remito.total))
-    .replace(/\{fecha\}/g, remito.fecha || '')
-    .replace(/\{unidades\}/g, String(remito.unidades || 0));
-
-  /* Si algo quedó en deuda, el mensaje lleva adónde transferir:
-     el cliente no debería tener que abrir la imagen para saberlo. */
-  var deuda = deudaPendiente(remito);
-  if (deuda > 0) {
-    var alias = remito.alias || remito.pago2_alias || '';
-    partesPago(remito).forEach(function (p) {
-      if (p.tipo === 'deuda' && p.alias) alias = p.alias;
-    });
-    var horas = leerConfig('horas_pago', '72');
-    texto += '\n\nQuedaron ' + plata(deuda) + ' pendientes. ' +
-      'Podés transferirlos dentro de las ' + horas + ' horas al alias ' +
-      (alias ? aliasConTitular(alias) : '[alias no seleccionado]') +
-      ', y mandarme el comprobante al ' + leerConfig('tel_comprobantes', '11-7904-7745') + '.' +
-      '\n\nSi transferís desde otro número o desde una cuenta a otro nombre, ' +
-      'aclarame el nombre del local: sin eso no puedo dar de baja la deuda del sistema.';
+  /* Con deuda va la plantilla que explica cómo pagarla; sin
+     deuda, el saludo de siempre. */
+  if (deudaPendiente(remito) > 0) {
+    return armarMensaje(leerConfig('mensaje_deuda', MENSAJE_DEUDA_DEFAULT), datos);
   }
-  return texto;
+
+  return armarMensaje(
+    leerConfig('mensaje_compartir',
+      '¡Hola! Te dejo el remito de la reposición de hoy por {total}. ¡Gracias por elegirnos!'),
+    datos);
 }
 
 /* ── Aviso de pago pendiente que va al pie del remito ─────── */
@@ -2116,4 +2102,79 @@ function enlaceWhatsapp(tel, texto) {
   var n = telParaWhatsapp(tel);
   if (!n) return '';
   return 'https://wa.me/' + n + (texto ? '?text=' + encodeURIComponent(texto) : '');
+}
+
+
+/* ═══════════════════════════════════════════════════════════
+   MENSAJES QUE SE MANDAN
+   Las plantillas se editan en Configuraciones. Los datos entre
+   llaves se reemplazan por los del remito.
+   ═══════════════════════════════════════════════════════════ */
+
+var MENSAJE_DEUDA_DEFAULT =
+  '¡Hola! Te dejo el remito de la reposición de hoy por {total}.\n\n' +
+  'Quedaron {deuda} pendientes. Podés transferirlos dentro de las {horas} horas al alias ' +
+  '{alias}, y mandarme el comprobante al {telefono}.\n\n' +
+  'Si transferís desde otro número o desde una cuenta a otro nombre, aclarame el nombre ' +
+  'del local: sin eso no puedo dar de baja la deuda del sistema.';
+
+var MENSAJE_COBRO_DEFAULT =
+  '¡Hola {cliente}! Te escribo de Intencional por el remito del {fecha}.\n\n' +
+  'Quedaron {deuda} pendientes y ya pasaron {dias} días. ¿Nos ayudás a regularizarlo?\n\n' +
+  'Podés transferir al alias {alias} y mandarme el comprobante acá.\n\n' +
+  'Si transferís desde otro número o desde una cuenta a otro nombre, aclarame el nombre ' +
+  'del local para poder darlo de baja. ¡Gracias!';
+
+/* ── El alias que se le pidió en su momento ──────────────────
+   Importante: se le tiene que volver a pedir al MISMO alias que
+   figuraba en el remito, no al que hoy convenga por reparto.
+   ────────────────────────────────────────────────────────── */
+function aliasDeLaDeuda(remito) {
+  if (!remito) return '';
+
+  /* Primero el que quedó anotado junto a la parte en deuda */
+  var deLaParte = '';
+  partesPago(remito).forEach(function (p) {
+    if (p.tipo === 'deuda' && p.alias) deLaParte = p.alias;
+  });
+  if (deLaParte) return deLaParte;
+
+  /* Si no, el del remito */
+  return remito.alias || remito.pago2_alias || '';
+}
+
+/* Hace cuántos días se emitió el remito */
+function diasDeLaDeuda(remito) {
+  var f = claveFecha(remito.fecha || remito.created_at);
+  return f ? diasEntre(f, hoyISO()) : 0;
+}
+
+/* Reemplaza los datos entre llaves */
+function armarMensaje(plantilla, datos) {
+  var texto = String(plantilla || '');
+  Object.keys(datos).forEach(function (k) {
+    texto = texto.split('{' + k + '}').join(datos[k]);
+  });
+  return texto;
+}
+
+function datosDelMensaje(remito) {
+  var alias = aliasDeLaDeuda(remito);
+  return {
+    cliente: remito.cliente_nombre || '',
+    fecha: fechaCorta(remito.fecha) || '',
+    total: plata(remito.total),
+    deuda: plata(deudaPendiente(remito)),
+    dias: String(diasDeLaDeuda(remito)),
+    alias: alias ? aliasConTitular(alias) : '[alias no anotado]',
+    aliasSolo: alias || '',
+    horas: leerConfig('horas_pago', '72'),
+    telefono: leerConfig('tel_comprobantes', '11-7904-7745'),
+    unidades: String(remito.unidades || 0)
+  };
+}
+
+/* El mensaje para cobrar una deuda vieja */
+function mensajeCobroDeuda(remito) {
+  return armarMensaje(leerConfig('mensaje_cobro', MENSAJE_COBRO_DEFAULT), datosDelMensaje(remito));
 }

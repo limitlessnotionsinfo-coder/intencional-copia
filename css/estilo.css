@@ -793,3 +793,25 @@ a.btn-bloque{display:flex;width:100%}
   background:var(--rose);color:#fff;font-size:12px;font-weight:700;
   display:flex;align-items:center;justify-content:center;margin-top:9px;
 }
+
+/* ── Ver el comprobante en pantalla ──────────────────────────
+   El remito se dibuja para una imagen de 520px de ancho: acá se
+   escala para que entre en el celular sin deformarse.
+   ────────────────────────────────────────────────────────── */
+.visor-remito{
+  width:100%;overflow:hidden;border-radius:12px;
+  border:1px solid var(--border);background:#fff;
+}
+.visor-remito > *{
+  width:520px;transform-origin:top left;
+  /* La escala la calcula la app al abrirlo: hay que medir el
+     alto real para que no quede un hueco abajo. */
+  transform:scale(var(--escala-remito,1));
+}
+
+/* Cómo queda el mensaje antes de guardarlo */
+.vista-previa{
+  margin-top:8px;padding:10px 12px;border-radius:10px;
+  background:var(--subtle);border:1px solid var(--border);
+  font-size:12.5px;line-height:1.5;color:var(--text2);
+}

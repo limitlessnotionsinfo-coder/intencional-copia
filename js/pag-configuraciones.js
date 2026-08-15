@@ -30,8 +30,8 @@ registrarPagina({
         tarjetaProductos() + tarjetaAumento()) +
 
       grupoConfig('cobrar', 'Cómo cobro', 'cash',
-        'Alias, plazos y el mensaje que se manda con el remito',
-        tarjetaAlias() + tarjetaMensaje()) +
+        'Alias, plazos y los mensajes que se mandan',
+        tarjetaAlias() + tarjetaMensaje() + tarjetaMensajesDeuda()) +
 
       grupoConfig('costos', 'Lo que me cuesta', 'wallet',
         'Sueldos, gastos fijos y objetivos del negocio',
@@ -53,6 +53,7 @@ registrarPagina({
       g.addEventListener('toggle', function () {
         if (!g.open) return;
         previewAviso(); previewMensaje(); previewDeuda(); pintarGastosFijos();
+        previewMensajesDeuda();
         ['cfg-alias', 'cfg-tel', 'cfg-horas'].forEach(function (id) {
           var el = porId(id); if (el) el.oninput = previewDeuda;
         });
@@ -1394,4 +1395,109 @@ function agregarGastoFijo() {
 function quitarGastoFijo(i) {
   _fijos.splice(i, 1);
   pintarGastosFijos();
+}
+
+
+/* ═══════════════════════════════════════════════════════════
+   LOS MENSAJES DE LA DEUDA
+   Uno para cuando se deja la deuda y otro para reclamarla.
+   ═══════════════════════════════════════════════════════════ */
+var DATOS_MENSAJE = [
+  ['cliente', 'nombre del local'],
+  ['fecha', 'fecha del remito'],
+  ['total', 'total del remito'],
+  ['deuda', 'lo que quedó debiendo'],
+  ['dias', 'días desde el remito'],
+  ['alias', 'alias con el titular'],
+  ['aliasSolo', 'alias sin el titular'],
+  ['horas', 'plazo configurado'],
+  ['telefono', 'teléfono de comprobantes']
+];
+
+function tarjetaMensajesDeuda() {
+  return '<details class="tarjeta">' +
+    '<summary class="tarjeta-cab" style="cursor:pointer">' + ic('clock', 16) + ' Mensajes de deuda</summary>' +
+    '<div class="tarjeta-cuerpo">' +
+
+      '<div class="campo-etiq">Cuando queda una deuda</div>' +
+      '<div class="campo-ayuda" style="margin-bottom:6px">' +
+        'Se manda junto con el remito, en vez del mensaje común.</div>' +
+      '<textarea class="campo-input" id="cfg-msg-deuda" rows="7" style="resize:vertical" ' +
+                'oninput="previewMensajesDeuda()">' +
+        esc(leerConfig('mensaje_deuda', MENSAJE_DEUDA_DEFAULT)) + '</textarea>' +
+      '<div id="pv-deuda"></div>' +
+
+      '<div class="campo-etiq" style="margin-top:16px">Para reclamar una deuda</div>' +
+      '<div class="campo-ayuda" style="margin-bottom:6px">' +
+        'Se usa desde Remitos hechos, al ir a cobrar.</div>' +
+      '<textarea class="campo-input" id="cfg-msg-cobro" rows="8" style="resize:vertical" ' +
+                'oninput="previewMensajesDeuda()">' +
+        esc(leerConfig('mensaje_cobro', MENSAJE_COBRO_DEFAULT)) + '</textarea>' +
+      '<div id="pv-cobro"></div>' +
+
+      '<div class="campo-ayuda" style="margin-top:12px">' +
+        '<strong>Datos que podés usar</strong>, entre llaves:<br>' +
+        DATOS_MENSAJE.map(function (d) {
+          return '<code>{' + d[0] + '}</code> ' + esc(d[1]);
+        }).join(' · ') +
+      '</div>' +
+
+      '<div class="aviso aviso-ok" style="margin-top:10px">' + ic('check', 15) +
+        '<div>El alias siempre es al que se le pidió transferir en ese remito, ' +
+        'no el que hoy convenga por reparto.</div></div>' +
+
+      '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px">' +
+        '<button class="btn btn-primario" style="flex:1;min-width:130px" ' +
+                'onclick="guardarMensajesDeuda()">Guardar</button>' +
+        '<button class="btn btn-secundario" onclick="restaurarMensajesDeuda()">' +
+          ic('undo', 15) + ' Volver a los de fábrica</button>' +
+      '</div>' +
+    '</div>' +
+  '</details>';
+}
+
+/* Un remito de mentira para ver cómo queda */
+function remitoDeEjemplo() {
+  return {
+    cliente_nombre: 'Perfumería Sol',
+    fecha: fechaCorta(isoDe(sumarDias(-9))),
+    total: 62500,
+    unidades: 25,
+    alias: aliasConfigurados()[0] || 'intencional.f',
+    pagos_detalle: JSON.stringify([
+      { tipo: 'efectivo', monto: 20000 },
+      { tipo: 'deuda', monto: 42500, alias: aliasConfigurados()[0] || 'intencional.f' }
+    ])
+  };
+}
+
+function previewMensajesDeuda() {
+  var ej = remitoDeEjemplo();
+  var datos = datosDelMensaje(ej);
+
+  var pintar = function (id, campo) {
+    var el = porId(id);
+    var txt = porId(campo);
+    if (!el || !txt) return;
+    el.innerHTML = '<div class="vista-previa">' +
+      esc(armarMensaje(txt.value, datos)).replace(/\n/g, '<br>') + '</div>';
+  };
+
+  pintar('pv-deuda', 'cfg-msg-deuda');
+  pintar('pv-cobro', 'cfg-msg-cobro');
+}
+
+async function guardarMensajesDeuda() {
+  try {
+    await guardarConfig('mensaje_deuda', porId('cfg-msg-deuda').value.trim());
+    await guardarConfig('mensaje_cobro', porId('cfg-msg-cobro').value.trim());
+    toast('Mensajes guardados');
+  } catch (e) { toast(e.message, 'error'); }
+}
+
+async function restaurarMensajesDeuda() {
+  porId('cfg-msg-deuda').value = MENSAJE_DEUDA_DEFAULT;
+  porId('cfg-msg-cobro').value = MENSAJE_COBRO_DEFAULT;
+  previewMensajesDeuda();
+  toast('Listo · tocá Guardar para dejarlo así');
 }

@@ -781,23 +781,6 @@ function bloqueAvisos(remitos, gastos) {
     '</div>';
   }
 
-  /* Clientes de cremas a los que se les estaría acabando */
-  var consultar = clientesParaConsultar(_clientesInicio, remitos);
-  if (consultar.length && !avisoSilenciado('consultar')) {
-    var urgentes = consultar.filter(function (x) { return x.urgente; });
-    html += '<div class="aviso aviso-info" style="align-items:flex-start">' + ic('phone', 16) +
-      '<div style="flex:1">' +
-        '<strong>' + plural(consultar.length, 'cliente') + ' para consultar</strong>' +
-        (urgentes.length ? ' · ' + urgentes.length + ' ya sin stock' : '') +
-        '<br>Compran por cantidad y se les acaba antes de que volvamos a pasar.' +
-        '<br><button class="btn btn-fantasma" style="padding:2px 0;text-decoration:underline;font-size:12.5px" ' +
-          'onclick="verParaConsultar()">Ver cuáles</button>' +
-      '</div>' +
-      '<button class="btn btn-fantasma" style="padding:2px 6px" aria-label="No mostrar hoy" ' +
-        'onclick="cerrarAviso(\'consultar\')">' + ic('x', 15) + '</button>' +
-    '</div>';
-  }
-
   /* Deudas por cobrar: los días elegidos y hasta que lo cierres */
   var d = resumenDeudas(remitos);
   if (d.items.length && tocaHoy('dias_aviso_deudas', '') && !avisoSilenciado('deudas')) {
