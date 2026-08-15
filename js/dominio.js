@@ -1941,3 +1941,179 @@ function clientesPendientesDeHoja(ruta, clientes) {
     .filter(function (c) { return c && clienteActivo(c); })
     .map(function (c) { return { cliente: c, desde: g.fecha, dias: diasEntre(g.fecha, hoyISO()) }; });
 }
+
+/* ═══════════════════════════════════════════════════════════
+   CLIENTES QUE CONVIENE CONSULTAR
+   Con 60 hojas y una por día hábil, entre visita y visita a un
+   mismo cliente pasan unas 12 semanas. Para el esmalte alcanza,
+   porque se cobra lo vendido cuando toca. Pero quien compra
+   cremas puede quedarse sin stock mucho antes, y ahí conviene
+   preguntarle si necesita reponer.
+   ═══════════════════════════════════════════════════════════ */
+
+/* Cada cuántos días vuelve a tocar una hoja: una por día hábil,
+   así que depende de cuántas hojas haya en la cola. */
+function vueltaDeRuta() {
+  var hojas = colaRutas().length;
+  if (!hojas) return 0;
+  /* Los días hábiles son 5 de cada 7 */
+  return Math.round(hojas * 7 / 5);
+}
+
+/* Qué productos son de reposición lenta: los que se venden por
+   cantidad y duran, en vez de rotar en el exhibidor. */
+function productoDeStock(nombre) {
+  var p = buscarProducto(nombre);
+  return !!(p && p.desde);   // tiene precio mayorista: se lleva de a varias
+}
+
+/* Lo que compra un cliente de estos productos, y cada cuánto */
+function consumoDeStock(cliente, remitos) {
+  var suyos = remitosDe(cliente, remitos).filter(function (r) {
+    return r.motivo !== 'cerrado' && (+r.total || 0) > 0;
+  });
+
+  var compras = [];
+  suyos.forEach(function (r) {
+    var lineas = [];
+    try {
+      lineas = typeof r.productos === 'string' ? JSON.parse(r.productos || '[]') : (r.productos || []);
+    } catch (e) { lineas = []; }
+
+    var unidades = lineas
+      .filter(function (l) { return productoDeStock(l.prod); })
+      .reduce(function (a, l) { return a + (+l.cant || 0); }, 0);
+
+    if (unidades > 0) {
+      compras.push({
+        fecha: claveFecha(r.fecha || r.created_at),
+        unidades: unidades,
+        producto: (lineas.find(function (l) { return productoDeStock(l.prod); }) || {}).prod || ''
+      });
+    }
+  });
+
+  if (!compras.length) return null;
+
+  compras.sort(function (a, b) { return (b.fecha || '').localeCompare(a.fecha || ''); });
+
+  var total = compras.reduce(function (a, c) { return a + c.unidades; }, 0);
+  var promedio = Math.round(total / compras.length);
+  var ultima = compras[0];
+  var dias = ultima.fecha ? diasEntre(ultima.fecha, hoyISO()) : 0;
+
+  /* Cada cuánto compra: el promedio entre una compra y la
+     siguiente. Con una sola compra todavía no se puede saber. */
+  var cada = 0;
+  if (compras.length >= 2) {
+    var huecos = [];
+    for (var i = 1; i < compras.length; i++) {
+      var d = diasEntre(compras[i].fecha, compras[i - 1].fecha);
+      if (d > 0) huecos.push(d);
+    }
+    if (huecos.length) {
+      cada = Math.round(huecos.reduce(function (a, b) { return a + b; }, 0) / huecos.length);
+    }
+  }
+
+  return {
+    compras: compras.length,
+    total: total,
+    promedio: promedio,
+    ultima: ultima,
+    dias: dias,
+    cada: cada,
+    producto: ultima.producto
+  };
+}
+
+/* ── A quién conviene consultarle ────────────────────────────
+   Se compara hace cuánto compró contra su propio ritmo. Si
+   todavía no tiene ritmo propio, se usa la vuelta de la ruta:
+   si va a tardar más que eso en volver a pasar, conviene
+   preguntar antes.
+   ────────────────────────────────────────────────────────── */
+function clientesParaConsultar(clientes, remitos) {
+  var vuelta = vueltaDeRuta() || 84;
+
+  return (clientes || [])
+    .filter(clienteActivo)
+    .map(function (c) {
+      var k = consumoDeStock(c, remitos);
+      if (!k) return null;
+
+      /* Cuánto se supone que le dura lo que compró */
+      var dura = k.cada || vuelta;
+      var restante = dura - k.dias;
+
+      /* Cuándo vuelve a tocarle la ruta */
+      var cal = calendarioRutas().find(function (e) {
+        return String(e.ruta) === String(rutaDe(c));
+      });
+      var faltanParaLaRuta = cal ? diasEntre(hoyISO(), cal.iso) : vuelta;
+
+      /* Solo interesa si se le va a acabar antes de que pasemos */
+      if (restante > faltanParaLaRuta) return null;
+
+      return {
+        cliente: c,
+        consumo: k,
+        restante: restante,
+        faltanParaLaRuta: faltanParaLaRuta,
+        proximaVisita: cal ? cal.iso : null,
+        urgente: restante <= 0,
+        motivo: restante <= 0
+          ? 'Se le habría acabado hace ' + Math.abs(restante) + ' días'
+          : 'Le quedarían para ' + restante + ' días y recién pasamos en ' + faltanParaLaRuta
+      };
+    })
+    .filter(Boolean)
+    .sort(function (a, b) { return a.restante - b.restante; });
+}
+
+/* El mensaje para mandarle */
+function mensajeDeConsulta(x) {
+  var c = x.cliente;
+  var k = x.consumo;
+  return '¡Hola' + (c.duenio ? ' ' + c.duenio : '') + '! Te escribo de Intencional. ' +
+    'La última vez te dejamos ' + plural(k.ultima.unidades, 'unidad', 'unidades') +
+    (k.producto ? ' de ' + k.producto : '') + ', hace ' + plural(k.dias, 'día') + '. ' +
+    '¿Necesitás reponer? Así te lo llevamos en la próxima vuelta.';
+}
+
+
+/* ═══════════════════════════════════════════════════════════
+   WHATSAPP
+   Un chat se abre con el número, esté o no agendado. Hay que
+   normalizarlo primero: en Argentina el formato internacional
+   lleva 54 y, para celulares, un 9 antes del área.
+   ═══════════════════════════════════════════════════════════ */
+function telParaWhatsapp(tel) {
+  var d = String(tel || '').replace(/[^0-9]/g, '');
+  if (!d) return '';
+
+  /* Prefijo internacional de salida */
+  d = d.replace(/^00/, '');
+
+  /* Ya viene con país */
+  if (d.indexOf('54') === 0) {
+    var resto = d.slice(2);
+    /* WhatsApp pide el 9 para celulares argentinos */
+    if (resto.indexOf('9') !== 0 && resto.length >= 10) resto = '9' + resto;
+    d = '54' + resto;
+  } else {
+    /* Sin país: se saca el 0 de larga distancia y el 15 del celular */
+    d = d.replace(/^0/, '');
+    d = d.replace(/^(\d{2,4})15(\d{6,8})$/, '$1$2');
+    if (d.length >= 10) d = '549' + d;
+    else return '';           // muy corto: no es un número válido
+  }
+
+  return d.length >= 12 && d.length <= 15 ? d : '';
+}
+
+function enlaceWhatsapp(tel, texto) {
+  var n = telParaWhatsapp(tel);
+  if (!n) return '';
+  return 'https://wa.me/' + n + (texto ? '?text=' + encodeURIComponent(texto) : '');
+}

@@ -759,3 +759,13 @@ body.con-banda .contenido{padding-bottom:calc(120px + env(safe-area-inset-bottom
 .aviso-mayorista svg{flex:0 0 auto;margin-top:1px}
 .aviso-mayorista .tachado{text-decoration:line-through;opacity:.65}
 .fila-fijo.apagado .campo-input{opacity:.5}
+
+/* ── "Ir a" dentro de una fila ───────────────────────────────
+   Antes usaba campo-ayuda, que es gris claro para textos
+   secundarios: sobre el fondo oscuro casi no se leía.
+   ────────────────────────────────────────────────────────── */
+.ir-a{
+  display:inline-flex;align-items:center;gap:2px;
+  font-size:11px;font-weight:600;color:var(--rose);
+  margin-top:3px;white-space:nowrap;
+}

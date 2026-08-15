@@ -263,6 +263,10 @@ function verRemito(id) {
         : '') +
       '<button class="btn btn-secundario" onclick="editarRemito()">' + ic('edit', 15) + ' Editar</button>' +
       '<button class="btn btn-secundario" onclick="reenviarRemito()">' + ic('upload', 15) + ' Reenviar</button>' +
+      (enlaceWhatsapp(_remitoAbierto.cliente_tel, '')
+        ? '<button class="btn btn-secundario" onclick="chatDelRemito()">' +
+          ic('phone', 15) + ' WhatsApp</button>'
+        : '') +
       '<button class="btn btn-peligro" onclick="borrarRemito()">' + ic('trash', 15) + ' Borrar</button>' +
     '</div>');
 }
@@ -418,6 +422,13 @@ async function confirmarBorrado() {
 }
 
 /* ── Reenviar: misma imagen que se mandó la primera vez ──── */
+/* Abre el chat del cliente con el mensaje del remito */
+function chatDelRemito() {
+  var enlace = enlaceWhatsapp(_remitoAbierto.cliente_tel, mensajeCompartir(_remitoAbierto));
+  if (!enlace) { toast('Ese remito no tiene un teléfono válido', 'error'); return; }
+  window.open(enlace, '_blank');
+}
+
 async function reenviarRemito() {
   var r = _remitoAbierto; if (!r) return;
   cerrarModal();
@@ -483,7 +494,7 @@ function detalleDeuda() {
               (x.alias ? ' · a ' + esc(x.alias) : '') + '</div>' +
           '</div>' +
           '<div class="fila-derecha"><div class="fila-titulo">' + plata(x.monto) + '</div>' +
-            '<div class="campo-ayuda">cobrar →</div></div>' +
+            '<div class="ir-a">Cobrar ' + ic('chevron', 11) + '</div></div>' +
         '</button>';
       }).join('') +
     '</div>');

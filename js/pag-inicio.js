@@ -781,6 +781,23 @@ function bloqueAvisos(remitos, gastos) {
     '</div>';
   }
 
+  /* Clientes de cremas a los que se les estaría acabando */
+  var consultar = clientesParaConsultar(_clientesInicio, remitos);
+  if (consultar.length && !avisoSilenciado('consultar')) {
+    var urgentes = consultar.filter(function (x) { return x.urgente; });
+    html += '<div class="aviso aviso-info" style="align-items:flex-start">' + ic('phone', 16) +
+      '<div style="flex:1">' +
+        '<strong>' + plural(consultar.length, 'cliente') + ' para consultar</strong>' +
+        (urgentes.length ? ' · ' + urgentes.length + ' ya sin stock' : '') +
+        '<br>Compran por cantidad y se les acaba antes de que volvamos a pasar.' +
+        '<br><button class="btn btn-fantasma" style="padding:2px 0;text-decoration:underline;font-size:12.5px" ' +
+          'onclick="verParaConsultar()">Ver cuáles</button>' +
+      '</div>' +
+      '<button class="btn btn-fantasma" style="padding:2px 6px" aria-label="No mostrar hoy" ' +
+        'onclick="cerrarAviso(\'consultar\')">' + ic('x', 15) + '</button>' +
+    '</div>';
+  }
+
   /* Deudas por cobrar: los días elegidos y hasta que lo cierres */
   var d = resumenDeudas(remitos);
   if (d.items.length && tocaHoy('dias_aviso_deudas', '') && !avisoSilenciado('deudas')) {
@@ -873,7 +890,7 @@ function verHuerfanos() {
               (r.cliente_dir ? ' · ' + esc(r.cliente_dir) : '') + '</div>' +
           '</div>' +
           '<div class="fila-derecha"><div class="fila-titulo">' + plata(r.total) + '</div>' +
-            '<div class="campo-ayuda">vincular →</div></div>' +
+            '<div class="ir-a">Vincular ' + ic('chevron', 11) + '</div></div>' +
         '</button>';
       }).join('') +
     '</div>');
@@ -1064,7 +1081,7 @@ function verPendientesDeHoja(ruta) {
             '<div class="fila-titulo">' + esc(x.cliente.local) + '</div>' +
             '<div class="fila-sub">' + esc([x.cliente.dir, x.cliente.loc].filter(Boolean).join(' · ')) + '</div>' +
           '</div>' +
-          '<div class="fila-derecha"><div class="campo-ayuda">hacerle el remito →</div></div>' +
+          '<div class="fila-derecha"><div class="ir-a">Hacer remito ' + ic('chevron', 11) + '</div></div>' +
         '</button>';
       }).join('') +
     '</div>',
@@ -1080,4 +1097,61 @@ async function limpiarPendientesDeHoja(ruta) {
     toast('Listo');
     pintarRuta();
   } catch (e) { toast(e.message, 'error'); }
+}
+
+
+/* ═══════════════════════════════════════════════════════════
+   CLIENTES PARA CONSULTAR
+   Los que compran por cantidad y se les va a acabar antes de
+   que la ruta vuelva a pasar.
+   ═══════════════════════════════════════════════════════════ */
+function verParaConsultar() {
+  var lista = clientesParaConsultar(_clientesInicio, _remitosInicio);
+  if (!lista.length) { toast('No hay clientes para consultar'); return; }
+
+  var vuelta = vueltaDeRuta();
+
+  abrirModal('Clientes para consultar',
+    '<div class="campo-ayuda" style="margin-bottom:10px">' +
+      'Con ' + plural(colaRutas().length, 'hoja') + ' en la cola, entre visita y visita a un mismo ' +
+      'cliente pasan unos ' + vuelta + ' días. Estos compran por cantidad y se les acabaría antes.</div>' +
+
+    '<div class="lista">' +
+      lista.map(function (x) {
+        var k = x.consumo;
+        return '<div class="fila" style="cursor:default;align-items:flex-start">' +
+          '<span class="num-cliente">' + esc(x.cliente.num_str || x.cliente.num) + '</span>' +
+          '<div class="fila-principal">' +
+            '<div class="fila-titulo">' + esc(x.cliente.local) +
+              (x.urgente ? ' <span class="pin pin-warn">sin stock</span>' : '') + '</div>' +
+            '<div class="fila-sub">' +
+              'Lleva ' + k.promedio + ' por vez' +
+              (k.cada ? ' · cada ' + k.cada + ' días' : '') +
+              '<br>Última: ' + plural(k.ultima.unidades, 'unidad', 'unidades') +
+              ' hace ' + plural(k.dias, 'día') +
+              '<br>' + esc(x.motivo) +
+            '</div>' +
+          '</div>' +
+          (x.cliente.tel
+            ? '<button class="btn btn-secundario" style="padding:5px 9px;font-size:11.5px;white-space:nowrap" ' +
+              'onclick="consultarStock(\'' + esc(x.cliente.num) + '\')">' +
+              ic('phone', 13) + ' Escribir</button>'
+            : '<span class="campo-ayuda">sin teléfono</span>') +
+        '</div>';
+      }).join('') +
+    '</div>');
+}
+
+/* Abre WhatsApp con el mensaje armado */
+async function consultarStock(num) {
+  var c = _clientesInicio.find(function (x) { return String(x.num) === String(num); });
+  if (!c || !c.tel) { toast('Ese cliente no tiene teléfono cargado', 'error'); return; }
+
+  var x = clientesParaConsultar([c], _remitosInicio)[0];
+  if (!x) return;
+
+  var tel = String(c.tel).replace(/[^0-9]/g, '');
+  if (tel.length >= 10 && tel.indexOf('54') !== 0) tel = '54' + tel;
+
+  window.open('https://wa.me/' + tel + '?text=' + encodeURIComponent(mensajeDeConsulta(x)), '_blank');
 }

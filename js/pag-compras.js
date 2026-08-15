@@ -59,7 +59,7 @@ function pintarCompras() {
             '</div>' +
             '<div class="fila-derecha">' +
               '<div class="fila-titulo">' + plata(costoCompra(c)) + '</div>' +
-              '<div class="campo-ayuda">ver detalle →</div>' +
+              '<div class="ir-a">Ver detalle ' + ic('chevron', 11) + '</div>' +
             '</div>' +
           '</button>';
         }).join('') + '</div>'

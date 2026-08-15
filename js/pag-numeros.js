@@ -237,6 +237,11 @@ function pintarKpis(r, completo) {
               'var(--violet)') +
       tarjeta('Costos totales', plata(a.costoMercaderia + a.gastosFijos + a.gastosVariables),
               undefined, 'mercadería y gastos', 'var(--danger)', "detalleN('costos')") +
+      tarjeta('Gastos fijos', plata(a.gastosFijos), c.var.fijos,
+              e.fijosEstimados.length
+                ? plural(e.fijosEstimados.length, 'estimado') + ' de los configurados'
+                : 'vs antes',
+              'var(--text2)', "detalleN('fijos')") +
       tarjeta('Deuda por cobrar', plata(i.pendiente), undefined,
               i.pendiente ? 'sin cobrar' : 'todo cobrado',
               i.pendiente ? 'var(--warn)' : 'var(--ok)') +
@@ -244,9 +249,7 @@ function pintarKpis(r, completo) {
               plural(i.operaciones, 'venta'), 'var(--text2)') +
 
       (completo
-        ? tarjeta('Gastos fijos', plata(a.gastosFijos), c.var.fijos, 'vs antes', 'var(--text2)',
-                  "detalleN('fijos')") +
-          tarjeta('Gastos variables', plata(a.gastosVariables), c.var.variables, 'vs antes', 'var(--text2)',
+        ? tarjeta('Gastos variables', plata(a.gastosVariables), c.var.variables, 'vs antes', 'var(--text2)',
                   "detalleN('variables')") +
           tarjeta('Reposición', plata(e.reposicion), c.var.reposicion,
                   plural(e.unidadesRepuestas, 'unidad', 'unidades'), 'var(--info)') +
@@ -328,13 +331,37 @@ function detalleN(cual) {
   var items = e.gastos.filter(function (g) { return esGastoFijo(g) === esFijo && montoEmpresa(g) > 0; })
     .sort(function (x, y) { return montoEmpresa(y) - montoEmpresa(x); });
 
+  var estimados = esFijo ? e.fijosEstimados : [];
+  var totalTodo = items.reduce(function (x, g) { return x + montoEmpresa(g); }, 0) +
+                  estimados.reduce(function (x, g) { return x + g.monto; }, 0);
+
   abrirModal((esFijo ? 'Gastos fijos' : 'Gastos variables') + ' · ' + r.etiqueta,
     '<div class="campo-ayuda" style="margin-bottom:10px">' +
       (esFijo
-        ? 'Se pagan haya o no ventas.'
+        ? 'Se pagan haya o no ventas. Total: <strong>' + plata(totalTodo) + '</strong>'
         : 'Acompañan a la actividad: más ventas, más gasto.') + '</div>' +
+
+    (estimados.length
+      ? '<div class="eyebrow">Configurados</div>' +
+        '<div class="campo-ayuda" style="margin-bottom:6px">' +
+          'Cargados en Configuraciones → Lo que me cuesta. Se cuentan aunque no los hayas ' +
+          'anotado como gasto.</div>' +
+        '<div class="lista" style="margin-bottom:12px">' +
+          estimados.map(function (g) {
+            return '<button class="fila" onclick="cerrarModal();irA(\'configuraciones\')">' +
+              '<div class="fila-principal">' +
+                '<div class="fila-titulo">' + esc(g.nombre) + '</div>' +
+                '<div class="fila-sub">proporcional a ' + r.dias + ' días</div>' +
+              '</div>' +
+              '<div class="fila-derecha"><div class="fila-titulo">' + plata(g.monto) + '</div></div>' +
+            '</button>';
+          }).join('') +
+        '</div>'
+      : '') +
+
     (items.length
-      ? '<div class="lista">' + items.map(function (g) {
+      ? (estimados.length ? '<div class="eyebrow">Anotados en Gastos</div>' : '') +
+        '<div class="lista">' + items.map(function (g) {
           return '<button class="fila" onclick="cerrarModal();irA(\'gastos\')">' +
             '<div class="fila-principal">' +
               '<div class="fila-titulo">' + esc(g.descripcion || '—') + '</div>' +
@@ -344,7 +371,7 @@ function detalleN(cual) {
             '<div class="fila-derecha"><div class="fila-titulo">' + plata(montoEmpresa(g)) + '</div></div>' +
           '</button>';
         }).join('') + '</div>'
-      : '<div class="campo-ayuda">Sin gastos de este tipo en el período.</div>'));
+      : (estimados.length ? '' : '<div class="campo-ayuda">Sin gastos de este tipo en el período.</div>')));
 }
 
 /* ── Punto de equilibrio ─────────────────────────────────── */

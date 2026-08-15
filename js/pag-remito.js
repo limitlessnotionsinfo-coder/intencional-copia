@@ -593,21 +593,22 @@ function usaPrecioDeCaja(f) {
   if (!p || !p.desde || !p.precioMayor) return false;
   if ((+f.cant || 0) < p.desde) return false;
   if (f.precioManual) return false;
-  return (+f.precio || 0) === p.precio || (+f.precio || 0) === p.precioMayor;
+  return true;
 }
 
 /* Al cruzar el umbral el precio del renglón cambia solo, y al
    bajar de él vuelve al de unidad. */
+/* Al cruzar el umbral de cantidad, el precio del renglón cambia
+   solo. No se toca si el precio se escribió a mano ni si viene
+   del aumento: esos mandan sobre el de lista. */
 function ajustarPrecioPorCantidad(f) {
   var p = buscarProducto(f.prod);
-  if (!p || !p.desde || !p.precioMayor || f.precioManual) return false;
+  if (!p || !p.desde || !p.precioMayor) return false;
+  if (f.precioManual) return false;
+  if (R.cliente && esProductoEnAumento(f.prod) && precioParaCliente(R.cliente)) return false;
 
   var deberia = (+f.cant || 0) >= p.desde ? p.precioMayor : p.precio;
   if ((+f.precio || 0) === deberia) return false;
-
-  /* Solo se toca si el precio actual es uno de los dos de lista:
-     un precio puesto a mano no se pisa. */
-  if ((+f.precio || 0) !== p.precio && (+f.precio || 0) !== p.precioMayor) return false;
 
   f.precio = deberia;
   return true;
@@ -619,8 +620,11 @@ function cambiarCantidad(i, valor) {
   pintarRemito();
 }
 
+/* El subtotal es siempre cantidad × el precio que se ve en el
+   renglón. Antes el mayorista se calculaba aparte y el subtotal
+   no coincidía con lo que mostraba el campo: ahora el campo se
+   actualiza solo y la cuenta es la que se ve. */
 function totalFila(f) {
-  if (usaPrecioDeCaja(f)) return cotizar(f.prod, f.cant).total;
   return (+f.cant || 0) * (+f.precio || 0);
 }
 
@@ -771,7 +775,7 @@ function filaProducto(f, i) {
   return '<div class="fila-prod">' +
     '<select class="campo-input prod" aria-label="Producto" onchange="cambiarProducto(' + i + ',this.value)">' + opciones + '</select>' +
     '<input class="campo-input" type="number" min="0" inputmode="numeric" value="' + (+f.cant || 0) + '" ' +
-           'aria-label="Cantidad" oninput="R.filas[' + i + '].cant=+this.value||0;pintarTotales()"/>' +
+           'aria-label="Cantidad" oninput="cambiarCantidad(' + i + ',this.value)"/>' +
     '<input class="campo-input" type="number" min="0" inputmode="decimal" value="' + (+f.precio || 0) + '" ' +
            'aria-label="Precio por unidad" ' +
       'oninput="R.filas[' + i + '].precio=+this.value||0;R.filas[' + i + '].precioManual=true;pintarTotales()"/>' +
@@ -806,9 +810,21 @@ function filaProducto(f, i) {
 }
 
 function cambiarProducto(i, nombre) {
-  R.filas[i].prod = nombre;
+  var f = R.filas[i];
+  f.prod = nombre;
+  /* Producto nuevo: el precio se recalcula desde cero, incluso si
+     antes se había escrito uno a mano para el producto anterior. */
+  f.precioManual = false;
+
   var sugerido = R.cliente && esProductoEnAumento(nombre) ? precioParaCliente(R.cliente) : 0;
-  R.filas[i].precio = sugerido || precioDeLista(nombre) || R.filas[i].precio || 0;
+  if (sugerido) {
+    f.precio = sugerido;
+  } else {
+    /* Con la cantidad que ya esté puesta: si son 12 cremas, el
+       precio que corresponde es el mayorista. */
+    var c = cotizar(nombre, f.cant);
+    f.precio = c.unitario || precioDeLista(nombre) || 0;
+  }
   pintarRemito();
 }
 
@@ -1007,11 +1023,11 @@ async function confirmarRemito() {
     notas: R.notas.trim() || null,
     productos: JSON.stringify(R.filas.filter(function (f) { return f.prod; })
       .map(function (f) {
-        var c = usaPrecioDeCaja(f) ? cotizar(f.prod, f.cant) : null;
         return {
-          prod: f.prod, cant: +f.cant || 0,
-          precio: c ? c.unitario : (+f.precio || 0),
-          cajas: c ? c.cajas : 0
+          prod: f.prod,
+          cant: +f.cant || 0,
+          precio: +f.precio || 0,
+          mayorista: usaPrecioDeCaja(f) || undefined
         };
       })),
     pagos_detalle: JSON.stringify(partes),
@@ -1057,6 +1073,37 @@ async function confirmarRemito() {
    abre el menú de compartir del celular; si el navegador no lo
    soporta, se descarga la imagen.
    ────────────────────────────────────────────────────────── */
+/* ── Abrir el chat del cliente ───────────────────────────────
+   Con el número del remito, esté agendado o no. La imagen ya se
+   compartió; acá va el mensaje con el alias y el total.
+   ────────────────────────────────────────────────────────── */
+function ofrecerWhatsapp(remito) {
+  var enlace = enlaceWhatsapp(remito.cliente_tel, mensajeCompartir(remito));
+  if (!enlace) return;
+
+  abrirModal('¿Se lo mandás por WhatsApp?',
+    '<div class="campo-ayuda" style="margin-bottom:10px">' +
+      'Se abre el chat de <strong>' + esc(remito.cliente_nombre) + '</strong> con el mensaje escrito. ' +
+      'Funciona aunque el número no esté agendado.' +
+      '<br>La imagen del remito ya la tenés en el portapapeles del menú de compartir: ' +
+      'pegala en el chat.</div>' +
+
+    '<div class="aviso aviso-ok">' + ic('phone', 15) +
+      '<div>' + esc(remito.cliente_tel) + '</div></div>',
+
+    '<div style="display:flex;gap:8px;flex-wrap:wrap">' +
+      '<button class="btn btn-primario" style="flex:1;min-width:140px" ' +
+              'onclick="abrirWhatsapp(\'' + esc(enlace).replace(/'/g, "\\'") + '\')">' +
+        ic('phone', 16) + ' Abrir el chat</button>' +
+      '<button class="btn btn-secundario" onclick="cerrarModal()">Ahora no</button>' +
+    '</div>');
+}
+
+function abrirWhatsapp(enlace) {
+  cerrarModal();
+  window.open(enlace, '_blank');
+}
+
 async function compartirRemito(remito) {
   var caja = document.createElement('div');
   caja.style.cssText = 'position:fixed;left:-9999px;top:0;width:520px;background:#fff';
@@ -1082,6 +1129,9 @@ async function compartirRemito(remito) {
         title: 'Remito de ' + remito.cliente_nombre,
         text: mensajeCompartir(remito)
       });
+      /* Compartir manda la imagen, pero el chat hay que elegirlo a
+         mano. Si el remito tiene teléfono, se ofrece abrirlo. */
+      ofrecerWhatsapp(remito);
     } else {
       var a = document.createElement('a');
       a.href = URL.createObjectURL(blob);

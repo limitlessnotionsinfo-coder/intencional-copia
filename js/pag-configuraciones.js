@@ -1295,7 +1295,13 @@ async function guardarFinanzas() {
       String(Math.max(3, Math.min(26, +porId('cfg-semanas').value || 8))));
     await guardarConfig('objetivo_facturacion', String(leerMonto('cfg-obj-facturacion') || ''));
     await guardarConfig('objetivo_margen', (porId('cfg-obj-margen').value || '').trim());
-    toast('Guardado');
+
+    /* Los números se calculan con esta configuración: si quedó
+       una copia vieja en memoria, mostrarían lo de antes. */
+    invalidarCache('config');
+    if (typeof _dn !== 'undefined') _dn = null;
+
+    toast('Guardado · ' + plata(fijosMensuales()) + ' de gastos fijos por mes');
     pintarRuta();
   } catch (e) { toast(e.message, 'error'); }
 }
