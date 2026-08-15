@@ -1105,15 +1105,32 @@ var _remitoParaEnviar = null;
    bloquea la apertura de WhatsApp. Por eso abrir el chat es un
    enlace de verdad, que navega solo al tocarlo.
    ────────────────────────────────────────────────────────── */
-function ofrecerWhatsapp(remito, blob) {
-  var enlace = enlaceWhatsapp(remito.cliente_tel, mensajeCompartir(remito));
-  if (!enlace) return;
-  _remitoParaEnviar = { remito: remito, blob: blob, enlace: enlace };
+function ofrecerWhatsapp(remito, opciones) {
+  var o = opciones || {};
+  /* El teléfono puede venir del remito o de la ficha del cliente */
+  var tel = o.tel || remito.cliente_tel;
+  var mensaje = o.mensaje || mensajeCompartir(remito);
+  var enlace = enlaceWhatsapp(tel, mensaje);
+  if (!enlace) { toast('Ese remito no tiene un teléfono válido', 'error'); return; }
 
-  abrirModal('Mandarle el remito',
-    '<div class="aviso aviso-ok" style="margin-bottom:14px">' + ic('phone', 15) +
-      '<div><strong>' + esc(remito.cliente_nombre) + '</strong><br>' +
-      esc(remito.cliente_tel) + '</div></div>' +
+  _remitoParaEnviar = { remito: remito, blob: o.blob, enlace: enlace };
+
+  abrirModal(o.titulo || 'Mandarle el remito',
+    '<div class="aviso ' + (o.reclamo ? 'aviso-warn' : 'aviso-ok') + '" style="margin-bottom:14px">' +
+      ic('phone', 15) +
+      '<div><strong>' + esc(remito.cliente_nombre) + '</strong><br>' + esc(tel) + '</div></div>' +
+
+    /* Se ve el comprobante que se va a mandar. En la computadora
+       esta es además la única forma de verlo. */
+    '<details style="margin-bottom:14px">' +
+      '<summary style="cursor:pointer;font-size:12.5px;color:var(--rose);font-weight:600;padding:4px 0">' +
+        'Ver el remito</summary>' +
+      '<div class="visor-remito" id="visor-envio" style="margin-top:8px">' +
+        remitoParaImagen(remito) + '</div>' +
+    '</details>' +
+
+    '<div class="campo-ayuda" style="margin-bottom:10px"><strong>Mensaje que se manda</strong>' +
+      '<div class="vista-previa">' + esc(mensaje).replace(/\n/g, '<br>') + '</div></div>' +
 
     '<div class="paso-envio">' +
       '<span class="paso-num">1</span>' +
@@ -1134,8 +1151,34 @@ function ofrecerWhatsapp(remito, blob) {
       '</div>' +
     '</div>',
 
-    '<button class="btn btn-secundario btn-bloque" onclick="soloCompartir()">' +
-      ic('upload', 15) + ' Compartir de otra forma</button>');
+    '<div style="display:flex;gap:8px;flex-wrap:wrap">' +
+      '<button class="btn btn-secundario" style="flex:1;min-width:130px" onclick="soloCompartir()">' +
+        ic('upload', 15) + ' Compartir de otra forma</button>' +
+      '<button class="btn btn-secundario" onclick="bajarRemitoDesdeEnvio()">' +
+        ic('download', 15) + ' Descargar</button>' +
+    '</div>');
+
+  /* El comprobante se dibuja a 520px: se escala para que entre */
+  var visor = porId('visor-envio');
+  if (visor && visor.firstElementChild) {
+    var escala = Math.min(1, (visor.clientWidth || 520) / 520);
+    visor.style.setProperty('--escala-remito', escala);
+    visor.style.height = Math.ceil(visor.firstElementChild.offsetHeight * escala) + 'px';
+  }
+}
+
+async function bajarRemitoDesdeEnvio() {
+  var d = _remitoParaEnviar;
+  if (!d) return;
+  try {
+    var img = await imagenDelRemito(d.remito);
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(img.blob);
+    a.download = img.nombre;
+    a.click();
+    setTimeout(function () { URL.revokeObjectURL(a.href); }, 1000);
+    toast('Descargado');
+  } catch (e) { toast(e.message, 'error'); }
 }
 
 /* Copiar es su propio paso: así el toque que abre WhatsApp queda
@@ -1268,7 +1311,7 @@ async function compartirRemito(remito) {
     /* Con teléfono cargado, el camino corto: copiar y abrir el
        chat. Sin teléfono, el menú de compartir de siempre. */
     if (enlaceWhatsapp(remito.cliente_tel, '')) {
-      ofrecerWhatsapp(remito, blob);
+      ofrecerWhatsapp(remito, { blob: blob });
     } else if (navigator.canShare && navigator.canShare({ files: [archivo] })) {
       await navigator.share({
         files: [archivo],

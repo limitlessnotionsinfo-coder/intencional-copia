@@ -261,14 +261,12 @@ function verRemito(id) {
         ? '<button class="btn btn-primario" style="flex:1;min-width:120px" onclick="abrirCobro()">' +
           ic('cash', 15) + ' Cobrar ' + plata(deuda) + '</button>'
         : '') +
-      (deuda > 0 && enlaceReclamo(r)
-        ? '<a class="btn btn-secundario" href="' + esc(enlaceReclamo(r)) + '" ' +
-          'target="_blank" rel="noopener">' + ic('phone', 15) + ' Reclamar</a>'
-        : '') +
-      '<button class="btn btn-secundario" onclick="verImagenRemito()">' +
-        ic('eye', 15) + ' Ver imagen</button>' +
       '<button class="btn btn-secundario" onclick="enviarRemito()">' +
         ic('upload', 15) + ' Enviar</button>' +
+      (deuda > 0
+        ? '<button class="btn btn-secundario" onclick="reclamarRemito()">' +
+          ic('phone', 15) + ' Reclamar</button>'
+        : '') +
       '<button class="btn btn-secundario" onclick="editarRemito()">' + ic('edit', 15) + ' Editar</button>' +
       '<button class="btn btn-peligro" onclick="borrarRemito()">' + ic('trash', 15) + ' Borrar</button>' +
     '</div>');
@@ -460,60 +458,40 @@ async function confirmarBorrado() {
 
 /* ── Reenviar: misma imagen que se mandó la primera vez ──── */
 /* Copia el remito y abre el chat, igual que al crearlo */
-/* ── Ver el comprobante en pantalla ──────────────────────────
-   En la computadora no hay menú de compartir, así que sin esto
-   no había forma de ver la imagen.
+/* ── Enviar y reclamar ───────────────────────────────────────
+   El mismo camino que al crear el remito: se copia la imagen y
+   se abre el chat. Lo único que cambia es el mensaje.
    ────────────────────────────────────────────────────────── */
-function verImagenRemito() {
-  var r = _remitoAbierto;
-  if (!r) return;
-
-  abrirModal('Remito de ' + (r.cliente_nombre || ''),
-    '<div class="visor-remito" id="visor-remito">' + remitoParaImagen(r) + '</div>',
-
-    '<div style="display:flex;gap:8px;flex-wrap:wrap">' +
-      '<button class="btn btn-primario" style="flex:1;min-width:130px" onclick="enviarRemito()">' +
-        ic('upload', 15) + ' Enviar</button>' +
-      '<button class="btn btn-secundario" onclick="bajarImagenRemito()">' +
-        ic('download', 15) + ' Descargar</button>' +
-    '</div>');
-
-  ajustarVisor();
-}
-
-/* El comprobante se dibuja a 520px de ancho. Se escala para que
-   entre, y se le fija el alto: si no, queda un hueco abajo del
-   tamaño de lo que se achicó. */
-function ajustarVisor() {
-  var visor = porId('visor-remito');
-  if (!visor || !visor.firstElementChild) return;
-
-  var ancho = visor.clientWidth || 520;
-  var escala = Math.min(1, ancho / 520);
-  visor.style.setProperty('--escala-remito', escala);
-  visor.style.height = Math.ceil(visor.firstElementChild.offsetHeight * escala) + 'px';
-}
-
-async function bajarImagenRemito() {
-  var r = _remitoAbierto;
-  if (!r) return;
-  try {
-    var img = await imagenDelRemito(r);
-    var a = document.createElement('a');
-    a.href = URL.createObjectURL(img.blob);
-    a.download = img.nombre;
-    a.click();
-    setTimeout(function () { URL.revokeObjectURL(a.href); }, 1000);
-    toast('Descargado');
-  } catch (e) { toast(e.message, 'error'); }
-}
-
-/* Un solo camino de envío: antes "Reenviar" y "WhatsApp"
-   terminaban los dos acá y hacían exactamente lo mismo. */
-async function enviarRemito() {
+function enviarRemito() {
   var r = _remitoAbierto; if (!r) return;
+  var tel = telDelRemito(r);
   cerrarModal();
-  await compartirRemito(r);
+
+  /* Sin teléfono no hay chat que abrir: queda el menú del sistema */
+  if (!tel) { compartirRemito(r); return; }
+
+  ofrecerWhatsapp(r, {
+    tel: tel,
+    mensaje: mensajeCompartir(r),
+    titulo: 'Mandarle el remito'
+  });
+}
+
+function reclamarRemito() {
+  var r = _remitoAbierto; if (!r) return;
+  var tel = telDelRemito(r);
+  if (!tel) {
+    toast('Para reclamarle hace falta el teléfono: cargalo en su ficha', 'error');
+    return;
+  }
+  cerrarModal();
+
+  ofrecerWhatsapp(r, {
+    tel: tel,
+    mensaje: mensajeCobroDeuda(r),
+    titulo: 'Reclamar ' + plata(deudaPendiente(r)),
+    reclamo: true
+  });
 }
 
 function dato(etiqueta, valor) {
@@ -588,8 +566,3 @@ function detalleDeuda() {
     '</div>');
 }
 
-
-/* Si se gira el teléfono, el visor se recalcula */
-window.addEventListener('resize', function () {
-  if (porId('visor-remito')) ajustarVisor();
-});
