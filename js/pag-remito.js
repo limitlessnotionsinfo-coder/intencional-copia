@@ -1099,58 +1099,81 @@ async function confirmarRemito() {
    ────────────────────────────────────────────────────────── */
 var _remitoParaEnviar = null;
 
+/* ── Mandarle el remito ──────────────────────────────────────
+   Dos pasos separados a propósito: copiar es asíncrono y, al
+   terminar, iOS ya no considera que haya un toque del usuario y
+   bloquea la apertura de WhatsApp. Por eso abrir el chat es un
+   enlace de verdad, que navega solo al tocarlo.
+   ────────────────────────────────────────────────────────── */
 function ofrecerWhatsapp(remito, blob) {
   var enlace = enlaceWhatsapp(remito.cliente_tel, mensajeCompartir(remito));
   if (!enlace) return;
   _remitoParaEnviar = { remito: remito, blob: blob, enlace: enlace };
 
   abrirModal('Mandarle el remito',
-    '<div class="aviso aviso-ok" style="margin-bottom:12px">' + ic('phone', 15) +
+    '<div class="aviso aviso-ok" style="margin-bottom:14px">' + ic('phone', 15) +
       '<div><strong>' + esc(remito.cliente_nombre) + '</strong><br>' +
       esc(remito.cliente_tel) + '</div></div>' +
 
-    '<div class="campo-ayuda">' +
-      'Se copia el remito y se abre el chat con el mensaje ya escrito. ' +
-      'Ahí solo tenés que mantener apretado y pegar la imagen.' +
-      '<br>Funciona aunque el número no esté agendado.</div>',
+    '<div class="paso-envio">' +
+      '<span class="paso-num">1</span>' +
+      '<div style="flex:1">' +
+        '<button class="btn btn-secundario btn-bloque" id="btn-copiar" onclick="copiarRemito()">' +
+          ic('clipboard', 15) + ' Copiar el remito</button>' +
+        '<div class="campo-ayuda" id="estado-copia">La imagen queda lista para pegar</div>' +
+      '</div>' +
+    '</div>' +
 
-    '<div style="display:flex;gap:8px;flex-wrap:wrap">' +
-      '<button class="btn btn-primario btn-bloque" id="btn-wa" onclick="copiarYAbrirChat()">' +
-        ic('phone', 16) + ' Copiar y abrir el chat</button>' +
-      '<button class="btn btn-secundario" style="flex:1;min-width:120px" onclick="soloCompartir()">' +
-        ic('upload', 15) + ' Compartir de otra forma</button>' +
-      '<button class="btn btn-fantasma" onclick="cerrarModal()">Ahora no</button>' +
-    '</div>');
+    '<div class="paso-envio">' +
+      '<span class="paso-num">2</span>' +
+      '<div style="flex:1">' +
+        '<a class="btn btn-primario btn-bloque" href="' + esc(enlace) + '" ' +
+           'target="_blank" rel="noopener" onclick="cerrarModal()">' +
+          ic('phone', 16) + ' Abrir el chat</a>' +
+        '<div class="campo-ayuda">Se abre con el mensaje escrito. Ahí pegás la imagen.</div>' +
+      '</div>' +
+    '</div>',
+
+    '<button class="btn btn-secundario btn-bloque" onclick="soloCompartir()">' +
+      ic('upload', 15) + ' Compartir de otra forma</button>');
 }
 
-/* Todo en el mismo toque: iOS no deja copiar al portapapeles si
-   antes hubo una espera. */
-async function copiarYAbrirChat() {
+/* Copiar es su propio paso: así el toque que abre WhatsApp queda
+   limpio y el navegador no lo bloquea. */
+async function copiarRemito() {
   var d = _remitoParaEnviar;
   if (!d) return;
 
-  var btn = porId('btn-wa');
-  if (btn) btn.textContent = 'Copiando…';
+  var btn = porId('btn-copiar');
+  var estado = porId('estado-copia');
+  if (btn) { btn.disabled = true; btn.innerHTML = ic('clock', 15) + ' Copiando…'; }
 
-  var copiado = false;
   try {
-    if (navigator.clipboard && typeof ClipboardItem !== 'undefined') {
-      var blob = d.blob
-        ? Promise.resolve(d.blob)
-        : imagenDelRemito(d.remito).then(function (r) { return r.blob; });
-      await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
-      copiado = true;
+    if (!navigator.clipboard || typeof ClipboardItem === 'undefined') {
+      throw new Error('Este navegador no permite copiar imágenes');
+    }
+    var blob = d.blob
+      ? Promise.resolve(d.blob)
+      : imagenDelRemito(d.remito).then(function (r) { return r.blob; });
+
+    await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+
+    if (btn) {
+      btn.className = 'btn btn-secundario btn-bloque';
+      btn.innerHTML = ic('check', 15) + ' Copiado';
+      btn.disabled = false;
+    }
+    if (estado) {
+      estado.innerHTML = '<span style="color:var(--ok)">Listo · ahora abrí el chat y pegalo</span>';
     }
   } catch (e) {
+    if (btn) { btn.disabled = false; btn.innerHTML = ic('clipboard', 15) + ' Copiar el remito'; }
+    if (estado) {
+      estado.innerHTML = '<span style="color:var(--warn)">No se pudo copiar. ' +
+        'Usá “Compartir de otra forma” y guardá la imagen.</span>';
+    }
     console.warn('portapapeles:', e.message);
   }
-
-  cerrarModal();
-  toast(copiado
-    ? 'Remito copiado · pegalo en el chat'
-    : 'No se pudo copiar la imagen: usá el botón de compartir', copiado ? '' : 'error');
-
-  window.open(d.enlace, '_blank');
 }
 
 /* El menú de compartir del teléfono, por si prefiere ese camino */

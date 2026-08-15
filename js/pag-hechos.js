@@ -423,12 +423,12 @@ async function confirmarBorrado() {
 
 /* ── Reenviar: misma imagen que se mandó la primera vez ──── */
 /* Copia el remito y abre el chat, igual que al crearlo */
-async function chatDelRemito() {
-  if (!enlaceWhatsapp(_remitoAbierto.cliente_tel, '')) {
+function chatDelRemito() {
+  var r = _remitoAbierto;
+  if (!r || !enlaceWhatsapp(r.cliente_tel, '')) {
     toast('Ese remito no tiene un teléfono válido', 'error');
     return;
   }
-  var r = _remitoAbierto;
   cerrarModal();
   ofrecerWhatsapp(r);
 }
