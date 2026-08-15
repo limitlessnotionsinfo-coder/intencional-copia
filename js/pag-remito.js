@@ -1283,6 +1283,33 @@ function sinCortar(html) {
              '$1<span style="white-space:nowrap">$2</span>');
 }
 
+/* ¿El comprobante lleva el aviso de aumento?
+   Se decide con el cliente del propio remito, no con el
+   formulario: si no, abrir un remito viejo desde Remitos hechos
+   rompía la pantalla porque el formulario todavía no existía. */
+function correspondeAvisarAumento(r) {
+  if (!aumentoConfig().activo) return false;
+
+  var c = clienteDelRemito(r);
+  if (!c) return false;
+  return !clienteAvisado(c) && !clienteReciente(c);
+}
+
+/* El cliente de un remito, buscado en lo que ya está cargado */
+function clienteDelRemito(r) {
+  if (!r) return null;
+  /* Si es el que se está cargando, ya lo tenemos */
+  if (R && R.cliente && normalizar(R.cliente.local) === normalizar(r.cliente_nombre)) return R.cliente;
+
+  var lista = (typeof _clientesRemito !== 'undefined' && _clientesRemito) ? _clientesRemito : [];
+  if (r.cliente_num) {
+    var porNum = lista.find(function (c) { return String(c.num) === String(r.cliente_num); });
+    if (porNum) return porNum;
+  }
+  var n = normalizar(r.cliente_nombre);
+  return lista.find(function (c) { return normalizar(c.local) === n; }) || null;
+}
+
 function remitoParaImagen(r) {
   var prods = [];
   try { prods = JSON.parse(r.productos || '[]'); } catch (e) {}
@@ -1385,7 +1412,7 @@ function remitoParaImagen(r) {
         '</div>'
       : '') +
 
-    (aumentoConfig().activo && !!R.cliente && !clienteAvisado(R.cliente) && !clienteReciente(R.cliente)
+    (correspondeAvisarAumento(r)
       ? '<div style="margin-top:12px;border:1px solid #fed7aa;background:#fff7ed;border-radius:10px;padding:10px 13px;font-size:12.5px;color:#9a3412;line-height:1.5">' +
         '<strong>Aviso:</strong> ' + esc(textoAviso(aumentoConfig().nuevo)) + '</div>'
       : '') +
