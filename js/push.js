@@ -190,6 +190,17 @@ async function filaDeEsteTelefono() {
    El servidor necesita la suscripción para poder mandar el push.
    Se guarda en la base, no en el teléfono.
    ────────────────────────────────────────────────────────── */
+/* Dos suscripciones del mismo servicio de push son, casi siempre,
+   del mismo teléfono: iOS usa web.push.apple.com para todas. */
+function servicioDe(endpoint) {
+  try { return new URL(endpoint).hostname; } catch (e) { return ''; }
+}
+
+function mismoServicio(a, b) {
+  var h1 = servicioDe(a), h2 = servicioDe(b);
+  return !!h1 && h1 === h2;
+}
+
 async function guardarSuscripcion(sub) {
   var j = sub.toJSON();
   var fila = {
@@ -206,14 +217,41 @@ async function guardarSuscripcion(sub) {
 
   /* Si el mismo teléfono ya estaba, se actualiza en vez de duplicar */
   var previas = await traerTodo('push_subs', 'endpoint=eq.' + encodeURIComponent(j.endpoint));
+
   if (previas.length) {
+    /* Mismo endpoint: se actualiza y se conservan sus horarios */
     await actualizar('push_subs', previas[0].id, fila);
-  } else {
-    fila.avisos = JSON.stringify(avisosPorDefecto());
-    /* Directo, sin pasar por la cola: si esto falla, el teléfono
-       queda suscripto de un lado y no del otro, y hay que saberlo. */
-    await crearDirecto('push_subs', fila);
+    return;
   }
+
+  /* Endpoint nuevo. iOS lo cambia cada vez que se reinstala la app
+     o se revoca el permiso, así que las suscripciones del mismo
+     teléfono se acumulaban y cada una disparaba a su hora.
+
+     Se identifican por el servicio de push: todas las de un mismo
+     iPhone salen del mismo dominio. Comparar el texto de
+     "dispositivo" no alcanza, porque puede cambiar. */
+  var anteriores = (await traerTodo('push_subs', 'activa=eq.true'))
+    .filter(function (x) {
+      return x.endpoint !== j.endpoint && mismoServicio(x.endpoint, j.endpoint);
+    })
+    .sort(function (a, b) { return (+b.id || 0) - (+a.id || 0); });
+
+  /* Se heredan los horarios de la más reciente para no perder lo
+     configurado al reinstalar. */
+  fila.avisos = anteriores.length && anteriores[0].avisos
+    ? anteriores[0].avisos
+    : JSON.stringify(avisosPorDefecto());
+
+  /* Directo, sin pasar por la cola: si esto falla, el teléfono
+     queda suscripto de un lado y no del otro, y hay que saberlo. */
+  await crearDirecto('push_subs', fila);
+
+  for (var i = 0; i < anteriores.length; i++) {
+    try { await actualizar('push_subs', anteriores[i].id, { activa: false }); }
+    catch (e) { console.warn('no se pudo dar de baja la suscripción vieja', anteriores[i].id); }
+  }
+  invalidarCache('push_subs');
 }
 
 async function borrarSuscripcion(endpoint) {
@@ -328,6 +366,17 @@ async function diagnosticoPush() {
     agregar(bool(fila.activa), 'La suscripción está activa',
       bool(fila.activa) ? '' : 'El servidor la dio de baja porque los envíos fallaban. ' +
         'Apagá y volvé a activar.');
+
+    /* Varias suscripciones del mismo teléfono disparan avisos a
+       horarios distintos: es lo que hace parecer que la hora está mal. */
+    try {
+      var activas = (await traerTodo('push_subs', 'activa=eq.true'))
+        .filter(function (x) { return mismoServicio(x.endpoint, fila.endpoint); });
+      agregar(activas.length <= 1, 'No hay suscripciones repetidas',
+        activas.length <= 1 ? ''
+          : 'Hay ' + activas.length + ' de este teléfono, cada una con sus horarios. ' +
+            'Apagá y volvé a activar: las viejas se dan de baja solas.');
+    } catch (e) {}
   }
 
   return pasos;

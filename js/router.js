@@ -60,6 +60,14 @@ function marcarMenu(id) {
     if (b.dataset.pagina === id) b.setAttribute('aria-current', 'page');
     else b.removeAttribute('aria-current');
   });
+
+  /* Si la página abierta no está en la barra, se marca el menú:
+     así siempre se ve dónde estás parado. */
+  var tabMenu = porId('tab-menu');
+  if (tabMenu) {
+    if (id && TABS_INFERIORES.indexOf(id) === -1) tabMenu.setAttribute('aria-current', 'page');
+    else tabMenu.removeAttribute('aria-current');
+  }
 }
 
 function construirMenu() {
@@ -83,17 +91,73 @@ function construirMenu() {
 
 /* En el celular no hay menú lateral: estas cinco quedan siempre
    a un toque. Al resto se llega por los atajos del inicio. */
-var TABS_INFERIORES = ['inicio', 'remito', 'hechos', 'clientes', 'metricas'];
+var TABS_INFERIORES = ['inicio', 'remito', 'hechos', 'clientes'];   /* el quinto lugar es el menú */
 
 function construirBarraInferior() {
   var cont = porId('barra-inferior');
   if (!cont) return;
+
   cont.innerHTML = TABS_INFERIORES.map(function (id) {
     var p = PAGINAS[id];
     if (!p) return '';
     return '<button class="tab-inferior" data-pagina="' + id + '" onclick="irA(\'' + id + '\')">' +
       ic(p.icono, 20) + '<span>' + esc(p.menu) + '</span></button>';
-  }).join('');
+  }).join('') +
+    /* El último lugar es el menú: adentro está todo lo que no
+       entra en la barra. */
+    '<button class="tab-inferior" id="tab-menu" onclick="alternarMenuMas()">' +
+      ic('menu', 20) + '<span>Menú</span></button>';
+}
+
+/* ═══════════════════════════════════════════════════════════
+   EL MENÚ DE LAS DEMÁS PÁGINAS
+   ═══════════════════════════════════════════════════════════ */
+function paginasFueraDeLaBarra() {
+  return Object.keys(PAGINAS)
+    .filter(function (id) { return TABS_INFERIORES.indexOf(id) === -1 && PAGINAS[id].menu; })
+    .map(function (id) { return PAGINAS[id]; });
+}
+
+function alternarMenuMas() {
+  var abierto = porId('menu-mas');
+  if (abierto) { cerrarMenuMas(); return; }
+
+  var cap = document.createElement('div');
+  cap.id = 'menu-mas';
+  cap.className = 'menu-mas';
+  cap.onclick = function (e) { if (e.target === cap) cerrarMenuMas(); };
+
+  cap.innerHTML =
+    '<div class="menu-mas-caja" onclick="event.stopPropagation()">' +
+      '<div class="menu-mas-agarre"></div>' +
+      '<div class="menu-mas-grilla">' +
+        paginasFueraDeLaBarra().map(function (p) {
+          return '<button class="menu-mas-item" onclick="irDesdeMenu(\'' + p.id + '\')">' +
+            '<span class="menu-mas-ic">' + ic(p.icono, 20) + '</span>' +
+            '<span class="menu-mas-txt">' + esc(p.menu) + '</span>' +
+          '</button>';
+        }).join('') +
+      '</div>' +
+    '</div>';
+
+  document.body.appendChild(cap);
+  /* En el próximo cuadro, para que la transición se vea */
+  var mostrar = function () { cap.classList.add('visible'); };
+  if (typeof requestAnimationFrame === 'function') requestAnimationFrame(mostrar);
+  else setTimeout(mostrar, 16);
+}
+
+function cerrarMenuMas() {
+  var cap = porId('menu-mas');
+  if (!cap) return;
+  cap.classList.remove('visible');
+  setTimeout(function () { if (cap.parentNode) cap.remove(); }, 160);
+  marcarMenu((location.hash || '').replace(/^#\/?/, '').split('?')[0]);
+}
+
+function irDesdeMenu(id) {
+  cerrarMenuMas();
+  irA(id);
 }
 
 window.addEventListener('hashchange', pintarRuta);

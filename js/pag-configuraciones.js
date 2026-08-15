@@ -26,7 +26,7 @@ registrarPagina({
         tarjetaProductos() + tarjetaAumento()) +
 
       grupoConfig('plata', 'Cobranzas y gastos', 'wallet',
-        tarjetaAlias() + tarjetaEmpleado() + tarjetaMensaje()) +
+        tarjetaAlias() + tarjetaEmpleado() + tarjetaFinanzas() + tarjetaMensaje()) +
 
       /* El orden de las rutas vive en Clientes, donde se arrastra */
       grupoConfig('rutas', 'Feriados', 'calendar', tarjetaFeriados()) +
@@ -1211,4 +1211,69 @@ async function revisarEsquema() {
         'En Supabase → SQL Editor, corré <code>sql/al-dia.sql</code> del zip. ' +
         'Se puede correr las veces que quieras: no rompe nada de lo que ya está.</div>'
       : ''));
+}
+
+
+/* ═══════════════════════════════════════════════════════════
+   FINANZAS
+   Lo que la app no puede deducir sola y hace falta para los
+   números de la empresa.
+   ═══════════════════════════════════════════════════════════ */
+function tarjetaFinanzas() {
+  return '<details class="tarjeta">' +
+    '<summary class="tarjeta-cab" style="cursor:pointer">' + ic('chart', 16) + ' Finanzas</summary>' +
+    '<div class="tarjeta-cuerpo">' +
+
+      '<div class="campo"><div class="campo-etiq">Reserva de seguridad</div>' +
+        '<div style="display:flex;align-items:center;gap:8px">' +
+          '<input class="campo-input" id="cfg-reserva" type="number" min="0" max="100" ' +
+                 'style="max-width:100px" value="' + esc(leerConfig('reserva_seguridad', '15')) + '"/>' +
+          '<span style="font-size:13px;color:var(--muted)">% de los gastos del mes</span>' +
+        '</div>' +
+        '<div class="campo-ayuda">Se aparta antes de calcular cuánta plata se puede usar. ' +
+          'Es el colchón para un mes flojo.</div>' +
+      '</div>' +
+
+      '<div class="campo"><div class="campo-etiq">Categorías de gasto fijo</div>' +
+        '<input class="campo-input" id="cfg-fijas" value="' + esc(leerConfig('categorias_fijas', '')) + '" ' +
+               'placeholder="alquiler, servicios, contador"/>' +
+        '<div class="campo-ayuda">Separadas por coma. Ya cuentan como fijas: ' +
+          esc(CATEGORIAS_FIJAS.join(', ')) + '. ' +
+          'Un gasto fijo se paga haya o no ventas, y es lo que define el punto de equilibrio.</div>' +
+      '</div>' +
+
+      '<div class="campo"><div class="campo-etiq">Semanas para las proyecciones</div>' +
+        '<input class="campo-input" id="cfg-semanas" type="number" min="3" max="26" ' +
+               'style="max-width:100px" value="' + esc(leerConfig('semanas_proyeccion', '8')) + '"/>' +
+        '<div class="campo-ayuda">Cuántas semanas se promedian. Más semanas, estimación más ' +
+          'estable pero menos sensible a un cambio reciente.</div>' +
+      '</div>' +
+
+      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">' +
+        '<div class="campo"><div class="campo-etiq">Objetivo de facturación</div>' +
+          inputMonto('cfg-obj-facturacion', leerConfig('objetivo_facturacion', '') || '') +
+          '<div class="campo-ayuda">Por mes</div></div>' +
+        '<div class="campo"><div class="campo-etiq">Objetivo de margen</div>' +
+          '<input class="campo-input" id="cfg-obj-margen" type="number" min="0" max="100" ' +
+                 'value="' + esc(leerConfig('objetivo_margen', '')) + '"/>' +
+          '<div class="campo-ayuda">En porcentaje</div></div>' +
+      '</div>' +
+
+      '<button class="btn btn-primario btn-bloque" onclick="guardarFinanzas()">Guardar</button>' +
+    '</div>' +
+  '</details>';
+}
+
+async function guardarFinanzas() {
+  try {
+    await guardarConfig('reserva_seguridad',
+      String(Math.max(0, Math.min(100, +porId('cfg-reserva').value || 0))));
+    await guardarConfig('categorias_fijas', (porId('cfg-fijas').value || '').trim());
+    await guardarConfig('semanas_proyeccion',
+      String(Math.max(3, Math.min(26, +porId('cfg-semanas').value || 8))));
+    await guardarConfig('objetivo_facturacion', String(leerMonto('cfg-obj-facturacion') || ''));
+    await guardarConfig('objetivo_margen', (porId('cfg-obj-margen').value || '').trim());
+    toast('Guardado');
+    pintarRuta();
+  } catch (e) { toast(e.message, 'error'); }
 }

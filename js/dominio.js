@@ -1680,3 +1680,182 @@ function parecido(a, b) {
   }
   return comunes / largo;
 }
+
+/* ═══════════════════════════════════════════════════════════
+   CRM · LA RELACIÓN CON CADA CLIENTE
+   Todo sale de los remitos que ya están cargados: cuándo compró,
+   cuánto y cada cuánto. No hay que anotar nada aparte.
+   ═══════════════════════════════════════════════════════════ */
+
+/* Los remitos de un cliente, del más nuevo al más viejo.
+   Se busca por número si está vinculado, y si no por nombre. */
+function remitosDe(cliente, remitos) {
+  var n = normalizar(cliente.local);
+  return (remitos || []).filter(function (r) {
+    if (r.cliente_num) return String(r.cliente_num) === String(cliente.num);
+    return normalizar(r.cliente_nombre) === n;
+  }).sort(function (a, b) {
+    return (claveFecha(b.fecha || b.created_at) || '').localeCompare(
+            claveFecha(a.fecha || a.created_at) || '');
+  });
+}
+
+/* Cuántos días pasan, en promedio, entre una compra y la siguiente */
+function frecuenciaDeCompra(rs) {
+  var fechas = (rs || [])
+    .map(function (r) { return claveFecha(r.fecha || r.created_at); })
+    .filter(Boolean).sort();
+  if (fechas.length < 2) return 0;
+
+  var huecos = [];
+  for (var i = 1; i < fechas.length; i++) {
+    var d = diasEntre(fechas[i - 1], fechas[i]);
+    if (d > 0) huecos.push(d);
+  }
+  if (!huecos.length) return 0;
+  return Math.round(huecos.reduce(function (a, b) { return a + b; }, 0) / huecos.length);
+}
+
+/* ── El estado de la relación ────────────────────────────────
+   Se compara hace cuánto no compra contra su propio ritmo: un
+   cliente que compra cada 15 días y hace 45 que no aparece está
+   en problemas, aunque otro que compra cada 90 esté bien.
+   ────────────────────────────────────────────────────────── */
+var ESTADOS_CRM = {
+  nuevo:     { etiqueta: 'Nuevo',      color: 'var(--info)',   clase: 'pin-info',
+               ayuda: 'Primera compra en los últimos 60 días' },
+  fiel:      { etiqueta: 'Fiel',       color: 'var(--ok)',     clase: 'pin-ok',
+               ayuda: 'Compra seguido y al día' },
+  activo:    { etiqueta: 'Al día',     color: 'var(--ok)',     clase: 'pin-ok',
+               ayuda: 'Viene comprando con normalidad' },
+  demorado:  { etiqueta: 'Demorado',   color: 'var(--warn)',   clase: 'pin-warn',
+               ayuda: 'Tarda más que de costumbre' },
+  enRiesgo:  { etiqueta: 'En riesgo',  color: 'var(--danger)', clase: 'pin-danger',
+               ayuda: 'Hace más del doble de su ritmo que no compra' },
+  perdido:   { etiqueta: 'Perdido',    color: 'var(--muted)',  clase: 'pin-neutro',
+               ayuda: 'Más de 120 días sin comprar' },
+  sinCompras:{ etiqueta: 'Sin compras',color: 'var(--muted)',  clase: 'pin-neutro',
+               ayuda: 'Está cargado pero nunca compró' }
+};
+
+function fichaCRM(cliente, remitos) {
+  var rs = remitosDe(cliente, remitos).filter(function (r) {
+    return r.motivo !== 'cerrado';   // una visita a puerta cerrada no es una compra
+  });
+  var compras = rs.filter(function (r) { return (+r.total || 0) > 0; });
+
+  var total = compras.reduce(function (a, r) { return a + (+r.total || 0); }, 0);
+  var unidades = compras.reduce(function (a, r) { return a + (+r.unidades || 0); }, 0);
+  var ultima = compras.length ? claveFecha(compras[0].fecha || compras[0].created_at) : '';
+  var primera = compras.length
+    ? claveFecha(compras[compras.length - 1].fecha || compras[compras.length - 1].created_at) : '';
+  var dias = ultima ? diasEntre(ultima, hoyISO()) : 0;
+  var ritmo = frecuenciaDeCompra(compras);
+  var deuda = rs.reduce(function (a, r) { return a + deudaPendiente(r); }, 0);
+
+  /* Sin ventas: el cliente estuvo pero no repuso */
+  var sinVentas = rs.filter(function (r) { return r.motivo === 'sin_ventas'; }).length;
+
+  var estado = 'sinCompras';
+  if (compras.length) {
+    var antiguedad = primera ? diasEntre(primera, hoyISO()) : 0;
+    /* Si todavía no tiene un ritmo propio, se usa un mes como referencia */
+    var esperado = ritmo || 30;
+
+    /* El orden importa: primero lo que urge, después lo que
+       describe la relación. Un cliente con cinco compras ya no es
+       "nuevo" aunque haya empezado hace poco: es fiel. */
+    if (dias > 120) estado = 'perdido';
+    else if (dias > esperado * 2) estado = 'enRiesgo';
+    else if (dias > esperado * 1.4) estado = 'demorado';
+    else if (compras.length >= 5 && ritmo && ritmo <= 30) estado = 'fiel';
+    else if (antiguedad <= 60 && compras.length <= 3) estado = 'nuevo';
+    else estado = 'activo';
+  }
+
+  return {
+    cliente: cliente,
+    compras: compras.length,
+    total: total,
+    unidades: unidades,
+    promedio: compras.length ? Math.round(total / compras.length) : 0,
+    ultima: ultima,
+    primera: primera,
+    dias: dias,
+    ritmo: ritmo,
+    esperado: ritmo || 30,
+    deuda: deuda,
+    sinVentas: sinVentas,
+    estado: estado,
+    remitos: compras
+  };
+}
+
+/* Todas las fichas, ordenadas por lo que más facturó */
+function fichasCRM(clientes, remitos) {
+  return (clientes || [])
+    .filter(clienteActivo)
+    .map(function (c) { return fichaCRM(c, remitos); })
+    .sort(function (a, b) { return b.total - a.total; });
+}
+
+/* El panorama general */
+function resumenCRM(fichas) {
+  var porEstado = {};
+  Object.keys(ESTADOS_CRM).forEach(function (k) { porEstado[k] = []; });
+  (fichas || []).forEach(function (f) { porEstado[f.estado].push(f); });
+
+  var conCompras = (fichas || []).filter(function (f) { return f.compras > 0; });
+  var facturado = conCompras.reduce(function (a, f) { return a + f.total; }, 0);
+
+  /* Cuánto de la facturación viene de los mejores clientes: si
+     pocos concentran casi todo, perder uno duele mucho. */
+  var ordenados = conCompras.slice().sort(function (a, b) { return b.total - a.total; });
+  var cuantosSonElTop = Math.max(1, Math.round(ordenados.length * 0.2));
+  var delTop = ordenados.slice(0, cuantosSonElTop)
+    .reduce(function (a, f) { return a + f.total; }, 0);
+
+  return {
+    porEstado: porEstado,
+    total: (fichas || []).length,
+    conCompras: conCompras.length,
+    facturado: facturado,
+    promedio: conCompras.length ? Math.round(facturado / conCompras.length) : 0,
+    ritmoTipico: (function () {
+      var ritmos = conCompras.map(function (f) { return f.ritmo; }).filter(Boolean).sort(function (a, b) { return a - b; });
+      return ritmos.length ? ritmos[Math.floor(ritmos.length / 2)] : 0;
+    })(),
+    concentracion: facturado ? Math.round(delTop / facturado * 100) : 0,
+    cuantosSonElTop: cuantosSonElTop,
+    enPeligro: porEstado.enRiesgo.concat(porEstado.demorado)
+      .sort(function (a, b) { return b.total - a.total; }),
+    plataEnPeligro: porEstado.enRiesgo.reduce(function (a, f) { return a + f.total; }, 0)
+  };
+}
+
+/* Qué conviene hacer con este cliente hoy */
+function sugerenciaCRM(f) {
+  if (f.estado === 'enRiesgo') {
+    return 'Hace ' + f.dias + ' días que no compra y suele hacerlo cada ' + f.esperado +
+      '. Conviene llamarlo antes de perderlo.';
+  }
+  if (f.estado === 'demorado') {
+    return 'Va ' + (f.dias - f.esperado) + ' días más tarde que de costumbre. Un mensaje puede alcanzar.';
+  }
+  if (f.estado === 'perdido') {
+    return 'Hace ' + f.dias + ' días que no compra. Vale la pena pasar a ver si sigue abierto.';
+  }
+  if (f.estado === 'nuevo') {
+    return 'Cliente nuevo: las primeras reposiciones definen si se queda.';
+  }
+  if (f.deuda > 0) {
+    return 'Tiene ' + plata(f.deuda) + ' de deuda pendiente.';
+  }
+  if (f.sinVentas >= 2) {
+    return 'Ya hubo ' + f.sinVentas + ' visitas sin reposición: puede que el producto no le esté saliendo.';
+  }
+  if (f.estado === 'fiel') {
+    return 'Compra cada ' + f.ritmo + ' días sin fallar. Es de los que sostienen el negocio.';
+  }
+  return '';
+}
