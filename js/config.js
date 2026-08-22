@@ -5,16 +5,18 @@
    ═══════════════════════════════════════════════════════════ */
 
 /* Base por defecto. La clave publishable es pública por diseño:
-   quien protege los datos son las políticas RLS del proyecto. */
+   quien protege los datos son las políticas RLS del proyecto.
+   >>> APUNTADO A LA BASE DE PRUEBAS (no producción) <<< */
 var SB_BASE = {
-  url: 'https://mcobunyyuahxtjkykfby.supabase.co',
-  key: 'sb_publishable_BWiNB58kOu1NQOXbFZPbQw_N-BOcaDn',
-  nombre: 'Intencional'
+  url: 'https://runlbcwrehbaqcwvzcxs.supabase.co',
+  key: 'sb_publishable_9P5b9VpiJyExFJ8-OLtDkg_JjSHJhep',
+  nombre: 'Intencional (PRUEBAS)'
 };
 
 /* Mientras se termina la app se entra directo, sin login.
-   Poner en true para volver a pedir email y contraseña. */
-var PEDIR_LOGIN = true;
+   Poner en true para volver a pedir email y contraseña.
+   >>> EN PRUEBAS: sin login (la base de pruebas no tiene usuarios) <<< */
+var PEDIR_LOGIN = false;
 
 /* Si guardaste otra base desde Configuraciones, se usa esa. */
 function _conexionGuardada() {
