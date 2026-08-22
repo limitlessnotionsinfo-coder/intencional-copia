@@ -293,6 +293,12 @@ function verRemito(id) {
    de los 1029 quedaron sin él. Si falta, se busca en la ficha
    del cliente: el número es del cliente, no del remito.
    ────────────────────────────────────────────────────────── */
+/* Los clientes cargados en esta pantalla, para saber a quién ya
+   se le avisó del aumento. */
+function clientesDeHechos() {
+  return Object.keys(_porNombre || {}).map(function (k) { return _porNombre[k]; });
+}
+
 function telDelRemito(r) {
   if (!r) return '';
   if (enlaceWhatsapp(r.cliente_tel, '')) return r.cliente_tel;
@@ -487,7 +493,7 @@ function enviarRemito() {
 
   ofrecerWhatsapp(r, {
     tel: tel,
-    mensaje: mensajeCompartir(r),
+    mensaje: mensajeCompartir(r, clientesDeHechos()),
     titulo: 'Mandarle el remito'
   });
 }

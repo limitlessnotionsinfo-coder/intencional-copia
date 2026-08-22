@@ -44,7 +44,8 @@ function pintarPeriodo() {
   var chips = porId('g-chips');
   if (!chips) return;
 
-  chips.innerHTML = [['dia', 'Hoy'], ['semana', 'Semana'], ['mes', 'Mes'], ['rango', 'Rango']]
+  chips.innerHTML = [['hoy', 'Hoy'], ['semana', '7 días'], ['mes', '30 días'],
+                     ['trimestre', '3 meses'], ['anio', 'Año'], ['rango', 'Elegir']]
     .map(function (o) {
       return '<button class="btn ' + (G.periodo === o[0] ? 'btn-primario' : 'btn-secundario') + '" ' +
         'style="padding:6px 13px;font-size:12.5px" onclick="setPeriodoGasto(\'' + o[0] + '\')">' +
@@ -194,16 +195,21 @@ function categoriaDeGastoFijo(nombre) {
 }
 
 /* ── Período ─────────────────────────────────────────────── */
+/* Los mismos períodos que en Números, calculados por la misma
+   función: si cada pantalla hiciera su cuenta, los totales
+   podrían no coincidir. */
 function rangoGastos() {
-  var hoy = hoyISO();
-  if (G.periodo === 'dia')    return { desde: hoy, hasta: hoy, etiqueta: 'Hoy' };
-  if (G.periodo === 'semana') return { desde: isoDe(sumarDias(-6)), hasta: hoy, etiqueta: 'Últimos 7 días' };
-  if (G.periodo === 'mes')    return { desde: isoDe(sumarDias(-29)), hasta: hoy, etiqueta: 'Últimos 30 días' };
-  return {
-    desde: G.desde || '0000-00-00',
-    hasta: G.hasta || '9999-99-99',
-    etiqueta: (G.desde ? fechaCorta(G.desde) : 'el principio') + ' a ' + (G.hasta ? fechaCorta(G.hasta) : 'hoy')
-  };
+  if (G.periodo === 'rango' && !(G.desde && G.hasta)) {
+    /* Rango a medio completar: se muestra todo en vez de nada */
+    return {
+      desde: G.desde || '0000-00-00',
+      hasta: G.hasta || '9999-99-99',
+      dias: 9999,
+      etiqueta: (G.desde ? fechaCorta(G.desde) : 'el principio') + ' a ' +
+                (G.hasta ? fechaCorta(G.hasta) : 'hoy')
+    };
+  }
+  return rangoDe(G.periodo, G.desde, G.hasta);
 }
 
 function setPeriodoGasto(p) {
@@ -1756,7 +1762,7 @@ function pintarTodosLosGastos() {
   if (!lista.length) { cont.innerHTML = ''; return; }
 
   cont.innerHTML =
-    '<details class="tarjeta" id="det-todos">' +
+    '<details class="tarjeta" id="det-todos" ontoggle="if(this.open){pintarPeriodo();pintarListaTodos();}">' +
       '<summary class="tarjeta-cab" style="cursor:pointer">' + ic('db', 16) + ' Todos los gastos' +
         '<span style="margin-left:auto"><span class="pin pin-neutro">' +
           plural(lista.length, 'gasto') + '</span></span>' +

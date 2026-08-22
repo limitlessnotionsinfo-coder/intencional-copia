@@ -56,6 +56,7 @@ registrarPagina({
         if (!g.open) return;
         previewAviso(); previewMensaje(); previewDeuda(); pintarGastosFijos();
         previewMensajesDeuda(); pintarMonotributos(); pintarDeudasPropias();
+        previewMensajeAumento();
         ['cfg-alias', 'cfg-tel', 'cfg-horas'].forEach(function (id) {
           var el = porId(id); if (el) el.oninput = previewDeuda;
         });
@@ -92,7 +93,31 @@ function tarjetaAumento() {
           '<input class="campo-input" id="cfg-nuevo" type="number" inputmode="numeric" min="0" value="' + (cfg.nuevo || '') + '" oninput="previewAviso()"/></div>' +
       '</div>' +
 
+      '<div class="campo"><div class="campo-etiq">Precio sugerido de venta</div>' +
+        inputMonto('cfg-sugerido', leerConfig('aumento_precio_sugerido', '') || '') +
+        '<div class="campo-ayuda">A cuánto le conviene venderlo al local. ' +
+          'Si lo dejás vacío, se sugiere el doble del costo nuevo.</div>' +
+      '</div>' +
+
       '<div id="preview-aviso"></div>' +
+
+      /* El texto que se manda con el remito */
+      '<div class="campo-etiq" style="margin-top:14px">Mensaje del aviso</div>' +
+      '<div class="campo-ayuda" style="margin-bottom:6px">' +
+        'Se agrega al mensaje del remito cuando el cliente todavía no sabe del aumento.</div>' +
+      '<textarea class="campo-input" id="cfg-msg-aumento" rows="5" style="resize:vertical" ' +
+                'oninput="previewMensajeAumento()">' +
+        esc(leerConfig('mensaje_aumento', MENSAJE_AUMENTO_DEFAULT)) + '</textarea>' +
+      '<div id="pv-aumento"></div>' +
+
+      '<div class="campo-ayuda" style="margin-top:8px">' +
+        '<strong>Datos que podés usar:</strong> ' +
+        [['producto', 'el que aumenta'], ['viejo', 'precio de hoy'], ['nuevo', 'precio nuevo'],
+         ['sugerido', 'a cuánto lo vende'], ['diferencia', 'cuánto sube'],
+         ['ganancia', 'lo que le queda']]
+          .map(function (d) { return '<code>{' + d[0] + '}</code> ' + esc(d[1]); }).join(' · ') +
+      '</div>' +
+
       '<button class="btn btn-primario btn-bloque" style="margin-top:14px" onclick="guardarAumento()">Guardar</button>' +
     '</div>' +
   '</details>';
@@ -100,6 +125,7 @@ function tarjetaAumento() {
 
 function previewAviso() {
   if (!porId('cfg-activo')) return;   // el grupo puede estar plegado
+  previewMensajeAumento();
   var activo = porId('cfg-activo').checked;
   var nuevo = +porId('cfg-nuevo').value || 0;
   porId('preview-aviso').innerHTML = activo && nuevo
@@ -121,6 +147,9 @@ async function guardarAumento() {
     await guardarConfig(CFG_AUMENTO.producto, producto);
     await guardarConfig(CFG_AUMENTO.viejo, viejo);
     await guardarConfig(CFG_AUMENTO.nuevo, nuevo);
+    await guardarConfig('aumento_precio_sugerido', String(leerMonto('cfg-sugerido') || ''));
+    var msgAum = porId('cfg-msg-aumento');
+    if (msgAum) await guardarConfig('mensaje_aumento', msgAum.value.trim());
     toast('Configuración guardada');
   } catch (e) { toast(e.message, 'error'); }
 }
@@ -1704,4 +1733,28 @@ async function forzarActualizacion() {
     cerrarModal();
     toast('No se pudo: ' + e.message, 'error');
   }
+}
+
+
+/* Cómo queda el aviso de aumento que se manda con el remito */
+function previewMensajeAumento() {
+  var el = porId('pv-aumento');
+  var txt = porId('cfg-msg-aumento');
+  if (!el || !txt) return;
+
+  /* Con los precios que se están escribiendo, no con los guardados */
+  var datos = {
+    producto: (porId('cfg-producto') || {}).value || aumentoConfig().producto,
+    viejo: plata(+(porId('cfg-viejo') || {}).value || 0),
+    nuevo: plata(+(porId('cfg-nuevo') || {}).value || 0),
+    sugerido: plata(leerMonto('cfg-sugerido') || (+(porId('cfg-nuevo') || {}).value || 0) * 2),
+    diferencia: plata(Math.max(0, (+(porId('cfg-nuevo') || {}).value || 0) -
+                                  (+(porId('cfg-viejo') || {}).value || 0))),
+    ganancia: plata(Math.max(0, (leerMonto('cfg-sugerido') ||
+                                 (+(porId('cfg-nuevo') || {}).value || 0) * 2) -
+                                (+(porId('cfg-nuevo') || {}).value || 0)))
+  };
+
+  el.innerHTML = '<div class="vista-previa">' +
+    esc(armarMensaje(txt.value, datos)).replace(/\n/g, '<br>') + '</div>';
 }

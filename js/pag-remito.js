@@ -1300,7 +1300,7 @@ function ofrecerWhatsapp(remito, opciones) {
   var o = opciones || {};
   /* El teléfono puede venir del remito o de la ficha del cliente */
   var tel = o.tel || remito.cliente_tel;
-  var mensaje = o.mensaje || mensajeCompartir(remito);
+  var mensaje = o.mensaje || mensajeCompartir(remito, _clientesRemito);
   var enlace = enlaceWhatsapp(tel, mensaje);
   if (!enlace) { toast('Ese remito no tiene un teléfono válido', 'error'); return; }
 
@@ -1423,7 +1423,7 @@ async function soloCompartir() {
       await navigator.share({
         files: [img.archivo],
         title: 'Remito de ' + d.remito.cliente_nombre,
-        text: mensajeCompartir(d.remito)
+        text: mensajeCompartir(d.remito, _clientesRemito)
       });
     } else {
       var a = document.createElement('a');
@@ -1507,7 +1507,7 @@ async function compartirRemito(remito) {
       await navigator.share({
         files: [archivo],
         title: 'Remito de ' + remito.cliente_nombre,
-        text: mensajeCompartir(remito)
+        text: mensajeCompartir(remito, _clientesRemito)
       });
     } else {
       var a = document.createElement('a');

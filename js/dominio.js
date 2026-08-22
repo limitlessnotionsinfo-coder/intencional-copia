@@ -148,8 +148,17 @@ function aumentoConfig() {
     activo:   leerConfig(CFG_AUMENTO.activo, 'true') === 'true',
     producto: leerConfig(CFG_AUMENTO.producto, 'Esmalte en Gel'),
     viejo:   +leerConfig(CFG_AUMENTO.viejo, 2200) || 0,
-    nuevo:   +leerConfig(CFG_AUMENTO.nuevo, 2400) || 0
+    nuevo:   +leerConfig(CFG_AUMENTO.nuevo, 2400) || 0,
+    /* A cuánto le conviene venderlo al local. Si no se carga, se
+       sugiere el doble del costo, que es el margen que suelen usar. */
+    sugerido: +leerConfig('aumento_precio_sugerido', 0) || 0
   };
+}
+
+/* El precio de venta al público que se le sugiere al local */
+function precioSugeridoVenta() {
+  var cfg = aumentoConfig();
+  return cfg.sugerido || (cfg.nuevo ? cfg.nuevo * 2 : 0);
 }
 
 function textoAviso(precio) {
@@ -417,19 +426,24 @@ function demoraPromedio(remitosDelCliente) {
 }
 
 /* ── Mensaje que acompaña al remito al compartirlo ────────── */
-function mensajeCompartir(remito) {
+function mensajeCompartir(remito, clientes) {
   var datos = datosDelMensaje(remito);
 
   /* Con deuda va la plantilla que explica cómo pagarla; sin
      deuda, el saludo de siempre. */
-  if (deudaPendiente(remito) > 0) {
-    return armarMensaje(leerConfig('mensaje_deuda', MENSAJE_DEUDA_DEFAULT), datos);
-  }
+  var texto = deudaPendiente(remito) > 0
+    ? armarMensaje(leerConfig('mensaje_deuda', MENSAJE_DEUDA_DEFAULT), datos)
+    : armarMensaje(
+        leerConfig('mensaje_compartir',
+          '¡Hola! Te dejo el remito de la reposición de hoy por {total}. ¡Gracias por elegirnos!'),
+        datos);
 
-  return armarMensaje(
-    leerConfig('mensaje_compartir',
-      '¡Hola! Te dejo el remito de la reposición de hoy por {total}. ¡Gracias por elegirnos!'),
-    datos);
+  /* Y si todavía no sabe del aumento, se le avisa acá: es el
+     momento en que está mirando el remito. */
+  if (remitoLlevaAviso(remito, clientes)) {
+    texto += '\n\n' + mensajeDeAumento();
+  }
+  return texto;
 }
 
 /* ── Aviso de pago pendiente que va al pie del remito ─────── */
@@ -2230,4 +2244,53 @@ function ingresosSueltos(gastos, r) {
 
 function totalIngresosSueltos(gastos, r) {
   return ingresosSueltos(gastos, r).reduce(function (a, g) { return a + (+g.monto || 0); }, 0);
+}
+
+
+/* ═══════════════════════════════════════════════════════════
+   EL AVISO DE AUMENTO EN EL MENSAJE
+   Va pegado al remito cuando el cliente todavía no sabe del
+   precio nuevo. La plantilla se edita en Configuraciones.
+   ═══════════════════════════════════════════════════════════ */
+
+var MENSAJE_AUMENTO_DEFAULT =
+  'Te aviso que a partir de la próxima reposición {producto} pasa a {nuevo} ' +
+  '(hoy está {viejo}).\n\n' +
+  'Te sugerimos venderlo a {sugerido}, así mantenés tu ganancia.';
+
+function datosDelAumento() {
+  var cfg = aumentoConfig();
+  var sug = precioSugeridoVenta();
+  return {
+    producto: cfg.producto || 'el producto',
+    viejo: plata(cfg.viejo),
+    nuevo: plata(cfg.nuevo),
+    sugerido: plata(sug),
+    diferencia: plata(Math.max(0, cfg.nuevo - cfg.viejo)),
+    ganancia: plata(Math.max(0, sug - cfg.nuevo))
+  };
+}
+
+function mensajeDeAumento() {
+  return armarMensaje(leerConfig('mensaje_aumento', MENSAJE_AUMENTO_DEFAULT), datosDelAumento());
+}
+
+/* ¿A este remito le corresponde el aviso?
+   Se decide con el cliente del remito, no con el formulario. */
+function remitoLlevaAviso(remito, clientes) {
+  var cfg = aumentoConfig();
+  if (!cfg.activo || !cfg.nuevo) return false;
+
+  var c = null;
+  var lista = clientes || [];
+  if (remito.cliente_num) {
+    c = lista.find(function (x) { return String(x.num) === String(remito.cliente_num); });
+  }
+  if (!c) {
+    var n = normalizar(remito.cliente_nombre);
+    c = lista.find(function (x) { return normalizar(x.local) === n; });
+  }
+  if (!c) return false;
+
+  return !clienteAvisado(c) && !clienteReciente(c);
 }
