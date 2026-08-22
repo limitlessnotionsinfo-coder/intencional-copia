@@ -9,7 +9,7 @@ var _topeHechos = 40;
 
 /* Todos los filtros en un solo objeto: así se limpian de una */
 var F = {
-  q: '', estado: '', pago: '', desde: '', hasta: '', min: '', max: '', loc: ''
+  q: '', estado: '', pago: '', desde: '', hasta: '', min: '', max: '', loc: '', alias: ''
 };
 
 registrarPagina({
@@ -68,7 +68,16 @@ function panelFiltros() {
               return '<option value="' + o[0] + '"' + (F.pago === o[0] ? ' selected' : '') + '>' + o[1] + '</option>';
             }).join('') +
           '</select></div>' +
-        '<div class="campo" style="margin:0"><div class="campo-etiq">Localidad</div>' +
+        '<div class="campo" style="margin:0"><div class="campo-etiq">Alias</div>' +
+          '<select class="campo-input" onchange="setF(\'alias\',this.value)">' +
+            '<option value="">Cualquiera</option>' +
+            aliasConfigurados().map(function (a) {
+              var t = titularDeAlias(a);
+              return '<option value="' + esc(a) + '"' + (F.alias === a ? ' selected' : '') + '>' +
+                esc(a) + (t ? ' · ' + esc(t.split(' ')[0]) : '') + '</option>';
+            }).join('') +
+          '</select></div>' +
+        '<div class="campo filtro-ancho" style="margin:0"><div class="campo-etiq">Localidad</div>' +
           '<input class="campo-input" value="' + esc(F.loc) + '" placeholder="Ej: chascomus" oninput="setF(\'loc\',this.value)"/></div>' +
         '<div class="campo" style="margin:0"><div class="campo-etiq">Desde</div>' +
           '<input class="campo-input" type="date" value="' + esc(F.desde) + '" onchange="setF(\'desde\',this.value)"/></div>' +
@@ -101,7 +110,7 @@ function limpiarFiltros() {
 }
 
 function cuantosFiltros() {
-  return ['pago', 'desde', 'hasta', 'min', 'max', 'loc'].filter(function (k) { return F[k]; }).length;
+  return ['pago', 'alias', 'desde', 'hasta', 'min', 'max', 'loc'].filter(function (k) { return F[k]; }).length;
 }
 
 function chipFiltro(campo, valor, etiqueta) {
@@ -149,6 +158,12 @@ function hechosFiltrados() {
     if (F.estado === 'sinventas' && r.motivo !== 'sin_ventas') return false;
 
     if (F.pago && !partesPago(r).some(function (p) { return p.tipo === F.pago && p.monto > 0; })) return false;
+
+    /* Por alias: cuenta si alguna parte del pago fue a ese alias,
+       sea transferencia cobrada o deuda pedida ahí. */
+    if (F.alias && !partesPago(r).some(function (p) {
+      return p.alias && mismoAlias(p.alias, F.alias) && p.monto > 0;
+    })) return false;
     if (F.loc && normalizar(r.cliente_loc).indexOf(normalizar(F.loc)) === -1) return false;
 
     var k = claveFecha(r.fecha || r.created_at);

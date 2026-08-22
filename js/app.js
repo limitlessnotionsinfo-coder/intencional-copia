@@ -29,8 +29,6 @@ function pantallaIngreso() {
                    'onkeydown="if(event.key===\'Enter\')entrar()"/>' +
           '</div>' +
           '<button class="btn btn-primario btn-bloque" id="ing-btn" onclick="entrar()">Entrar</button>' +
-          '<div class="campo-ayuda" style="margin:14px 0 8px;text-align:center">¿Todavía no creaste tu usuario?</div>' +
-          '<button class="btn btn-secundario btn-bloque" onclick="entrarSinCuenta()">Entrar sin cuenta</button>' +
           '<div id="ing-error" style="margin-top:12px"></div>' +
         '</div></div>' +
       '</div>' +
@@ -62,11 +60,11 @@ async function entrar() {
   }
 }
 
-/* Sin cuenta se entra con la clave pública: sirve mientras las
-   políticas RLS de la base lo permitan. */
-function entrarSinCuenta() {
-  try { localStorage.setItem('intencional_sin_cuenta', '1'); } catch (e) {}
-  arrancarApp();
+/* El atajo "entrar sin cuenta" ya no existe: con el login puesto,
+   dejarlo era dejar la puerta al lado abierta. Se limpia la marca
+   por si quedó de antes. */
+function limpiarSinCuenta() {
+  try { localStorage.removeItem('intencional_sin_cuenta'); } catch (e) {}
 }
 
 async function salir() {
@@ -130,17 +128,55 @@ function bloquearZoom() {
 /* ── Arranque ────────────────────────────────────────────── */
 document.addEventListener('DOMContentLoaded', function () {
   bloquearZoom();
-  var sinCuenta = false;
-  try { sinCuenta = localStorage.getItem('intencional_sin_cuenta') === '1'; } catch (e) {}
+  /* Si quedó la marca del atajo viejo, se borra: ya no sirve
+     para saltear el login. */
+  limpiarSinCuenta();
   recuperarSesion();
-  if (!PEDIR_LOGIN || _sesion || sinCuenta) arrancarApp();
+  if (!PEDIR_LOGIN || _sesion) arrancarApp();
   else pantallaIngreso();
 });
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', function () {
-    navigator.serviceWorker.register('sw.js').catch(function (e) {
+    navigator.serviceWorker.register('sw.js').then(function (reg) {
+      vigilarActualizaciones(reg);
+    }).catch(function (e) {
       console.warn('[SW] no se registró:', e.message);
+    });
+  });
+
+  /* ── Que la versión nueva llegue sola ────────────────────────
+     El service worker guarda los archivos y los sirve desde ahí.
+     Sin esto, una pestaña abierta puede seguir usando la versión
+     vieja aunque el servidor ya tenga otra: es lo que hacía que
+     los cambios no aparecieran por más que se subieran. */
+  var _recargando = false;
+  navigator.serviceWorker.addEventListener('controllerchange', function () {
+    if (_recargando) return;      // una sola vez, si no queda en bucle
+    _recargando = true;
+    location.reload();
+  });
+}
+
+function vigilarActualizaciones(reg) {
+  if (!reg) return;
+
+  /* Al volver a la app y cada media hora */
+  var revisar = function () { try { reg.update(); } catch (e) {} };
+  document.addEventListener('visibilitychange', function () {
+    if (!document.hidden) revisar();
+  });
+  setInterval(revisar, 30 * 60 * 1000);
+  revisar();
+
+  /* Si aparece una versión nueva mientras estás usando la app */
+  reg.addEventListener('updatefound', function () {
+    var nuevo = reg.installing;
+    if (!nuevo) return;
+    nuevo.addEventListener('statechange', function () {
+      if (nuevo.state === 'installed' && navigator.serviceWorker.controller) {
+        if (typeof toast === 'function') toast('Actualizando a la versión nueva…');
+      }
     });
   });
 }

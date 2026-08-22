@@ -14,6 +14,35 @@
    ────────────────────────────────────────────────────────── */
 var CATEGORIAS_FIJAS = ['empleado', 'alquiler', 'servicios', 'impuestos', 'seguros', 'contador', 'software'];
 
+/* ── Monotributo ─────────────────────────────────────────────
+   Uno por socio, una vez al mes. Tiene su propia configuración
+   porque es el gasto fijo que más se repite y conviene tenerlo
+   a un toque.
+   ────────────────────────────────────────────────────────── */
+function monotributos() {
+  var guardado = {};
+  try {
+    var g = JSON.parse(leerConfig('monotributos', '{}') || '{}');
+    if (g && typeof g === 'object') guardado = g;
+  } catch (e) {}
+
+  return socios().map(function (s) {
+    return { socio: s, monto: +guardado[s] || 0 };
+  });
+}
+
+function guardarMonotributos(lista) {
+  var g = {};
+  (lista || []).forEach(function (m) {
+    if (+m.monto > 0) g[m.socio] = +m.monto;
+  });
+  return guardarConfig('monotributos', JSON.stringify(g));
+}
+
+function totalMonotributos() {
+  return monotributos().reduce(function (a, m) { return a + m.monto; }, 0);
+}
+
 /* ── Los gastos fijos cargados a mano ────────────────────────
    Formato en config: "nombre|monto|frecuencia; ..."
    La frecuencia puede ser semanal, mensual o anual, y todo se
@@ -57,7 +86,7 @@ function guardarGastosFijosConfig(lista) {
 function fijosMensuales() {
   return gastosFijosConfig().reduce(function (a, g) {
     return a + Math.round(g.monto * FRECUENCIAS[g.frecuencia].alMes);
-  }, 0);
+  }, 0) + totalMonotributos();
 }
 
 /* Lo que corresponde a un período de tantos días */
@@ -172,7 +201,9 @@ function costoDeLoVendido(remitos, r) {
 }
 
 function egresos(gastos, compras, r) {
-  var delRango = (gastos || []).filter(function (g) { return enRangoFecha(g, r); });
+  /* Los ingresos viven en la misma tabla pero no son gastos */
+  var delRango = (gastos || [])
+    .filter(function (g) { return !esIngreso(g) && enRangoFecha(g, r); });
 
   /* Solo lo que sale de la caja de la empresa: lo que ponen los
      dueños de su bolsillo no es un gasto de la empresa. */
@@ -195,13 +226,19 @@ function egresos(gastos, compras, r) {
     if (esGastoFijo(g)) anotados[normalizar(g.descripcion)] = true;
   });
 
+  /* Los fijos configurados que no estén anotados se estiman por
+     el largo del período. Se topea en un año: para un rango
+     abierto como "desde siempre" el prorrateo daría un número
+     sin sentido, y esa cuenta la usa la caja. */
+  var diasEstimar = Math.min(r.dias || 30, 365);
   var estimados = [];
+
   gastosFijosConfig().forEach(function (f) {
     var yaEsta = Object.keys(anotados).some(function (d) {
       return d.indexOf(normalizar(f.nombre)) !== -1;
     });
     if (yaEsta) return;
-    var monto = Math.round(f.monto * FRECUENCIAS[f.frecuencia].alMes / 30 * r.dias);
+    var monto = Math.round(f.monto * FRECUENCIAS[f.frecuencia].alMes / 30 * diasEstimar);
     if (monto > 0) {
       fijos += monto;
       estimados.push({ nombre: f.nombre, monto: monto });
@@ -384,31 +421,96 @@ function reposicionEstimada(remitos, compras) {
    PLATA DISPONIBLE
    No es lo mismo lo que hay que lo que se puede sacar.
    ═══════════════════════════════════════════════════════════ */
+/* ── Lo que había antes de la app ────────────────────────────
+   Sin esto la caja arranca en cero y los gastos pagados con
+   plata anterior dejan el saldo en negativo, aunque no falte
+   nada. Es el punto de partida, no un ingreso.
+   ────────────────────────────────────────────────────────── */
+function capitalInicial() {
+  return {
+    monto: +leerConfig('caja_inicial', 0) || 0,
+    fecha: leerConfig('caja_inicial_fecha', '')
+  };
+}
+
+/* ── Lo que la empresa le debe a alguien ─────────────────────
+   Sueldos atrasados, plata que puso un socio, un proveedor.
+   No son gastos del período: son deudas que hay que cubrir.
+   Formato: "concepto|monto|fecha|quien"
+   ────────────────────────────────────────────────────────── */
+function deudasPropias() {
+  return String(leerConfig('deudas_propias', '')).split(';')
+    .map(function (t) { return t.trim(); }).filter(Boolean)
+    .map(function (t) {
+      var p = t.split('|');
+      return {
+        concepto: (p[0] || '').trim(),
+        monto: +p[1] || 0,
+        fecha: (p[2] || '').trim(),          // cuándo hay que pagarla
+        quien: (p[3] || '').trim()
+      };
+    })
+    .filter(function (d) { return d.concepto && d.monto > 0; });
+}
+
+function guardarDeudasPropias(lista) {
+  return guardarConfig('deudas_propias', (lista || [])
+    .filter(function (d) { return String(d.concepto || '').trim() && +d.monto > 0; })
+    .map(function (d) {
+      return String(d.concepto).trim() + '|' + (+d.monto) + '|' +
+        (d.fecha || '') + '|' + (d.quien || '');
+    }).join('; '));
+}
+
+function totalDeudasPropias() {
+  return deudasPropias().reduce(function (a, d) { return a + d.monto; }, 0);
+}
+
 function disponibleParaRetirar(remitos, gastos, compras) {
   /* Lo cobrado menos lo gastado, desde siempre */
   var todo = { desde: '2000-01-01', hasta: hoyISO(), dias: 99999 };
   var i = ingresos(remitos, todo);
   var e = egresos(gastos, compras, todo);
-  var caja = i.cobrado - e.total - e.reposicion;
+
+  /* La caja cuenta solo lo que realmente salió: los gastos fijos
+     que la app estima para completar un período no se pagaron,
+     así que no pueden descontarse de la plata que hay. */
+  var estimado = (e.fijosEstimados || []).reduce(function (a, x) { return a + x.monto; }, 0);
+  var salioDeVerdad = e.total - estimado + e.reposicion;
+
+  /* Lo que entró sin ser una venta: capital inicial, aportes,
+     devoluciones. Se cargan como movimientos, no en config. */
+  var otrosIngresos = totalIngresosSueltos(gastos, todo);
+
+  /* Se mantiene el capital de la configuración por si alguien lo
+     había cargado ahí antes de que existieran los movimientos. */
+  var inicial = capitalInicial().monto;
+  var caja = inicial + otrosIngresos + i.cobrado - salioDeVerdad;
 
   /* Lo que ya está comprometido */
   var comp = compromisosSemana(true);
   var repo = reposicionEstimada(remitos, compras);
   var sinPagar = (gastos || []).filter(function (g) { return !gastoPagado(g); })
     .reduce(function (a, g) { return a + montoEmpresa(g); }, 0);
+  var propias = totalDeudasPropias();
 
   var reservaPct = +leerConfig('reserva_seguridad', '15') || 0;
   var mes = rangoDe('mes');
   var gastoMensual = egresos(gastos, compras, mes).total;
   var reserva = Math.round(gastoMensual * reservaPct / 100);
 
-  var reservado = (comp.total || 0) + (repo ? repo.monto : 0) + sinPagar + reserva;
+  var reservado = (comp.total || 0) + (repo ? repo.monto : 0) + sinPagar + propias + reserva;
 
   return {
     caja: caja,
+    inicial: inicial,
+    otrosIngresos: otrosIngresos,
+    cobrado: i.cobrado,
+    gastado: salioDeVerdad,
     compromisos: comp.total || 0,
     reposicion: repo ? repo.monto : 0,
     sinPagar: sinPagar,
+    deudasPropias: propias,
     reserva: reserva,
     reservaPct: reservaPct,
     reservado: reservado,
@@ -645,4 +747,240 @@ function alertasFinancieras(remitos, gastos, compras) {
   }
 
   return av;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   LOS GASTOS FIJOS DE LA SEMANA
+   Los viernes se ofrece anotarlos, pero nunca se anotan solos:
+   un gasto que aparece sin que nadie lo confirme es un número
+   en el que después no se confía. Se pregunta cuáles se pagaron
+   y los que no quedan pendientes.
+   ═══════════════════════════════════════════════════════════ */
+
+var DIA_CIERRE_FIJOS = 5;   // viernes
+
+/* ¿Ya se preguntó esta semana? Se anota el lunes de la semana
+   para que valga aunque se conteste en otro día. */
+function lunesDeLaSemana(iso) {
+  var d = fechaDeIso(iso || hoyISO());
+  var dia = d.getUTCDay();
+  var atras = dia === 0 ? 6 : dia - 1;
+  d.setUTCDate(d.getUTCDate() - atras);
+  return isoDe(d);
+}
+
+function semanasFijosCerradas() {
+  return String(leerConfig('fijos_cerrados', '')).split(',')
+    .map(function (x) { return x.trim(); }).filter(Boolean);
+}
+
+function fijosYaPreguntados(iso) {
+  return semanasFijosCerradas().indexOf(lunesDeLaSemana(iso)) !== -1;
+}
+
+async function marcarFijosPreguntados(iso) {
+  var l = semanasFijosCerradas();
+  var semana = lunesDeLaSemana(iso);
+  if (l.indexOf(semana) === -1) l.push(semana);
+  /* Se guardan las últimas 12 semanas: alcanza y no crece */
+  await guardarConfig('fijos_cerrados', l.slice(-12).join(','));
+}
+
+/* ── Qué toca pagar ahora ────────────────────────────────────
+   Cada gasto se ofrece por su monto completo cuando le toca, no
+   prorrateado: el monotributo se paga entero una vez al mes, no
+   una cuarta parte cada viernes.
+   ────────────────────────────────────────────────────────── */
+function periodoDeLaFrecuencia(frecuencia, iso) {
+  var hasta = iso || hoyISO();
+  if (frecuencia === 'semanal') {
+    return { desde: lunesDeLaSemana(hasta), hasta: hasta, etiqueta: 'esta semana' };
+  }
+  if (frecuencia === 'anual') {
+    return { desde: hasta.slice(0, 4) + '-01-01', hasta: hasta, etiqueta: 'este año' };
+  }
+  if (frecuencia === 'bimestral') {
+    var d = fechaDeIso(hasta);
+    d.setUTCMonth(d.getUTCMonth() - 1, 1);
+    return { desde: isoDe(d), hasta: hasta, etiqueta: 'en estos dos meses' };
+  }
+  return { desde: hasta.slice(0, 7) + '-01', hasta: hasta, etiqueta: 'este mes' };
+}
+
+/* Lo que hay que anotar, con lo ya cargado marcado para no
+   duplicar. Incluye los monotributos, que van aparte. */
+function fijosPendientes(gastos, iso) {
+  var hoy = iso || hoyISO();
+
+  var lista = gastosFijosConfig().map(function (f) {
+    return { nombre: f.nombre, monto: f.monto, frecuencia: f.frecuencia };
+  });
+
+  /* Los monotributos: uno por socio, mensuales */
+  monotributos().forEach(function (m) {
+    if (m.monto > 0) {
+      lista.push({
+        nombre: 'Monotributo ' + m.socio,
+        monto: m.monto,
+        frecuencia: 'mensual',
+        socio: m.socio
+      });
+    }
+  });
+
+  return lista.map(function (f) {
+    var r = periodoDeLaFrecuencia(f.frecuencia, hoy);
+    var yaAnotado = (gastos || []).find(function (g) {
+      return enRangoFecha(g, r) &&
+             normalizar(g.descripcion).indexOf(normalizar(f.nombre)) !== -1;
+    });
+    return Object.assign({}, f, {
+      cada: r.etiqueta,
+      yaAnotado: !!yaAnotado,
+      gasto: yaAnotado || null
+    });
+  });
+}
+
+/* Se mantiene el nombre viejo para no romper nada */
+function fijosDeLaSemana(gastos, iso) { return fijosPendientes(gastos, iso); }
+
+/* ¿Toca preguntar hoy? */
+function tocaPreguntarFijos(gastos) {
+  var d = fechaDeIso(hoyISO()).getUTCDay();
+  /* Viernes o después, para que no se pierda si no se abre el viernes */
+  if (d !== DIA_CIERRE_FIJOS && d !== 6 && d !== 0) return false;
+  if (fijosYaPreguntados()) return false;
+  return fijosPendientes(gastos).some(function (f) { return !f.yaAnotado; });
+}
+
+/* ═══════════════════════════════════════════════════════════
+   LO QUE HAY QUE JUNTAR PARA EL MES
+   Monotributos, gastos fijos y deudas propias, con su fecha de
+   vencimiento. Sirve para saber cuánto apartar y para cuándo.
+   ═══════════════════════════════════════════════════════════ */
+
+/* El día del mes en que se pagan los impuestos y las deudas */
+function diaDePago() {
+  var d = +leerConfig('dia_pago_mes', 15) || 15;
+  return Math.max(1, Math.min(28, d));
+}
+
+/* La próxima fecha de vencimiento, en ISO */
+function proximoVencimiento(iso) {
+  var hoy = iso || hoyISO();
+  var dia = diaDePago();
+  var d = fechaDeIso(hoy);
+
+  /* Si ya pasó el día de este mes, es el del mes que viene */
+  if (d.getUTCDate() > dia) d.setUTCMonth(d.getUTCMonth() + 1);
+  d.setUTCDate(dia);
+  return isoDe(d);
+}
+
+/* Todo lo que vence este mes, pagado y sin pagar */
+function aPagarEsteMes(gastos) {
+  var hoy = hoyISO();
+  var vence = proximoVencimiento(hoy);
+  var items = [];
+
+  /* Los monotributos */
+  fijosPendientes(gastos, hoy).forEach(function (f) {
+    items.push({
+      concepto: f.nombre,
+      monto: f.monto,
+      pagado: f.yaAnotado,
+      vence: vence,
+      tipo: f.socio ? 'monotributo' : 'fijo'
+    });
+  });
+
+  /* Y lo que le debemos a alguien */
+  deudasPropias().forEach(function (d) {
+    items.push({
+      concepto: d.concepto,
+      monto: d.monto,
+      pagado: false,
+      vence: d.fecha || vence,
+      quien: d.quien,
+      tipo: 'deuda'
+    });
+  });
+
+  var falta = items.filter(function (x) { return !x.pagado; });
+  var dias = diasEntre(hoy, vence);
+
+  return {
+    items: items.sort(function (a, b) { return (a.vence || '').localeCompare(b.vence || ''); }),
+    falta: falta,
+    total: items.reduce(function (a, x) { return a + x.monto; }, 0),
+    pendiente: falta.reduce(function (a, x) { return a + x.monto; }, 0),
+    pagado: items.filter(function (x) { return x.pagado; })
+      .reduce(function (a, x) { return a + x.monto; }, 0),
+    vence: vence,
+    diasParaVencer: dias
+  };
+}
+
+/* ═══════════════════════════════════════════════════════════
+   LO QUE ENTRÓ A CADA ALIAS
+   Sirve para dos cosas: ver si el reparto entre los socios está
+   parejo, y cruzar contra el resumen del banco.
+   ═══════════════════════════════════════════════════════════ */
+function ingresosPorAlias(remitos, r) {
+  var lista = aliasConfigurados();
+  var detalle = {};
+
+  lista.forEach(function (a) {
+    detalle[a] = { alias: a, titular: titularDeAlias(a), cobrado: 0, pendiente: 0, operaciones: 0, remitos: [] };
+  });
+
+  /* Un alias que aparece en un remito pero ya no está configurado
+     igual se muestra: la plata entró. */
+  var caja = function (alias) {
+    var conocido = lista.find(function (a) { return mismoAlias(a, alias); });
+    var clave = conocido || alias;
+    if (!detalle[clave]) {
+      detalle[clave] = { alias: clave, titular: titularDeAlias(clave), cobrado: 0,
+                         pendiente: 0, operaciones: 0, remitos: [], viejo: true };
+    }
+    return detalle[clave];
+  };
+
+  (remitos || [])
+    .filter(function (x) { return x.motivo !== 'cerrado' && (!r || enRangoFecha(x, r)); })
+    .forEach(function (x) {
+      var yaContado = false;
+      partesPago(x).forEach(function (p) {
+        var m = +p.monto || 0;
+        if (!m || !p.alias) return;
+
+        if (p.tipo === 'transferencia') {
+          var d = caja(p.alias);
+          d.cobrado += m;
+          if (!yaContado) { d.operaciones++; d.remitos.push(x); yaContado = true; }
+        } else if (p.tipo === 'deuda' && !p.era_deuda && !bool(x.saldado)) {
+          /* Todavía no entró, pero está pedida a ese alias */
+          caja(p.alias).pendiente += m;
+        }
+      });
+    });
+
+  var arr = Object.keys(detalle).map(function (k) { return detalle[k]; })
+    .filter(function (d) { return d.cobrado || d.pendiente || !d.viejo; });
+
+  var total = arr.reduce(function (a, d) { return a + d.cobrado; }, 0);
+  arr.forEach(function (d) {
+    d.porcentaje = total ? Math.round(d.cobrado / total * 1000) / 10 : 0;
+  });
+  arr.sort(function (a, b) { return b.cobrado - a.cobrado; });
+
+  /* Cuánto se aparta del reparto parejo: con dos alias, lo justo
+     sería 50 y 50. */
+  var parejo = arr.length ? 100 / arr.length : 0;
+  var desvio = arr.length && total
+    ? Math.round(Math.max.apply(null, arr.map(function (d) { return Math.abs(d.porcentaje - parejo); })) * 10) / 10
+    : 0;
+
+  return { alias: arr, total: total, parejo: Math.round(parejo * 10) / 10, desvio: desvio };
 }

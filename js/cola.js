@@ -21,12 +21,15 @@ function escribirCola(cola) {
 function pendientesDeSubir() { return leerCola().length; }
 
 /* Guarda una fila que no se pudo subir */
-function encolar(tabla, fila) {
+/* Guarda algo que no se pudo subir. `pk` viene solo cuando es una
+   modificación: sin él es un alta. */
+function encolar(tabla, fila, pk) {
   var cola = leerCola();
   cola.push({
     id: 'local-' + Date.now() + '-' + Math.random().toString(36).slice(2, 7),
     tabla: tabla,
     fila: fila,
+    pk: pk === undefined ? null : pk,
     intentos: 0,
     guardado: new Date().toISOString()
   });
@@ -63,7 +66,12 @@ async function sincronizarCola(silencioso) {
     for (var i = 0; i < cola.length; i++) {
       var item = cola[i];
       try {
-        await crearDirecto(item.tabla, item.fila);
+        /* Con pk es una modificación; sin pk, un alta */
+        if (item.pk === null || item.pk === undefined) {
+          await crearDirecto(item.tabla, item.fila);
+        } else {
+          await actualizarDirecto(item.tabla, item.pk, item.fila);
+        }
         sacarDeCola(item.id);
         subidos++;
       } catch (e) {
@@ -113,7 +121,9 @@ function verDetalleCola() {
         var f = x.fila || {};
         return '<div class="fila" style="cursor:default;align-items:flex-start">' +
           '<div class="fila-principal">' +
-            '<div class="fila-titulo">' + esc(f.cliente_nombre || x.tabla) + '</div>' +
+            '<div class="fila-titulo">' + esc(f.cliente_nombre || x.tabla) +
+              (x.pk !== null && x.pk !== undefined ? ' <span class="pin pin-neutro">cambio</span>' : '') +
+            '</div>' +
             '<div class="fila-sub">' + esc(f.fecha || '') +
               (x.intentos ? ' · ' + plural(x.intentos, 'intento') : '') +
               (x.trabado

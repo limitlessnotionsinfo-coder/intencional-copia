@@ -889,10 +889,23 @@ function compromisoPagado(item, gastos) {
 
 function cierreSemana(remitos, gastos, desde, hasta, conDeuda) {
   var entradas = cobradoEnRango(remitos, desde, hasta);
-  var delRango = (gastos || []).filter(function (g) {
+
+  var enRango = function (g) {
     var k = claveFecha(g.fecha || g.created_at);
     return k && k >= desde && k <= hasta;
+  };
+
+  var delRango = (gastos || []).filter(function (g) {
+    if (esIngreso(g)) return false;   // los ingresos no son gastos
+    return enRango(g);
   });
+
+  /* La plata que entró sin ser una venta también está disponible
+     para pagar: si no, un aporte o lo que había en caja no cuenta
+     y el cierre marca un faltante que no existe. */
+  var otrosIngresos = (gastos || [])
+    .filter(function (g) { return esIngreso(g) && enRango(g); })
+    .reduce(function (a, g) { return a + (+g.monto || 0); }, 0);
 
   /* Lo que ya salió de la caja y lo que todavía se debe */
   /* Solo lo que salió de la caja de la empresa */
@@ -916,10 +929,11 @@ function cierreSemana(remitos, gastos, desde, hasta, conDeuda) {
     comp.total += montoEmpresa(g);
   });
 
-  var disponible = entradas.cobrado - yaGastado;
+  var disponible = entradas.cobrado + otrosIngresos - yaGastado;
 
   return {
     entradas: entradas,
+    otrosIngresos: otrosIngresos,
     yaGastado: yaGastado,
     pendientes: pendientes,
     compromisos: comp,
@@ -1130,6 +1144,7 @@ function gastoReintegrado(g) { return bool(g.reintegrado); }
 function reintegrosPendientes(gastos, categoria) {
   return (gastos || [])
     .filter(function (g) {
+      if (esIngreso(g)) return false;   // un ingreso no se reintegra
       if (categoria && g.categoria !== categoria) return false;
       if (gastoReintegrado(g)) return false;
       return montoEmpresa(g) > 0 && (+puestoPorCadaUno(g).empresa || 0) === 0;
@@ -2177,4 +2192,42 @@ function datosDelMensaje(remito) {
 /* El mensaje para cobrar una deuda vieja */
 function mensajeCobroDeuda(remito) {
   return armarMensaje(leerConfig('mensaje_cobro', MENSAJE_COBRO_DEFAULT), datosDelMensaje(remito));
+}
+
+
+/* ═══════════════════════════════════════════════════════════
+   INGRESOS QUE NO SON VENTAS
+   Plata que entra sin pasar por un remito: lo que había en caja
+   al empezar, un aporte de un socio, una devolución, la venta de
+   algo. Se guardan en la tabla de gastos con categoría 'ingreso'
+   y suman en vez de restar, así se ven y se corrigen como
+   cualquier otro movimiento, en vez de ser un número escondido
+   en la configuración.
+   ═══════════════════════════════════════════════════════════ */
+
+var MOTIVOS_INGRESO = [
+  { id: 'inicial',   etiqueta: 'Lo que había al empezar' },
+  { id: 'aporte',    etiqueta: 'Aporte de un socio' },
+  { id: 'devolucion',etiqueta: 'Devolución o reintegro' },
+  { id: 'venta',     etiqueta: 'Venta de algo (no mercadería)' },
+  { id: 'otro',      etiqueta: 'Otro' }
+];
+
+function esIngreso(g) {
+  return g && g.categoria === 'ingreso';
+}
+
+/* Los ingresos de un período, o todos si no se pasa rango */
+function ingresosSueltos(gastos, r) {
+  return (gastos || [])
+    .filter(esIngreso)
+    .filter(function (g) { return !r || enRangoFecha(g, r); })
+    .sort(function (a, b) {
+      return (claveFecha(b.fecha || b.created_at) || '')
+        .localeCompare(claveFecha(a.fecha || a.created_at) || '');
+    });
+}
+
+function totalIngresosSueltos(gastos, r) {
+  return ingresosSueltos(gastos, r).reduce(function (a, g) { return a + (+g.monto || 0); }, 0);
 }

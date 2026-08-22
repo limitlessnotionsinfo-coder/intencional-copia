@@ -47,6 +47,7 @@ registrarPagina({
         '<div id="n-resultado"></div>' +
         '<div id="n-equilibrio"></div>' +
         '<div id="n-caja"></div>' +
+      '<div id="n-alias"></div>' +
         '<div id="n-stock"></div>' +
         '<div id="n-evolucion"></div>' +
         '<div id="n-proyeccion"></div>' +
@@ -117,6 +118,7 @@ function pintarNumeros() {
   pintarKpis(r, completo);
   pintarResultado(r);
   pintarCaja();
+  pintarPorAlias(r);
 
   /* Lo que solo aparece en el detalle */
   ['n-equilibrio', 'n-stock', 'n-evolucion', 'n-proyeccion'].forEach(function (id) {
@@ -444,12 +446,27 @@ function pintarCaja() {
           (c.disponible >= 0 ? 'pin-ok' : 'pin-danger') + '">' + plata(c.disponible) + '</span></span>' +
       '</summary>' +
       '<div class="tarjeta-cuerpo">' +
-        '<div style="display:flex;justify-content:space-between;padding:5px 0;font-size:13.5px">' +
+        /* El desglose de la caja, para poder revisarlo */
+        ((c.inicial || c.otrosIngresos)
+          ? [(c.inicial ? ['Había al empezar', c.inicial] : null),
+             (c.otrosIngresos ? ['+ plata que entró', c.otrosIngresos] : null),
+             ['+ cobrado de remitos', c.cobrado],
+             ['− gastado', -c.gastado]]
+            .filter(Boolean)
+            .map(function (x) {
+              return '<div style="display:flex;justify-content:space-between;padding:4px 0;' +
+                'font-size:13px;color:var(--muted)"><span>' + esc(x[0]) + '</span>' +
+                '<span>' + plata(Math.abs(x[1])) + '</span></div>';
+            }).join('')
+          : '') +
+        '<div style="display:flex;justify-content:space-between;padding:5px 0;font-size:13.5px' +
+             ((c.inicial || c.otrosIngresos) ? ';border-top:1px solid var(--border);margin-top:2px' : '') + '">' +
           '<span>En caja</span><strong>' + plata(c.caja) + '</strong></div>' +
         '<div class="campo-etiq" style="margin:10px 0 2px">Comprometido</div>' +
         [['Gastos de la semana', c.compromisos],
          ['Próxima reposición', c.reposicion],
          ['Gastos sin pagar', c.sinPagar],
+         ['Deudas que tenemos', c.deudasPropias],
          ['Reserva de seguridad (' + c.reservaPct + '%)', c.reserva]]
           .filter(function (x) { return x[1] > 0; })
           .map(function (x) {
@@ -830,4 +847,57 @@ function detalleConcentracion() {
         '</button>';
       }).join('') +
     '</div>');
+}
+
+
+/* ═══════════════════════════════════════════════════════════
+   LO QUE ENTRÓ A CADA ALIAS
+   ═══════════════════════════════════════════════════════════ */
+function pintarPorAlias(r) {
+  var cont = porId('n-alias');
+  if (!cont) return;
+
+  var d = ingresosPorAlias(_dn.remitos, r);
+  if (!d.alias.length || !d.total) { cont.innerHTML = ''; return; }
+
+  cont.innerHTML =
+    '<details class="tarjeta">' +
+      '<summary class="tarjeta-cab" style="cursor:pointer">' + ic('cash', 16) + ' Entró a cada alias' +
+        '<span style="margin-left:auto"><span class="pin ' +
+          (d.desvio > 15 ? 'pin-warn' : 'pin-neutro') + '">' +
+          (d.desvio > 15 ? 'desparejo' : 'parejo') + '</span></span>' +
+      '</summary>' +
+      '<div class="tarjeta-cuerpo">' +
+        '<div class="campo-ayuda" style="margin-bottom:10px">' + esc(r.etiqueta) + ' · solo transferencias. ' +
+          (d.desvio > 15
+            ? 'El reparto está desparejo: lo justo sería ' + d.parejo + '% para cada uno.'
+            : 'El reparto viene parejo.') + '</div>' +
+
+        d.alias.map(function (a) {
+          return '<div style="margin-bottom:12px">' +
+            '<div style="display:flex;justify-content:space-between;align-items:baseline;gap:10px">' +
+              '<div style="min-width:0">' +
+                '<strong style="font-size:13.5px">' + esc(a.alias) + '</strong>' +
+                (a.titular ? '<span class="campo-ayuda"> · ' + esc(a.titular) + '</span>' : '') +
+                (a.viejo ? ' <span class="pin pin-neutro">ya no está en la lista</span>' : '') +
+              '</div>' +
+              '<strong style="white-space:nowrap">' + plata(a.cobrado) + '</strong>' +
+            '</div>' +
+            '<div style="height:6px;border-radius:99px;background:var(--subtle);margin:5px 0 3px">' +
+              '<div style="height:100%;width:' + Math.max(2, a.porcentaje) + '%;border-radius:99px;' +
+                'background:var(--rose)"></div>' +
+            '</div>' +
+            '<div class="campo-ayuda" style="margin:0">' +
+              a.porcentaje + '% · ' + plural(a.operaciones, 'transferencia') +
+              (a.pendiente ? ' · <span style="color:var(--warn)">' + plata(a.pendiente) +
+                ' pedidos y sin cobrar</span>' : '') +
+            '</div>' +
+          '</div>';
+        }).join('') +
+
+        '<div style="display:flex;justify-content:space-between;padding:8px 0;' +
+             'border-top:2px solid var(--border)">' +
+          '<strong>Total transferido</strong><strong>' + plata(d.total) + '</strong></div>' +
+      '</div>' +
+    '</details>';
 }

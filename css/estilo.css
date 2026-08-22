@@ -815,3 +815,8 @@ a.btn-bloque{display:flex;width:100%}
   background:var(--subtle);border:1px solid var(--border);
   font-size:12.5px;line-height:1.5;color:var(--text2);
 }
+
+/* La localidad ocupa el ancho completo: es texto libre y con
+   media columna se ve apretada al lado de los desplegables. */
+.grilla-filtros .filtro-ancho{grid-column:1/-1}
+.atajo-verde{background:var(--ok-bg);border-color:var(--ok-border);color:var(--ok)}

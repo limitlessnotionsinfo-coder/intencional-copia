@@ -343,12 +343,24 @@ function remitoRapido() {
         }).join('') +
       '</div></div>' +
 
+    /* Si hay transferencia o deuda, a qué alias */
+    '<div id="rr-alias"></div>' +
+
+    /* El segundo medio: parte en efectivo y parte en deuda es lo
+       más común, así que tiene que entrar sin salir de acá. */
+    '<div id="rr-segundo"></div>' +
+    '<button class="btn btn-fantasma btn-bloque" id="rr-mas" style="font-size:12.5px;margin-bottom:12px" ' +
+            'onclick="alternarSegundoRapido()">' + ic('plus', 14) + ' Pagó de dos formas</button>' +
+
     '<div class="campo" style="margin:0"><div class="campo-etiq">Nota (opcional)</div>' +
       '<input class="campo-input" id="rr-nota" placeholder="Ej: zona de Lanús"/></div>',
 
     '<button class="btn btn-primario btn-bloque" id="btn-rr" onclick="guardarRemitoRapido()">' +
       ic('check', 16) + ' Guardar</button>');
   window._pagoRapido = '';
+  window._pago2Rapido = '';
+  window._conSegundoRapido = false;
+  window._aliasRapido = '';
 }
 
 function setPagoRapido(t) {
@@ -356,6 +368,131 @@ function setPagoRapido(t) {
   $$('.rr-pago').forEach(function (b) {
     b.className = 'btn rr-pago ' + (b.dataset.tipo === t ? 'btn-primario' : 'btn-secundario');
   });
+  pintarAliasRapido();
+  if (window._conSegundoRapido) pintarSegundoRapido();
+}
+
+/* ── A qué alias ─────────────────────────────────────────────
+   Aparece solo si algún medio lo necesita. El que se elige es el
+   que después se le reclama, así que no puede quedar sin poner.
+   ────────────────────────────────────────────────────────── */
+function necesitaAliasRapido() {
+  var t1 = window._pagoRapido;
+  var t2 = window._conSegundoRapido ? window._pago2Rapido : '';
+  return t1 === 'transferencia' || t1 === 'deuda' ||
+         t2 === 'transferencia' || t2 === 'deuda';
+}
+
+function pintarAliasRapido() {
+  var cont = porId('rr-alias');
+  if (!cont) return;
+
+  if (!necesitaAliasRapido()) { cont.innerHTML = ''; window._aliasRapido = ''; return; }
+
+  var lista = aliasConfigurados();
+  if (!lista.length) { cont.innerHTML = ''; return; }
+
+  /* Se sugiere el que viene recibiendo menos, igual que en el
+     remito completo. */
+  /* Se sugiere el que viene recibiendo menos; si no se pueden
+     leer los remitos, el primero de la lista. */
+  if (!window._aliasRapido) {
+    var sug = null;
+    try { sug = aliasSugerido(_remitosAlias || [], []); } catch (e) {}
+    window._aliasRapido = sug || lista[0];
+  }
+
+  cont.innerHTML =
+    '<div class="campo"><div class="campo-etiq">A qué alias</div>' +
+      '<div style="display:flex;gap:8px;flex-wrap:wrap">' +
+        lista.map(function (a) {
+          var titular = titularDeAlias(a);
+          return '<button class="btn ' +
+            (window._aliasRapido === a ? 'btn-primario' : 'btn-secundario') + ' rr-alias-btn" ' +
+            'data-alias="' + esc(a) + '" onclick="setAliasRapido(\'' +
+            esc(a).replace(/'/g, "\\'") + '\')">' + esc(a) +
+            (titular ? ' <span style="opacity:.7">· ' + esc(titular.split(' ')[0]) + '</span>' : '') +
+            '</button>';
+        }).join('') +
+      '</div>' +
+      '<div class="campo-ayuda">Es el que se le va a reclamar si queda debiendo.</div>' +
+    '</div>';
+}
+
+function setAliasRapido(a) {
+  window._aliasRapido = a;
+  $$('.rr-alias-btn').forEach(function (b) {
+    b.className = 'btn rr-alias-btn ' + (b.dataset.alias === a ? 'btn-primario' : 'btn-secundario');
+  });
+}
+
+/* ── El segundo medio de pago ────────────────────────────────
+   Se elige el tipo y cuánto se pagó con él; el resto va al
+   primero. Así no hay que sumar de cabeza.
+   ────────────────────────────────────────────────────────── */
+function alternarSegundoRapido() {
+  window._conSegundoRapido = !window._conSegundoRapido;
+  var btn = porId('rr-mas');
+  if (btn) {
+    btn.innerHTML = window._conSegundoRapido
+      ? ic('x', 14) + ' Pagó de una sola forma'
+      : ic('plus', 14) + ' Pagó de dos formas';
+  }
+  if (!window._conSegundoRapido) {
+    window._pago2Rapido = '';
+    porId('rr-segundo').innerHTML = '';
+    return;
+  }
+  pintarSegundoRapido();
+}
+
+function pintarSegundoRapido() {
+  var cont = porId('rr-segundo');
+  if (!cont) return;
+
+  cont.innerHTML =
+    '<div class="campo"><div class="campo-etiq">Y el resto</div>' +
+      '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px" id="rr-pagos2">' +
+        ['efectivo', 'transferencia', 'deuda']
+          .filter(function (t) { return t !== window._pagoRapido; })
+          .map(function (t) {
+            var d = TIPOS_PAGO[t];
+            return '<button class="btn ' +
+              (window._pago2Rapido === t ? 'btn-primario' : 'btn-secundario') + ' rr-pago2" ' +
+              'data-tipo="' + t + '" onclick="setPago2Rapido(\'' + t + '\')">' +
+              ic(d.icono, 15) + ' ' + esc(d.corta) + '</button>';
+          }).join('') +
+      '</div>' +
+      '<div class="campo-etiq">Cuánto con ese medio</div>' +
+      inputMonto('rr-monto2', '', 'pintarRestoRapido()') +
+      '<div class="campo-ayuda" id="rr-resto"></div>' +
+    '</div>';
+  pintarRestoRapido();
+}
+
+function setPago2Rapido(t) {
+  window._pago2Rapido = t;
+  $$('.rr-pago2').forEach(function (b) {
+    b.className = 'btn rr-pago2 ' + (b.dataset.tipo === t ? 'btn-primario' : 'btn-secundario');
+  });
+  pintarAliasRapido();
+}
+
+/* Cuánto queda para el primer medio, para poder revisarlo */
+function pintarRestoRapido() {
+  var el = porId('rr-resto');
+  if (!el) return;
+  var total = leerMonto('rr-monto');
+  var segundo = leerMonto('rr-monto2');
+  var resto = total - segundo;
+
+  if (!total) { el.textContent = 'Poné primero el monto total.'; return; }
+  if (segundo > total) {
+    el.innerHTML = '<span style="color:var(--danger)">Es más que el total del remito.</span>';
+    return;
+  }
+  el.innerHTML = 'Con ' + esc((TIPOS_PAGO[window._pagoRapido] || {}).corta || 'el primero') +
+    ' quedan <strong>' + plata(resto) + '</strong>.';
 }
 
 async function guardarRemitoRapido() {
@@ -370,10 +507,33 @@ async function guardarRemitoRapido() {
   var btn = porId('btn-rr');
   if (btn) { btn.disabled = true; btn.textContent = 'Guardando…'; }
 
+  /* Las partes del pago: una o dos */
+  var conAlias = function (parte) {
+    if (parte.tipo === 'transferencia' || parte.tipo === 'deuda') {
+      parte.alias = window._aliasRapido || aliasConfigurados()[0] || '';
+    }
+    return parte;
+  };
+
+  var partes = [conAlias({ tipo: pago, monto: monto })];
+  if (window._conSegundoRapido && window._pago2Rapido) {
+    var monto2 = leerMonto('rr-monto2');
+    if (!monto2) { toast('Falta cuánto pagó con el segundo medio', 'error'); return; }
+    if (monto2 > monto) { toast('El segundo medio es más que el total', 'error'); return; }
+    if (monto2 === monto) { toast('Si es todo con ese medio, elegilo como único', 'error'); return; }
+    partes = [
+      conAlias({ tipo: pago, monto: monto - monto2 }),
+      conAlias({ tipo: window._pago2Rapido, monto: monto2 })
+    ];
+  }
+
   /* Si el nombre no deja lugar a dudas, se vincula solo */
   var seguro = clienteSeguroPara({ cliente_nombre: nombre }, _clientesRemito);
   var c = seguro ? seguro.cliente : null;
   var nota = (porId('rr-nota').value || '').trim();
+
+  var btnG = porId('btn-rr');
+  if (btnG) { btnG.disabled = true; btnG.textContent = 'Guardando…'; }
 
   try {
     await crear('remitos', {
@@ -386,8 +546,12 @@ async function guardarRemitoRapido() {
       total: monto,
       unidades: 0,
       productos: '[]',
-      pago: pago,
-      pagos_detalle: JSON.stringify([{ tipo: pago, monto: monto }]),
+      pago: partes[0].tipo,
+      alias: window._aliasRapido || null,
+      pago2_tipo: partes[1] ? partes[1].tipo : null,
+      pago2_alias: partes[1] ? (partes[1].alias || null) : null,
+      pago2_monto: partes[1] ? partes[1].monto : null,
+      pagos_detalle: JSON.stringify(partes),
       notas: ['Cargado rápido', nota].filter(Boolean).join(' · '),
       created_at: new Date().toISOString()
     });
@@ -1064,21 +1228,48 @@ async function confirmarRemito() {
 
   try {
     /* Antes de escribir: ¿ya hay uno igual hoy? Pasa al tocar dos
-       veces confirmar o al recargar el mismo remito sin querer. */
+       veces confirmar o al recargar el mismo remito sin querer.
+
+       Sin señal esta consulta falla, y hasta ahora se llevaba
+       puesto el guardado entero. No poder verificar no es razón
+       para perder el remito: se guarda igual y queda en la cola. */
     if (!R.forzarDuplicado) {
-      var igual = buscarRemitoIgual(await traerCacheado('remitos'), remito);
-      if (igual) {
-        if (btn) { btn.disabled = false; btn.innerHTML = ic('check', 16) + ' Confirmar y compartir'; }
-        avisarDuplicado(igual);
-        return;
+      try {
+        var igual = buscarRemitoIgual(await traerCacheado('remitos'), remito);
+        if (igual) {
+          if (btn) { btn.disabled = false; btn.innerHTML = ic('check', 16) + ' Confirmar y compartir'; }
+          avisarDuplicado(igual);
+          return;
+        }
+      } catch (e) {
+        if (!esErrorDeRed(e)) throw e;   // un error de datos sí importa
+        console.warn('sin conexión: no se pudo revisar duplicados');
       }
     }
 
     await crear('remitos', remito);
-    await saldarDeudasCobradas();
-    await marcarAvisoSiSalio();
-    toast('Remito guardado');
-    await compartirRemito(remito);
+
+    /* De acá en adelante el remito YA está guardado (o encolado).
+       Lo que sigue son extras: si fallan sin señal, no pueden
+       hacer parecer que el remito se perdió. */
+    try {
+      await saldarDeudasCobradas();
+      await marcarAvisoSiSalio();
+    } catch (e) {
+      if (!esErrorDeRed(e)) throw e;
+      console.warn('sin conexión: quedó pendiente saldar deudas o marcar el aviso');
+    }
+
+    toast(pendientesDeSubir()
+      ? 'Guardado en el teléfono · se sube cuando haya señal'
+      : 'Remito guardado');
+
+    try {
+      await compartirRemito(remito);
+    } catch (e) {
+      console.warn('no se pudo compartir:', e.message);
+    }
+
     R = remitoVacio();
     irA('inicio');
   } catch (e) {

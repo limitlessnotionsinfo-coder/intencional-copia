@@ -13,6 +13,8 @@ registrarPagina({
   async montar(cont) {
     _prods = null;
     _fijos = null;
+    _monos = null;
+    _deudasP = null;
     _subPush = await suscripcionActual();
     _filaPush = _subPush ? await filaDeEsteTelefono() : null;
     _avisosTel = _subPush ? leerAvisos(_filaPush) : null;
@@ -53,7 +55,7 @@ registrarPagina({
       g.addEventListener('toggle', function () {
         if (!g.open) return;
         previewAviso(); previewMensaje(); previewDeuda(); pintarGastosFijos();
-        previewMensajesDeuda();
+        previewMensajesDeuda(); pintarMonotributos(); pintarDeudasPropias();
         ['cfg-alias', 'cfg-tel', 'cfg-horas'].forEach(function (id) {
           var el = porId(id); if (el) el.oninput = previewDeuda;
         });
@@ -147,6 +149,8 @@ function tarjetaMantenimiento() {
         ic('refresh', 15) + ' Volver a leer la base</button>' +
       '<button class="btn btn-secundario btn-bloque" style="margin-top:8px" onclick="revisarEsquema()">' +
         ic('db', 15) + ' ¿La base está al día?</button>' +
+      '<button class="btn btn-secundario btn-bloque" style="margin-top:8px" onclick="forzarActualizacion()">' +
+        ic('refresh', 15) + ' Traer la versión más nueva</button>' +
       (PEDIR_LOGIN
         ? '<button class="btn btn-secundario btn-bloque" style="margin-top:8px" onclick="salir()">' +
           ic('undo', 15) + ' Cerrar sesión</button>'
@@ -1251,13 +1255,49 @@ function tarjetaFinanzas() {
           'Es el colchón para un mes flojo.</div>' +
       '</div>' +
 
-      '<div class="campo-etiq">Gastos fijos</div>' +
+      /* Lo que había antes de la app: sin esto la caja arranca en
+         cero y todo lo pagado con plata anterior da negativo. */
+      '<div class="campo"><div class="campo-etiq">Plata que había al empezar</div>' +
+        inputMonto('cfg-caja-inicial', leerConfig('caja_inicial', '') || '') +
+        '<div class="campo-ayuda">Lo que tenían en caja antes de usar la app. ' +
+          'Es el punto de partida: sin esto, los gastos pagados con esa plata ' +
+          'dejan el saldo en negativo aunque no falte nada.</div>' +
+      '</div>' +
+
+      '<div class="campo"><div class="campo-etiq">Día de pago del mes</div>' +
+        '<div style="display:flex;align-items:center;gap:8px">' +
+          '<input class="campo-input" id="cfg-dia-pago" type="number" inputmode="numeric" ' +
+                 'min="1" max="28" style="max-width:90px" ' +
+                 'value="' + esc(leerConfig('dia_pago_mes', '15')) + '"/>' +
+          '<span style="font-size:13px;color:var(--muted)">de cada mes</span>' +
+        '</div>' +
+        '<div class="campo-ayuda">Cuándo pagan los monotributos y las deudas. ' +
+          'Se usa para avisar cuánto falta juntar y para cuándo.</div>' +
+      '</div>' +
+
+      /* El monotributo va primero: es el que se toca más seguido */
+      '<div class="campo-etiq">Monotributo de cada uno</div>' +
+      '<div class="campo-ayuda" style="margin-bottom:8px">' +
+        'Se paga una vez al mes. Con esto cargado, en Gastos aparece ' +
+        'un botón por cada uno para anotarlo de un toque.</div>' +
+      '<div id="lista-monotributos"></div>' +
+
+      '<div class="campo-etiq" style="margin-top:16px">Otros gastos fijos</div>' +
       '<div class="campo-ayuda" style="margin-bottom:8px">' +
         'Lo que se paga haya o no ventas. Es lo que define el punto de equilibrio. ' +
         'Si además lo cargás en Gastos, no se cuenta dos veces.</div>' +
       '<div id="lista-fijos"></div>' +
       '<button class="btn btn-secundario btn-bloque" style="margin:8px 0 16px" onclick="agregarGastoFijo()">' +
         ic('plus', 15) + ' Agregar un gasto fijo</button>' +
+
+      /* Lo que la empresa le debe a alguien */
+      '<div class="campo-etiq">Deudas que tenemos</div>' +
+      '<div class="campo-ayuda" style="margin-bottom:8px">' +
+        'Sueldos atrasados, plata que puso un socio, un proveedor. ' +
+        'Se descuentan de lo disponible hasta que las saques de acá.</div>' +
+      '<div id="lista-deudas-propias"></div>' +
+      '<button class="btn btn-secundario btn-bloque" style="margin:8px 0 16px" ' +
+              'onclick="agregarDeudaPropia()">' + ic('plus', 15) + ' Agregar una deuda</button>' +
 
       '<div class="campo"><div class="campo-etiq">Semanas para las proyecciones</div>' +
         '<input class="campo-input" id="cfg-semanas" type="number" inputmode="numeric" min="3" max="26" ' +
@@ -1287,22 +1327,61 @@ function tarjetaFinanzas() {
   '</details>';
 }
 
+/* Cada dato se guarda por su cuenta: si uno falla, los demás
+   igual se guardan. Antes bastaba con que un campo no estuviera
+   en pantalla para que se perdiera todo lo que venía después.
+
+   Y solo se toca lo que existe: si un desplegable nunca se abrió,
+   sus campos no están y lo guardado no se pisa. */
 async function guardarFinanzas() {
+  var fallos = [];
+
+  var guardarSi = async function (id, clave, transformar) {
+    var el = porId(id);
+    if (!el) return;                    // no está en pantalla: no se toca
+    try {
+      await guardarConfig(clave, transformar(el));
+    } catch (e) { fallos.push(clave); }
+  };
+
   try {
-    await guardarConfig('reserva_seguridad',
-      String(Math.max(0, Math.min(100, +porId('cfg-reserva').value || 0))));
-    await guardarGastosFijosConfig(_fijos);
-    await guardarConfig('semanas_proyeccion',
-      String(Math.max(3, Math.min(26, +porId('cfg-semanas').value || 8))));
-    await guardarConfig('objetivo_facturacion', String(leerMonto('cfg-obj-facturacion') || ''));
-    await guardarConfig('objetivo_margen', (porId('cfg-obj-margen').value || '').trim());
+    await guardarSi('cfg-caja-inicial', 'caja_inicial', function () {
+      return String(leerMonto('cfg-caja-inicial') || 0);
+    });
+    await guardarSi('cfg-dia-pago', 'dia_pago_mes', function (el) {
+      return String(Math.max(1, Math.min(28, +el.value || 15)));
+    });
+    await guardarSi('cfg-reserva', 'reserva_seguridad', function (el) {
+      return String(Math.max(0, Math.min(100, +el.value || 0)));
+    });
+    await guardarSi('cfg-semanas', 'semanas_proyeccion', function (el) {
+      return String(Math.max(3, Math.min(26, +el.value || 8)));
+    });
+    await guardarSi('cfg-obj-facturacion', 'objetivo_facturacion', function () {
+      return String(leerMonto('cfg-obj-facturacion') || '');
+    });
+    await guardarSi('cfg-obj-margen', 'objetivo_margen', function (el) {
+      return (el.value || '').trim();
+    });
+
+    /* Las listas solo se guardan si se cargaron en pantalla */
+    if (_fijos)   { try { await guardarGastosFijosConfig(_fijos); } catch (e) { fallos.push('gastos fijos'); } }
+    if (_monos)   { try { await guardarMonotributos(_monos); }     catch (e) { fallos.push('monotributos'); } }
+    if (_deudasP) { try { await guardarDeudasPropias(_deudasP); }  catch (e) { fallos.push('deudas'); } }
 
     /* Los números se calculan con esta configuración: si quedó
        una copia vieja en memoria, mostrarían lo de antes. */
     invalidarCache('config');
     if (typeof _dn !== 'undefined') _dn = null;
 
-    toast('Guardado · ' + plata(fijosMensuales()) + ' de gastos fijos por mes');
+    if (fallos.length) {
+      toast('No se pudo guardar: ' + fallos.join(', '), 'error');
+    } else {
+      var ini = capitalInicial().monto;
+      toast('Guardado' +
+        (ini ? ' · caja inicial ' + plata(ini) : '') +
+        ' · ' + plata(fijosMensuales()) + ' de fijos por mes');
+    }
     pintarRuta();
   } catch (e) { toast(e.message, 'error'); }
 }
@@ -1500,4 +1579,129 @@ async function restaurarMensajesDeuda() {
   porId('cfg-msg-cobro').value = MENSAJE_COBRO_DEFAULT;
   previewMensajesDeuda();
   toast('Listo · tocá Guardar para dejarlo así');
+}
+
+
+/* ── Monotributo, uno por socio ─────────────────────────── */
+var _monos = null;
+
+function pintarMonotributos() {
+  var cont = porId('lista-monotributos');
+  if (!cont) return;
+  if (!_monos) _monos = monotributos();
+
+  cont.innerHTML = _monos.map(function (m, i) {
+    return '<div class="fila-fijo" style="grid-template-columns:1fr 140px">' +
+      '<div style="display:flex;align-items:center;font-size:13.5px;font-weight:600;min-width:0">' +
+        esc(m.socio) + '</div>' +
+      inputMonto('mono-' + i, m.monto, 'editarMonotributo(' + i + ',leerMonto(this))') +
+    '</div>';
+  }).join('') +
+  '<div class="campo-ayuda" id="total-monos" style="text-align:right">' +
+    'Entre los dos: <strong>' + plata(totalMonotributosEditando()) + '</strong> por mes</div>';
+}
+
+function totalMonotributosEditando() {
+  return (_monos || []).reduce(function (a, m) { return a + (+m.monto || 0); }, 0);
+}
+
+/* Sin repintar: si se redibuja, el campo se reemplaza y se pierde
+   el cursor a cada tecla. */
+function editarMonotributo(i, valor) {
+  if (!_monos[i]) return;
+  _monos[i].monto = +valor || 0;
+  var t = porId('total-monos');
+  if (t) t.innerHTML = 'Entre los dos: <strong>' + plata(totalMonotributosEditando()) + '</strong> por mes';
+}
+
+
+/* ── Las deudas que tenemos ─────────────────────────────── */
+var _deudasP = null;
+
+function pintarDeudasPropias() {
+  var cont = porId('lista-deudas-propias');
+  if (!cont) return;
+  if (!_deudasP) _deudasP = deudasPropias();
+
+  cont.innerHTML = _deudasP.length
+    ? _deudasP.map(filaDeudaPropia).join('') +
+      '<div class="campo-ayuda" id="total-deudas-p" style="text-align:right">' +
+        'En total: <strong>' + plata(totalDeudasEditando()) + '</strong></div>'
+    : '<div class="campo-ayuda">No hay ninguna cargada.</div>';
+}
+
+function filaDeudaPropia(d, i) {
+  return '<div class="fila-fijo" style="grid-template-columns:1fr 120px auto">' +
+    '<input class="campo-input" value="' + esc(d.concepto) + '" ' +
+           'placeholder="Sueldo de Nacho, semana pasada" aria-label="Concepto" ' +
+           'oninput="editarDeudaP(' + i + ',\'concepto\',this.value)"/>' +
+    inputMonto('deudap-' + i, d.monto, 'editarDeudaP(' + i + ',\'monto\',leerMonto(this))') +
+    '<button class="btn btn-fantasma" style="padding:4px 6px" aria-label="Quitar" ' +
+            'onclick="quitarDeudaPropia(' + i + ')">' + ic('trash', 15) + '</button>' +
+
+    '<div style="grid-column:1/-1;display:grid;grid-template-columns:1fr 1fr;gap:6px;margin:-2px 0 4px">' +
+      '<input class="campo-input" value="' + esc(d.quien) + '" placeholder="¿A quién?" ' +
+             'aria-label="A quién" style="min-height:34px;font-size:12.5px" ' +
+             'oninput="editarDeudaP(' + i + ',\'quien\',this.value)"/>' +
+      '<input class="campo-input" type="date" value="' + esc(d.fecha) + '" ' +
+             'aria-label="Para cuándo" style="min-height:34px;font-size:12.5px" ' +
+             'onchange="editarDeudaP(' + i + ',\'fecha\',this.value)"/>' +
+    '</div>' +
+  '</div>';
+}
+
+function totalDeudasEditando() {
+  return (_deudasP || []).reduce(function (a, d) { return a + (+d.monto || 0); }, 0);
+}
+
+/* Sin repintar: si se redibuja se pierde el cursor a cada tecla */
+function editarDeudaP(i, campo, valor) {
+  if (!_deudasP[i]) return;
+  _deudasP[i][campo] = campo === 'monto' ? (+valor || 0) : valor;
+  var t = porId('total-deudas-p');
+  if (t) t.innerHTML = 'En total: <strong>' + plata(totalDeudasEditando()) + '</strong>';
+}
+
+function agregarDeudaPropia() {
+  if (!_deudasP) _deudasP = deudasPropias();
+  _deudasP.push({ concepto: '', monto: 0, fecha: '', quien: '' });
+  pintarDeudasPropias();
+}
+
+function quitarDeudaPropia(i) {
+  _deudasP.splice(i, 1);
+  pintarDeudasPropias();
+}
+
+
+/* ── Traer la versión más nueva ──────────────────────────────
+   Borra los archivos guardados y vuelve a bajarlos. Para cuando
+   subiste algo y el teléfono sigue mostrando lo de antes.
+   ────────────────────────────────────────────────────────── */
+async function forzarActualizacion() {
+  abrirModal('Traer la versión más nueva', cargando('Buscando…'));
+
+  try {
+    /* Se borra todo lo guardado por el service worker */
+    if (window.caches) {
+      var claves = await caches.keys();
+      await Promise.all(claves.map(function (k) { return caches.delete(k); }));
+    }
+
+    /* Y se da de baja el service worker viejo */
+    if (navigator.serviceWorker) {
+      var regs = await navigator.serviceWorker.getRegistrations();
+      await Promise.all(regs.map(function (r) { return r.unregister(); }));
+    }
+
+    cerrarModal();
+    toast('Listo · la app se va a recargar');
+    setTimeout(function () {
+      /* Con la marca de tiempo para saltear cualquier caché */
+      location.href = location.pathname + '?v=' + Date.now();
+    }, 700);
+  } catch (e) {
+    cerrarModal();
+    toast('No se pudo: ' + e.message, 'error');
+  }
 }

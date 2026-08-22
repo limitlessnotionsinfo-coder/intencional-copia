@@ -188,14 +188,29 @@ var _enVuelo = {};
 /* Tablas que se guardan en el teléfono: sin señal, la app las
    sigue teniendo. Los clientes son la clave para poder armar un
    remito en la calle. */
-var TABLAS_OFFLINE = ['clientes', 'config', 'tareas'];
+var TABLAS_OFFLINE = ['clientes', 'config', 'tareas', 'remitos'];
+
+/* De remitos solo se guardan los últimos: son 1000+ y no entran
+   en el teléfono. Con los recientes alcanza para lo único que se
+   consulta sin señal, que es si el remito ya se cargó hoy. */
+var TOPE_OFFLINE = { remitos: 300 };
 
 function guardarOffline(tabla, datos) {
   if (TABLAS_OFFLINE.indexOf(tabla) === -1) return;
+  var guardar = datos;
+  var tope = TOPE_OFFLINE[tabla];
+  if (tope && datos.length > tope) guardar = datos.slice(-tope);
+
   try {
     localStorage.setItem('intencional_off_' + tabla,
-      JSON.stringify({ ts: Date.now(), datos: datos }));
-  } catch (e) { /* el teléfono puede estar sin espacio */ }
+      JSON.stringify({ ts: Date.now(), datos: guardar }));
+  } catch (e) {
+    /* Sin espacio: se intenta con menos antes de rendirse */
+    try {
+      localStorage.setItem('intencional_off_' + tabla,
+        JSON.stringify({ ts: Date.now(), datos: guardar.slice(-50) }));
+    } catch (e2) { /* el teléfono no da más */ }
+  }
 }
 
 function leerOffline(tabla) {
@@ -323,7 +338,8 @@ async function crear(tabla, fila) {
   }
 }
 
-async function actualizar(tabla, valorPk, cambios) {
+/* La modificación directa, sin red de contención. La usa la cola. */
+async function actualizarDirecto(tabla, valorPk, cambios) {
   var pk = TABLAS[tabla] || 'id';
   var r = await escribirTolerante(function (c) {
     return rest(tabla + '?' + pk + '=eq.' + encodeURIComponent(valorPk), {
@@ -333,6 +349,19 @@ async function actualizar(tabla, valorPk, cambios) {
   invalidarCache(tabla);
   return r;
 }
+
+/* Sin señal, el cambio queda guardado en el teléfono y se aplica
+   cuando vuelve. Para quien llama, no cambia nada. */
+async function actualizar(tabla, valorPk, cambios) {
+  try {
+    return await actualizarDirecto(tabla, valorPk, cambios);
+  } catch (e) {
+    if (!esErrorDeRed(e)) throw e;
+    encolar(tabla, cambios, valorPk);
+    return [Object.assign({ _pendiente: true }, cambios)];
+  }
+}
+
 
 async function borrar(tabla, valorPk) {
   var pk = TABLAS[tabla] || 'id';

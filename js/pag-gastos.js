@@ -19,21 +19,49 @@ registrarPagina({
     _gastos = (await traerCacheado('gastos')).slice().reverse();
 
     cont.innerHTML =
-      /* Primero la plata: cómo viene la semana y si alcanza.
-         Después con qué cargar. Al final, el detalle y los filtros. */
-      /* El período va arriba de todo: es lo que define qué muestran
-         las tarjetas de abajo. Las categorías ya no son chips:
-         cada una tiene su tarjeta. */
-      '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px" id="g-chips"></div>' +
-      '<div id="g-rango"></div>' +
+      /* De arriba abajo, por lo que se mira más seguido:
+         cómo venimos, en qué se fue, con qué cargar, y recién
+         después el detalle. */
+      '<div id="g-avisos"></div>' +
       '<div id="g-cierre"></div>' +
       '<div id="g-resumen"></div>' +
       '<div class="atajos" style="margin:14px 0">' + botonesRapidos() + '</div>' +
-      '<div id="g-cuentas"></div>';
+
+      '<div id="g-pagar"></div>' +
+      '<div id="g-cuentas"></div>' +
+      '<div id="g-ingresos"></div>' +
+
+      /* El período vive adentro de la lista completa: es lo único
+         que lo usa, y arriba distraía. */
+      '<div id="g-todos"></div>';
 
     pintarGastos();
   }
 });
+
+/* El selector de período, adentro de la lista completa */
+function pintarPeriodo() {
+  var chips = porId('g-chips');
+  if (!chips) return;
+
+  chips.innerHTML = [['dia', 'Hoy'], ['semana', 'Semana'], ['mes', 'Mes'], ['rango', 'Rango']]
+    .map(function (o) {
+      return '<button class="btn ' + (G.periodo === o[0] ? 'btn-primario' : 'btn-secundario') + '" ' +
+        'style="padding:6px 13px;font-size:12.5px" onclick="setPeriodoGasto(\'' + o[0] + '\')">' +
+        o[1] + '</button>';
+    }).join('');
+
+  var rango = porId('g-rango');
+  if (!rango) return;
+  rango.innerHTML = G.periodo === 'rango'
+    ? '<div class="grilla-fechas" style="margin-bottom:8px">' +
+        '<div class="campo" style="margin:0"><div class="campo-etiq">Desde</div>' +
+          '<input class="campo-input" type="date" value="' + esc(G.desde) + '" onchange="setFechaGasto(\'desde\',this.value)"/></div>' +
+        '<div class="campo" style="margin:0"><div class="campo-etiq">Hasta</div>' +
+          '<input class="campo-input" type="date" value="' + esc(G.hasta) + '" onchange="setFechaGasto(\'hasta\',this.value)"/></div>' +
+      '</div>'
+    : '';
+}
 
 /* ── Botones rápidos ─────────────────────────────────────────
    Los gastos que se repiten siempre iguales: un toque y queda
@@ -46,6 +74,10 @@ function botonesRapidos() {
 
   var botones = [
     '<button class="atajo atajo-grad" onclick="nuevoGasto()">' + ic('plus', 17) + '<span>Cargar gasto</span></button>',
+    '<button class="atajo atajo-verde" onclick="nuevoIngreso()">' + ic('cash', 17) +
+      '<span>Entró plata</span></button>',
+    '<button class="atajo atajo-rojo" onclick="nuevaDeuda()">' + ic('alert', 17) +
+      '<span>Quedó debiendo</span></button>',
     '<button class="atajo atajo-neutro" onclick="gastoNafta()">' + ic('fuel', 17) + '<span>Nafta Etios</span></button>'
   ];
 
@@ -59,8 +91,27 @@ function botonesRapidos() {
       ic('wallet', 17) + '<span>Sueldo ' + esc(s2) + '</span></button>');
   });
 
-  botones.push('<button class="atajo atajo-rojo" onclick="gastoDeuda()">' + ic('clock', 17) +
-    '<span>Deuda' + (deuda ? ' · ' + plata(deuda) : '') + '</span></button>');
+  /* El monotributo de cada socio, siempre presente. El monto sale
+     de Configuraciones; si todavía no se cargó, el botón lo pide. */
+  monotributos().forEach(function (m) {
+    botones.push('<button class="atajo atajo-neutro" onclick="gastoMonotributo(\'' +
+      esc(m.socio).replace(/'/g, "\\'") + '\')">' + ic('file', 17) +
+      '<span>Monotributo ' + esc(m.socio) +
+      (m.monto ? ' · ' + plata(m.monto) : '') + '</span></button>');
+  });
+
+  /* Y los demás gastos fijos que estén configurados */
+  gastosFijosConfig().forEach(function (f) {
+    botones.push('<button class="atajo atajo-neutro" onclick="gastoFijoRapido(\'' +
+      esc(f.nombre).replace(/'/g, "\\'") + '\')">' + ic('file', 17) +
+      '<span>' + esc(f.nombre) + (f.monto ? ' · ' + plata(f.monto) : '') + '</span></button>');
+  });
+
+  /* El pago de la deuda del mes, solo si hay un monto cargado */
+  if (deuda) {
+    botones.push('<button class="atajo atajo-neutro" onclick="gastoDeuda()">' + ic('clock', 17) +
+      '<span>Pagar deuda · ' + plata(deuda) + '</span></button>');
+  }
 
   return botones.join('');
 }
@@ -83,6 +134,65 @@ function pagarSueldo()       { desdePlantilla('sueldo_empleado'); }
 function sueldoSocio(nombre) { desdePlantilla('sueldo_socio', nombre); }
 function gastoDeuda()        { desdePlantilla('deuda'); }
 
+/* El monotributo de un socio, con el monto de Configuraciones */
+function gastoMonotributo(socio) {
+  var m = monotributos().find(function (x) { return x.socio === socio; });
+
+  if (!m || !m.monto) {
+    abrirModal('Monotributo de ' + socio,
+      avisoHTML('warn', 'Todavía no cargaste de cuánto es. Se pone una vez y queda.', 'alert') +
+      '<div class="campo" style="margin-top:12px"><div class="campo-etiq">Cuánto paga por mes</div>' +
+        inputMonto('mono-rapido', '') + '</div>',
+      '<button class="btn btn-primario btn-bloque" onclick="guardarMonotributoRapido(\'' +
+        esc(socio).replace(/'/g, "\\'") + '\')">Guardar y anotar el pago</button>');
+    return;
+  }
+
+  nuevoGasto({
+    descripcion: 'Monotributo ' + socio,
+    monto: m.monto,
+    categoria: 'impuestos',
+    pagadoPor: 'empresa',
+    modo: 'empresa'
+  });
+}
+
+async function guardarMonotributoRapido(socio) {
+  var monto = leerMonto('mono-rapido');
+  if (!monto) { toast('Falta el monto', 'error'); return; }
+  try {
+    var lista = monotributos().map(function (m) {
+      return m.socio === socio ? { socio: m.socio, monto: monto } : m;
+    });
+    await guardarMonotributos(lista);
+    cerrarModal();
+    gastoMonotributo(socio);
+  } catch (e) { toast(e.message, 'error'); }
+}
+
+/* Un gasto fijo de los configurados, con el monto ya puesto */
+function gastoFijoRapido(nombre) {
+  var f = gastosFijosConfig().find(function (x) { return x.nombre === nombre; });
+  if (!f) { toast('Ese gasto fijo ya no está configurado', 'error'); return; }
+
+  nuevoGasto({
+    descripcion: f.nombre,
+    monto: f.monto,
+    categoria: categoriaDeGastoFijo(f.nombre),
+    pagadoPor: 'empresa',
+    modo: 'empresa'
+  });
+}
+
+/* Se adivina la categoría por el nombre, para no pedirla cada vez */
+function categoriaDeGastoFijo(nombre) {
+  var n = normalizar(nombre);
+  if (/monotributo|afip|ingresos brutos|impuesto|arca/.test(n)) return 'impuestos';
+  if (/sueldo|jornal/.test(n)) return 'empleado';
+  if (/alquiler|luz|gas|agua|internet|telefono|servicio/.test(n)) return 'otro';
+  return 'otro';
+}
+
 /* ── Período ─────────────────────────────────────────────── */
 function rangoGastos() {
   var hoy = hoyISO();
@@ -96,13 +206,21 @@ function rangoGastos() {
   };
 }
 
-function setPeriodoGasto(p) { G.periodo = p; pintarGastos(); }
+function setPeriodoGasto(p) {
+  G.periodo = p;
+  var abierto = porId('det-todos') && porId('det-todos').open;
+  pintarGastos();
+  if (abierto) { var d = porId('det-todos'); if (d) { d.open = true; pintarListaTodos(); } }
+}
 function setFechaGasto(cual, v) { G[cual] = v; G.periodo = 'rango'; pintarGastos(); }
 function setCategoriaGasto(c) { G.categoria = c; pintarGastos(); }
 
 function gastosFiltrados() {
   var r = rangoGastos();
   return _gastos.filter(function (g) {
+    /* Los ingresos comparten tabla con los gastos pero no son
+       gastos: tienen su propia tarjeta y no suman acá. */
+    if (esIngreso(g)) return false;
     if (G.categoria && (g.categoria || 'otro') !== G.categoria) return false;
     var k = claveFecha(g.fecha || g.created_at);
     return k && k >= r.desde && k <= r.hasta;
@@ -111,20 +229,14 @@ function gastosFiltrados() {
 
 /* ── Pintado ─────────────────────────────────────────────── */
 function pintarGastos() {
-  porId('g-chips').innerHTML = [['dia', 'Hoy'], ['semana', 'Semana'], ['mes', 'Mes'], ['rango', 'Rango']]
-    .map(function (o) {
-      return '<button class="btn ' + (G.periodo === o[0] ? 'btn-primario' : 'btn-secundario') + '" ' +
-        'style="padding:7px 15px" onclick="setPeriodoGasto(\'' + o[0] + '\')">' + o[1] + '</button>';
-    }).join('');
+  pintarFijosDeLaSemana();
+  pintarAPagar();
+  pintarIngresosSueltos();
 
-  porId('g-rango').innerHTML = G.periodo === 'rango'
-    ? '<div class="grilla-fechas">' +
-        '<div class="campo" style="margin:0"><div class="campo-etiq">Desde</div>' +
-          '<input class="campo-input" type="date" value="' + esc(G.desde) + '" onchange="setFechaGasto(\'desde\',this.value)"/></div>' +
-        '<div class="campo" style="margin:0"><div class="campo-etiq">Hasta</div>' +
-          '<input class="campo-input" type="date" value="' + esc(G.hasta) + '" onchange="setFechaGasto(\'hasta\',this.value)"/></div>' +
-      '</div>'
-    : '';
+  /* La lista completa crea los contenedores del período, así que
+     va antes de pintarlos. */
+  pintarTodosLosGastos();
+  pintarPeriodo();
 
   var lista = gastosFiltrados();
   /* Lo que sale de la caja de la empresa. Un gasto que ponen los
@@ -181,8 +293,9 @@ function filaGasto(g) {
     .sort(function (a, b) { return puestos[b] - puestos[a]; })[0];
   var saldo = quienMas ? saldoDeGasto(g, quienMas) : 0;
 
-  return '<div class="fila" style="cursor:default;align-items:flex-start">' +
-    '<div class="fila-principal">' +
+  return '<div class="fila" style="align-items:flex-start">' +
+    '<button class="fila-principal" style="background:none;border:none;text-align:left;' +
+            'padding:0;cursor:pointer;min-width:0" onclick="editarGasto(' + g.id + ')">' +
       '<div class="fila-titulo">' + esc(g.descripcion || '—') + '</div>' +
       '<div class="fila-sub">' +
         esc(fechaCorta(g.fecha)) + ' · ' + esc(cat.etiqueta) +
@@ -203,7 +316,7 @@ function filaGasto(g) {
           : '') +
         (saldo > 0 ? ' <span class="pin pin-ok">le deben ' + plata(saldo) + ' a ' + esc(quienMas) + '</span>' : '') +
       '</div>' +
-    '</div>' +
+    '</button>' +
     '<div class="fila-derecha">' +
       '<div class="fila-titulo">' + plata(g.monto) + '</div>' +
       (!gastoPagado(g)
@@ -229,6 +342,11 @@ function grupoDe(g) {
   if (g.categoria === 'deuda') return 'deuda';
   if (g.categoria === 'insumos' || g.compra_id) return 'insumos';
   if (g.categoria === 'combustible') return 'combustible';
+  /* Los monotributos tienen su tarjeta: antes caían en "otros"
+     y no se veían por separado. */
+  if (g.categoria === 'impuestos' || /monotributo|afip|arca|ingresos brutos/.test(desc)) {
+    return 'impuestos';
+  }
   if (g.categoria === 'empleado') {
     var esDueno = nombres.some(function (n) { return desc.indexOf(n) !== -1; });
     return esDueno ? 'duenos' : 'empleado';
@@ -239,6 +357,7 @@ function grupoDe(g) {
 var GRUPOS = [
   { id: 'duenos',      etiqueta: 'Sueldos de los dueños', icono: 'wallet' },
   { id: 'empleado',    etiqueta: 'Sueldo del empleado',   icono: 'user' },
+  { id: 'impuestos',   etiqueta: 'Monotributos e impuestos', icono: 'file' },
   { id: 'combustible', etiqueta: 'Combustible',           icono: 'fuel' },
   { id: 'deuda',       etiqueta: 'Deuda',                 icono: 'clock' },
   { id: 'insumos',     etiqueta: 'Insumos y pedidos',     icono: 'box' },
@@ -577,13 +696,21 @@ async function pintarCierre(lista, rango) {
           '<div class="stat-val" style="font-size:26px;color:' +
             (c.alcanza ? 'var(--ok)' : 'var(--danger)') + '">' +
             (c.alcanza ? 'Alcanza' : 'Faltan ' + plata(c.falta)) + '</div>' +
-          '<div class="campo-ayuda" style="margin:0;text-align:right">' +
-            (c.alcanza ? 'sobran ' + plata(c.sobra) : 'para pagar todo') + '</div>' +
+          '<div class="campo-ayuda" style="margin:0;text-align:right;max-width:52%">' +
+            (c.alcanza
+              ? 'sobran ' + plata(c.sobra)
+              : (c.compromisos.total
+                  ? 'para cubrir ' + plata(c.compromisos.total) + ' de compromisos'
+                  : 'se gastó más de lo que entró')) + '</div>' +
         '</div>' +
 
         '<div style="display:flex;justify-content:space-between;padding:3px 0;font-size:13px">' +
           '<span>Cobrado en ' + plural(c.entradas.remitos, 'remito') + '</span>' +
           '<strong>' + plata(c.entradas.cobrado) + '</strong></div>' +
+        (c.otrosIngresos
+          ? '<div style="display:flex;justify-content:space-between;padding:3px 0;font-size:13px;color:var(--ok)">' +
+            '<span>Otra plata que entró</span><strong>+ ' + plata(c.otrosIngresos) + '</strong></div>'
+          : '') +
         '<div style="display:flex;justify-content:space-between;padding:3px 0;font-size:13px;color:var(--danger)">' +
           '<span>Ya se gastó</span><strong>− ' + plata(c.yaGastado) + '</strong></div>' +
         '<div style="display:flex;justify-content:space-between;padding:5px 0;border-top:1px solid var(--border);font-size:13px">' +
@@ -596,23 +723,14 @@ async function pintarCierre(lista, rango) {
         '<details style="margin-top:10px">' +
         '<summary style="cursor:pointer;font-size:12.5px;color:var(--rose);font-weight:600;padding:4px 0">' +
           'Falta pagar ' + plata(c.compromisos.total) + '</summary>' +
-        c.compromisos.items.map(function (i) {
-          return '<div style="display:flex;justify-content:space-between;padding:4px 0;font-size:13px' +
-            (i.pagado || i.loPonenLosDuenos ? ';color:var(--muted)' : '') +
-            (i.pagado ? ';text-decoration:line-through' : '') + '">' +
-            '<span>' + esc(i.concepto) +
-              ' <span class="campo-ayuda" style="text-decoration:none">· ' +
-              (i.pagado ? 'ya se pagó' : 'cada ' + esc(i.cada) +
-                (i.loPonenLosDuenos ? ' · lo ponen los dueños' : '')) + '</span></span>' +
-            '<strong>' + plata(i.monto) + '</strong></div>';
-        }).join('') +
-        '<div style="display:flex;justify-content:space-between;padding:5px 0;border-top:1px solid var(--border);font-size:13px">' +
-          '<span>Sale de la empresa</span><strong>' + plata(c.compromisos.total) + '</strong></div>' +
-        '<label style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted);margin:8px 0 0;cursor:pointer">' +
+        '<div class="campo-ayuda" style="padding:4px 0 8px">' +
+          'El detalle está abajo, en <strong>Lo que hay que pagar</strong>: ahí ' +
+          'están los sueldos, los impuestos del mes y las deudas, todo junto.</div>' +
+        '<label style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted);margin:0;cursor:pointer">' +
           '<input type="checkbox"' + (conDeuda ? ' checked' : '') + ' onchange="alternarDeuda()"/> ' +
           'Incluir la deuda de este mes' +
         '</label>' +
-        '</details>' +
+      '</details>' +
 
         (!c.alcanza && c.entradas.deuda
           ? '<div class="campo-ayuda" style="margin-top:8px">' +
@@ -1084,4 +1202,617 @@ function detalleSocios(lista, r) {
             }).join('') +
         '</div>';
     }).join(''));
+}
+
+
+/* ═══════════════════════════════════════════════════════════
+   LOS GASTOS FIJOS DE LA SEMANA
+   Los viernes aparece el recordatorio. No se anota nada solo:
+   se pregunta cuáles se pagaron y los que no quedan pendientes.
+   ═══════════════════════════════════════════════════════════ */
+function pintarFijosDeLaSemana() {
+  var cont = porId('g-avisos');
+  if (!cont) return;
+
+  if (!tocaPreguntarFijos(_gastos)) { cont.innerHTML = ''; return; }
+
+  var pendientes = fijosPendientes(_gastos).filter(function (f) { return !f.yaAnotado; });
+
+  cont.innerHTML =
+    '<div class="aviso aviso-warn" style="align-items:flex-start">' + ic('calendar', 16) +
+      '<div style="flex:1">' +
+        '<strong>Gastos fijos sin anotar</strong>' +
+        '<br>' + plural(pendientes.length, 'gasto fijo', 'gastos fijos') + ': ' +
+        esc(pendientes.slice(0, 3).map(function (f) { return f.nombre; }).join(', ')) +
+        (pendientes.length > 3 ? ' y ' + (pendientes.length - 3) + ' más' : '') +
+        '<br><button class="btn btn-fantasma" style="padding:2px 0;text-decoration:underline;font-size:12.5px" ' +
+          'onclick="revisarFijosSemana()">Revisarlos</button>' +
+      '</div>' +
+    '</div>';
+}
+
+var _fijosRevision = null;
+
+function revisarFijosSemana() {
+  _fijosRevision = fijosPendientes(_gastos).map(function (f) {
+    /* Por defecto se marcan como pagados los que no estén anotados:
+       es lo más común, pero se puede desmarcar uno por uno. */
+    return Object.assign({}, f, { pagado: !f.yaAnotado });
+  });
+
+  abrirModal('Gastos fijos',
+    '<div class="campo-ayuda" style="margin-bottom:10px">' +
+      'Marcá los que pagaste. Los que dejes sin marcar se anotan igual, ' +
+      'pero como <strong>pendientes de pago</strong>, así no se pierden ' +
+      'y aparecen en lo que falta pagar.</div>' +
+    '<div id="lista-fijos-semana"></div>',
+
+    '<div style="display:flex;gap:8px;flex-wrap:wrap">' +
+      '<button class="btn btn-primario" style="flex:1;min-width:140px" id="btn-fijos" ' +
+              'onclick="confirmarFijosSemana()">Anotarlos</button>' +
+      '<button class="btn btn-secundario" onclick="saltearFijosSemana()">Esta semana no</button>' +
+    '</div>');
+
+  pintarListaFijosSemana();
+}
+
+function pintarListaFijosSemana() {
+  var cont = porId('lista-fijos-semana');
+  if (!cont) return;
+
+  var aAnotar = _fijosRevision.filter(function (f) { return !f.yaAnotado; });
+  var total = aAnotar.filter(function (f) { return f.pagado; })
+    .reduce(function (a, f) { return a + f.monto; }, 0);
+  var pend = aAnotar.filter(function (f) { return !f.pagado; })
+    .reduce(function (a, f) { return a + f.monto; }, 0);
+
+  cont.innerHTML =
+    '<div class="lista">' +
+      _fijosRevision.map(function (f, i) {
+        if (f.yaAnotado) {
+          return '<div class="fila" style="cursor:default;opacity:.55">' +
+            '<span style="flex:0 0 auto;color:var(--ok)">' + ic('check', 16) + '</span>' +
+            '<div class="fila-principal">' +
+              '<div class="fila-titulo">' + esc(f.nombre) + '</div>' +
+              '<div class="fila-sub">ya anotado ' + esc(f.cada) + '</div>' +
+            '</div>' +
+            '<div class="fila-derecha"><div class="fila-titulo">' +
+              plata(montoEmpresa(f.gasto)) + '</div></div>' +
+          '</div>';
+        }
+        return '<label class="fila" style="cursor:pointer">' +
+          '<input type="checkbox"' + (f.pagado ? ' checked' : '') + ' ' +
+                 'style="width:20px;height:20px;flex:0 0 auto" ' +
+                 'onchange="marcarFijoPagado(' + i + ',this.checked)"/>' +
+          '<div class="fila-principal">' +
+            '<div class="fila-titulo">' + esc(f.nombre) + '</div>' +
+            '<div class="fila-sub">' +
+              (f.pagado ? 'pagado' : '<span style="color:var(--warn)">queda pendiente</span>') +
+              ' · ' + esc(FRECUENCIAS[f.frecuencia].etiqueta.toLowerCase()) +
+            '</div>' +
+          '</div>' +
+          '<div class="fila-derecha"><div class="fila-titulo">' + plata(f.monto) + '</div></div>' +
+        '</label>';
+      }).join('') +
+    '</div>' +
+
+    '<div class="campo-ayuda" style="margin-top:10px;text-align:right">' +
+      (total ? 'Pagado: <strong>' + plata(total) + '</strong>' : '') +
+      (total && pend ? ' · ' : '') +
+      (pend ? '<span style="color:var(--warn)">Pendiente: <strong>' + plata(pend) + '</strong></span>' : '') +
+    '</div>';
+}
+
+function marcarFijoPagado(i, valor) {
+  if (!_fijosRevision[i]) return;
+  _fijosRevision[i].pagado = !!valor;
+  pintarListaFijosSemana();
+}
+
+async function confirmarFijosSemana() {
+  var aAnotar = _fijosRevision.filter(function (f) { return !f.yaAnotado; });
+  if (!aAnotar.length) { await saltearFijosSemana(); return; }
+
+  var btn = porId('btn-fijos');
+  if (btn) { btn.disabled = true; btn.textContent = 'Anotando…'; }
+
+  try {
+    for (var i = 0; i < aAnotar.length; i++) {
+      var f = aAnotar[i];
+      await crear('gastos', {
+        descripcion: f.nombre,
+        categoria: categoriaDeGastoFijo(f.nombre),
+        monto: f.monto,
+        fecha: hoyTexto(),
+        pagado: f.pagado,
+        pagado_fecha: f.pagado ? hoyTexto() : null,
+        pagado_por: 'empresa',
+        reparto: JSON.stringify({ empresa: f.monto }),
+        parte_empresa: f.monto,
+        notas: 'Gasto fijo',
+        created_at: new Date().toISOString()
+      });
+    }
+
+    await marcarFijosPreguntados();
+    invalidarCache('gastos');
+    cerrarModal();
+
+    var pagados = aAnotar.filter(function (x) { return x.pagado; }).length;
+    var pend = aAnotar.length - pagados;
+    toast(plural(aAnotar.length, 'gasto') + ' anotados' +
+      (pend ? ' · ' + pend + ' sin pagar' : ''));
+    pintarRuta();
+  } catch (e) {
+    if (btn) { btn.disabled = false; btn.textContent = 'Anotarlos'; }
+    toast(e.message, 'error');
+  }
+}
+
+/* No anotar nada, pero no volver a preguntar hasta la semana que viene */
+async function saltearFijosSemana() {
+  try {
+    await marcarFijosPreguntados();
+    cerrarModal();
+    toast('Listo · se vuelve a preguntar la semana que viene');
+    pintarRuta();
+  } catch (e) { toast(e.message, 'error'); }
+}
+
+
+/* ═══════════════════════════════════════════════════════════
+   LO QUE HAY QUE JUNTAR PARA EL MES
+   ═══════════════════════════════════════════════════════════ */
+/* ═══════════════════════════════════════════════════════════
+   TODO LO QUE HAY QUE PAGAR
+   Antes esto estaba repartido en dos lugares: los sueldos de la
+   semana en el cierre y los monotributos en otra tarjeta. Ahora
+   está junto, ordenado por cuándo vence.
+   ═══════════════════════════════════════════════════════════ */
+function pintarAPagar() {
+  var cont = porId('g-pagar');
+  if (!cont) return;
+
+  var lista = todoLoQueHayQuePagar();
+  if (!lista.items.length) { cont.innerHTML = ''; return; }
+
+  var urgente = lista.diasParaVencer <= 5 && lista.pendiente > 0;
+
+  cont.innerHTML =
+    '<details class="tarjeta"' + (urgente ? ' open' : '') + '>' +
+      '<summary class="tarjeta-cab" style="cursor:pointer">' + ic('calendar', 16) + ' Lo que hay que pagar' +
+        '<span style="margin-left:auto"><span class="pin ' +
+          (lista.pendiente ? (urgente ? 'pin-danger' : 'pin-warn') : 'pin-ok') + '">' +
+          (lista.pendiente ? plata(lista.pendiente) : 'todo pago') + '</span></span>' +
+      '</summary>' +
+      '<div class="tarjeta-cuerpo">' +
+
+        (lista.pendiente
+          ? '<div class="campo-ayuda" style="margin-bottom:10px">' +
+              'Falta juntar <strong>' + plata(lista.pendiente) + '</strong>. ' +
+              'Lo primero vence ' + esc(fechaCorta(lista.vence)) +
+              (lista.diasParaVencer >= 0
+                ? ' · ' + (lista.diasParaVencer === 0 ? 'hoy' : 'en ' + plural(lista.diasParaVencer, 'día'))
+                : '') + '.</div>'
+          : '<div class="campo-ayuda" style="margin-bottom:10px">Está todo pago.</div>') +
+
+        ['semana', 'mes', 'deuda'].map(function (bloque) {
+          var items = lista.items.filter(function (x) { return x.bloque === bloque; });
+          if (!items.length) return '';
+          var titulo = bloque === 'semana' ? 'Esta semana'
+                     : bloque === 'mes' ? 'Este mes' : 'Deudas atrasadas';
+          return '<div class="eyebrow" style="margin-top:10px">' + esc(titulo) + '</div>' +
+            '<div class="lista">' +
+              items.map(function (x) {
+                var editable = x.bloque === 'deuda';
+                return '<' + (editable ? 'button' : 'div') + ' class="fila" style="' +
+                  (editable ? 'text-align:left;width:100%' : 'cursor:default') +
+                  (x.pagado ? ';opacity:.5' : '') + '"' +
+                  (editable ? ' onclick="editarDeudaDesdeGastos(' + x.indice + ')"' : '') + '>' +
+                  '<span style="flex:0 0 auto;color:' +
+                    (x.pagado ? 'var(--ok)' : x.vencida ? 'var(--danger)' : 'var(--muted)') + '">' +
+                    ic(x.pagado ? 'check' : 'clock', 15) + '</span>' +
+                  '<div class="fila-principal">' +
+                    '<div class="fila-titulo">' + esc(x.concepto) + '</div>' +
+                    '<div class="fila-sub">' +
+                      (x.pagado ? 'pagado'
+                        : (x.vence ? (x.vencida ? 'venció ' : 'vence ') + esc(fechaCorta(x.vence)) : x.cada)) +
+                      (x.quien ? ' · a ' + esc(x.quien) : '') +
+                      (x.loPonenLosDuenos ? ' · lo ponen ustedes' : '') +
+                    '</div>' +
+                  '</div>' +
+                  '<div class="fila-derecha"><div class="fila-titulo">' + plata(x.monto) + '</div>' +
+                    (editable ? '<div class="ir-a">Editar ' + ic('chevron', 11) + '</div>' : '') +
+                  '</div>' +
+                '</' + (editable ? 'button' : 'div') + '>';
+              }).join('') +
+            '</div>';
+        }).join('') +
+
+        '<div style="display:flex;justify-content:space-between;padding:9px 0;margin-top:6px;' +
+             'border-top:2px solid var(--border)">' +
+          '<strong>Todo junto</strong><strong>' + plata(lista.total) + '</strong></div>' +
+
+        '<button class="btn btn-secundario btn-bloque" style="margin-top:8px" onclick="nuevaDeuda()">' +
+          ic('plus', 15) + ' Anotar una deuda</button>' +
+      '</div>' +
+    '</details>';
+}
+
+/* Sueldos de la semana, impuestos del mes y deudas atrasadas,
+   todo en una sola lista. */
+function todoLoQueHayQuePagar() {
+  var hoy = hoyISO();
+  var vence = proximoVencimiento(hoy);
+  var items = [];
+
+  /* Lo de la semana: sueldos y demás compromisos */
+  var r = rangoGastos();
+  var delRango = _gastos.filter(function (g) {
+    if (esIngreso(g)) return false;
+    var k = claveFecha(g.fecha || g.created_at);
+    return k && k >= r.desde && k <= r.hasta;
+  });
+
+  compromisosSemana(tocaDeudaEsteMes(_gastos)).items.forEach(function (i) {
+    /* La deuda de configuración se muestra con los impuestos */
+    if (i.concepto === 'Deuda') return;
+    items.push({
+      concepto: i.concepto,
+      monto: i.monto,
+      pagado: compromisoPagado(i, delRango),
+      cada: 'cada ' + i.cada,
+      loPonenLosDuenos: i.loPonenLosDuenos,
+      bloque: 'semana'
+    });
+  });
+
+  /* Lo del mes: monotributos e impuestos fijos */
+  fijosPendientes(_gastos, hoy).forEach(function (f) {
+    items.push({
+      concepto: f.nombre,
+      monto: f.monto,
+      pagado: f.yaAnotado,
+      vence: vence,
+      bloque: 'mes'
+    });
+  });
+
+  /* Y lo que le debemos a alguien. Se guarda el índice para
+     poder editarla desde acá. */
+  deudasPropias().forEach(function (d, idx) {
+    items.push({
+      concepto: d.concepto,
+      monto: d.monto,
+      pagado: false,
+      vence: d.fecha || vence,
+      vencida: d.fecha && d.fecha < hoy,
+      quien: d.quien,
+      indice: idx,
+      bloque: 'deuda'
+    });
+  });
+
+  var falta = items.filter(function (x) { return !x.pagado; });
+  var proxima = falta.map(function (x) { return x.vence; }).filter(Boolean).sort()[0] || vence;
+
+  return {
+    items: items,
+    total: items.reduce(function (a, x) { return a + x.monto; }, 0),
+    pendiente: falta.reduce(function (a, x) { return a + x.monto; }, 0),
+    vence: proxima,
+    diasParaVencer: diasEntre(hoy, proxima)
+  };
+}
+
+/* ── Anotar una deuda ────────────────────────────────────── */
+function nuevaDeuda(datos) {
+  var d = datos || {};
+  var i = d.indice;
+
+  abrirModal(i !== undefined ? 'Editar la deuda' : 'Anotar una deuda',
+    '<div class="campo-ayuda" style="margin-bottom:12px">' +
+      'Algo que quedó sin pagar: un sueldo atrasado, plata que puso alguno de ustedes, ' +
+      'un proveedor. Se descuenta de lo disponible hasta que la saques.</div>' +
+
+    '<div class="campo"><div class="campo-etiq">Qué se debe</div>' +
+      '<input class="campo-input" id="nd-concepto" value="' + esc(d.concepto || '') + '" ' +
+             'placeholder="Sueldo de Nacho, semana pasada"/></div>' +
+
+    '<div class="campo"><div class="campo-etiq">Cuánto</div>' +
+      inputMonto('nd-monto', d.monto || '') + '</div>' +
+
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">' +
+      '<div class="campo"><div class="campo-etiq">A quién</div>' +
+        '<input class="campo-input" id="nd-quien" value="' + esc(d.quien || '') + '" ' +
+               'placeholder="Nacho"/></div>' +
+      '<div class="campo"><div class="campo-etiq">Para cuándo</div>' +
+        '<input class="campo-input" type="date" id="nd-fecha" value="' + esc(d.fecha || '') + '"/></div>' +
+    '</div>',
+
+    '<div style="display:flex;gap:8px;flex-wrap:wrap">' +
+      '<button class="btn btn-primario" style="flex:1;min-width:130px" id="btn-nd" ' +
+              'onclick="guardarDeudaNueva(' + (i !== undefined ? i : 'null') + ')">' +
+        ic('check', 16) + ' Guardar</button>' +
+      (i !== undefined
+        ? '<button class="btn btn-peligro" onclick="quitarDeudaDesdeGastos(' + i + ')">' +
+          ic('trash', 15) + ' Ya se pagó</button>'
+        : '') +
+    '</div>');
+}
+
+async function guardarDeudaNueva(indice) {
+  var concepto = (porId('nd-concepto').value || '').trim();
+  var monto = leerMonto('nd-monto');
+  if (!concepto) { toast('Falta qué se debe', 'error'); return; }
+  if (!monto) { toast('Falta el monto', 'error'); return; }
+
+  var btn = porId('btn-nd');
+  if (btn) { btn.disabled = true; btn.textContent = 'Guardando…'; }
+
+  var nueva = {
+    concepto: concepto,
+    monto: monto,
+    quien: (porId('nd-quien').value || '').trim(),
+    fecha: porId('nd-fecha').value || ''
+  };
+
+  try {
+    var lista = deudasPropias();
+    if (indice !== null && indice !== undefined) lista[indice] = nueva;
+    else lista.push(nueva);
+
+    await guardarDeudasPropias(lista);
+    invalidarCache('config');
+    cerrarModal();
+    toast(indice !== null && indice !== undefined ? 'Deuda actualizada' : 'Anotada');
+    pintarRuta();
+  } catch (e) {
+    if (btn) { btn.disabled = false; btn.textContent = 'Guardar'; }
+    toast(e.message, 'error');
+  }
+}
+
+async function quitarDeudaDesdeGastos(indice) {
+  try {
+    var lista = deudasPropias();
+    lista.splice(indice, 1);
+    await guardarDeudasPropias(lista);
+    invalidarCache('config');
+    cerrarModal();
+    toast('Listo');
+    pintarRuta();
+  } catch (e) { toast(e.message, 'error'); }
+}
+
+
+/* ═══════════════════════════════════════════════════════════
+   PLATA QUE ENTRÓ SIN SER UNA VENTA
+   Lo que había al empezar, un aporte, una devolución. Se cargan
+   como movimientos y se pueden editar o borrar, en vez de ser un
+   número suelto en la configuración.
+   ═══════════════════════════════════════════════════════════ */
+function nuevoIngreso(datos) {
+  var d = datos || {};
+
+  abrirModal(d.id ? 'Editar el ingreso' : 'Entró plata',
+    '<div class="campo-ayuda" style="margin-bottom:12px">' +
+      'Para la plata que no viene de un remito: lo que tenían en caja antes de ' +
+      'usar la app, un aporte de alguno de ustedes, una devolución.</div>' +
+
+    '<div class="campo"><div class="campo-etiq">Cuánto entró</div>' +
+      inputMonto('ni-monto', d.monto || '') + '</div>' +
+
+    '<div class="campo"><div class="campo-etiq">De qué</div>' +
+      '<select class="campo-input" id="ni-motivo" onchange="sugerirDescripcionIngreso()">' +
+        MOTIVOS_INGRESO.map(function (m) {
+          return '<option value="' + m.id + '"' +
+            (d.motivo === m.id ? ' selected' : '') + '>' + esc(m.etiqueta) + '</option>';
+        }).join('') +
+      '</select></div>' +
+
+    '<div class="campo"><div class="campo-etiq">Detalle</div>' +
+      '<input class="campo-input" id="ni-desc" value="' + esc(d.descripcion || '') + '" ' +
+             'placeholder="Ej: caja al arrancar con la app"/></div>' +
+
+    '<div class="campo" style="margin:0"><div class="campo-etiq">Fecha</div>' +
+      '<input class="campo-input" type="date" id="ni-fecha" value="' +
+        esc(d.fechaISO || hoyISO()) + '"/></div>',
+
+    '<div style="display:flex;gap:8px;flex-wrap:wrap">' +
+      '<button class="btn btn-primario" style="flex:1;min-width:130px" id="btn-ni" ' +
+              'onclick="guardarIngreso(' + (d.id || 'null') + ')">' +
+        ic('check', 16) + ' Guardar</button>' +
+      (d.id
+        ? '<button class="btn btn-peligro" onclick="borrarIngreso(' + d.id + ')">' +
+          ic('trash', 15) + ' Borrar</button>'
+        : '') +
+    '</div>');
+
+  if (!d.id) sugerirDescripcionIngreso();
+}
+
+function sugerirDescripcionIngreso() {
+  var sel = porId('ni-motivo');
+  var desc = porId('ni-desc');
+  if (!sel || !desc || desc.value.trim()) return;
+
+  var m = MOTIVOS_INGRESO.find(function (x) { return x.id === sel.value; });
+  desc.placeholder = m ? m.etiqueta : '';
+}
+
+async function guardarIngreso(id) {
+  var monto = leerMonto('ni-monto');
+  if (!monto) { toast('Falta el monto', 'error'); return; }
+
+  var motivo = porId('ni-motivo').value;
+  var m = MOTIVOS_INGRESO.find(function (x) { return x.id === motivo; });
+  var desc = (porId('ni-desc').value || '').trim() || (m ? m.etiqueta : 'Ingreso');
+  var iso = porId('ni-fecha').value || hoyISO();
+
+  var btn = porId('btn-ni');
+  if (btn) { btn.disabled = true; btn.textContent = 'Guardando…'; }
+
+  var fila = {
+    descripcion: desc,
+    categoria: 'ingreso',
+    monto: monto,
+    fecha: fechaCorta(iso),
+    pagado: true,
+    pagado_por: 'empresa',
+    notas: motivo
+  };
+
+  try {
+    if (id) await actualizar('gastos', id, fila);
+    else await crear('gastos', Object.assign({ created_at: new Date().toISOString() }, fila));
+
+    invalidarCache('gastos');
+    cerrarModal();
+    toast(id ? 'Ingreso actualizado' : 'Anotado · ' + plata(monto) + ' entraron a la caja');
+    pintarRuta();
+  } catch (e) {
+    if (btn) { btn.disabled = false; btn.textContent = 'Guardar'; }
+    toast(e.message, 'error');
+  }
+}
+
+async function borrarIngreso(id) {
+  try {
+    await borrar('gastos', id);
+    invalidarCache('gastos');
+    cerrarModal();
+    toast('Borrado');
+    pintarRuta();
+  } catch (e) { toast(e.message, 'error'); }
+}
+
+/* La lista, para poder revisarlos y corregirlos */
+function pintarIngresosSueltos() {
+  var cont = porId('g-ingresos');
+  if (!cont) return;
+
+  var lista = ingresosSueltos(_gastos);
+  if (!lista.length) { cont.innerHTML = ''; return; }
+
+  var total = lista.reduce(function (a, g) { return a + (+g.monto || 0); }, 0);
+
+  cont.innerHTML =
+    '<details class="tarjeta">' +
+      '<summary class="tarjeta-cab" style="cursor:pointer">' + ic('cash', 16) + ' Plata que entró' +
+        '<span style="margin-left:auto"><span class="pin pin-ok">' + plata(total) + '</span></span>' +
+      '</summary>' +
+      '<div class="tarjeta-cuerpo">' +
+        '<div class="campo-ayuda" style="margin-bottom:8px">' +
+          'Ingresos que no vienen de un remito. Suman a la caja.</div>' +
+        '<div class="lista">' +
+          lista.map(function (g) {
+            return '<button class="fila" onclick="editarIngreso(' + g.id + ')">' +
+              '<span style="flex:0 0 auto;color:var(--ok)">' + ic('cash', 15) + '</span>' +
+              '<div class="fila-principal">' +
+                '<div class="fila-titulo">' + esc(g.descripcion) + '</div>' +
+                '<div class="fila-sub">' + esc(fechaCorta(g.fecha)) + '</div>' +
+              '</div>' +
+              '<div class="fila-derecha">' +
+                '<div class="fila-titulo" style="color:var(--ok)">+' + plata(g.monto) + '</div>' +
+              '</div>' +
+            '</button>';
+          }).join('') +
+        '</div>' +
+      '</div>' +
+    '</details>';
+}
+
+function editarIngreso(id) {
+  var g = _gastos.find(function (x) { return String(x.id) === String(id); });
+  if (!g) return;
+  nuevoIngreso({
+    id: g.id,
+    monto: +g.monto || 0,
+    descripcion: g.descripcion,
+    motivo: g.notas || 'otro',
+    fechaISO: claveFecha(g.fecha) || hoyISO()
+  });
+}
+
+
+/* ═══════════════════════════════════════════════════════════
+   TODOS LOS GASTOS DEL PERÍODO
+   Las tarjetas de arriba agrupan, pero para corregir algo hay
+   que poder encontrarlo sin adivinar en qué grupo cayó.
+   ═══════════════════════════════════════════════════════════ */
+var _buscaGasto = '';
+
+function setBuscaGasto(q) {
+  _buscaGasto = q;
+  pintarListaTodos();
+}
+
+function pintarTodosLosGastos() {
+  var cont = porId('g-todos');
+  if (!cont) return;
+
+  var lista = gastosFiltrados();
+  if (!lista.length) { cont.innerHTML = ''; return; }
+
+  cont.innerHTML =
+    '<details class="tarjeta" id="det-todos">' +
+      '<summary class="tarjeta-cab" style="cursor:pointer">' + ic('db', 16) + ' Todos los gastos' +
+        '<span style="margin-left:auto"><span class="pin pin-neutro">' +
+          plural(lista.length, 'gasto') + '</span></span>' +
+      '</summary>' +
+      '<div class="tarjeta-cuerpo">' +
+        '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px" id="g-chips"></div>' +
+        '<div id="g-rango"></div>' +
+        '<div class="campo-ayuda" style="margin-bottom:8px">' +
+          'Tocá cualquiera para corregirlo o borrarlo.</div>' +
+        '<div class="buscador" style="margin-bottom:10px">' +
+          '<span class="ic-lupa">' + ic('search', 15) + '</span>' +
+          '<input class="campo-input" value="' + esc(_buscaGasto) + '" ' +
+                 'placeholder="Buscar por descripción" oninput="setBuscaGasto(this.value)"/>' +
+        '</div>' +
+        '<div id="lista-todos"></div>' +
+      '</div>' +
+    '</details>';
+
+  pintarListaTodos();
+}
+
+function pintarListaTodos() {
+  var cont = porId('lista-todos');
+  if (!cont) return;
+
+  var lista = gastosFiltrados()
+    .filter(function (g) {
+      if (!_buscaGasto) return true;
+      var q = normalizar(_buscaGasto);
+      return normalizar(g.descripcion).indexOf(q) !== -1 ||
+             normalizar(categoriaGasto(g.categoria).etiqueta).indexOf(q) !== -1;
+    })
+    .sort(function (a, b) {
+      return (claveFecha(b.fecha || b.created_at) || '')
+        .localeCompare(claveFecha(a.fecha || a.created_at) || '');
+    });
+
+  if (!lista.length) {
+    cont.innerHTML = '<div class="campo-ayuda">Ninguno coincide con la búsqueda.</div>';
+    return;
+  }
+
+  var total = lista.reduce(function (a, g) { return a + montoEmpresa(g); }, 0);
+
+  cont.innerHTML =
+    '<div class="lista">' + lista.map(filaGasto).join('') + '</div>' +
+    '<div style="display:flex;justify-content:space-between;padding:9px 0;margin-top:4px;' +
+         'border-top:2px solid var(--border)">' +
+      '<strong>' + (_buscaGasto ? 'Lo que se ve' : 'Total del período') + '</strong>' +
+      '<strong>' + plata(total) + '</strong></div>';
+}
+
+
+/* Editar una deuda desde la lista */
+function editarDeudaDesdeGastos(indice) {
+  var d = deudasPropias()[indice];
+  if (!d) return;
+  nuevaDeuda(Object.assign({ indice: indice }, d));
 }
