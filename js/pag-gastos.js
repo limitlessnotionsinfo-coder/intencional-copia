@@ -18,12 +18,37 @@ registrarPagina({
     await cargarConfig().catch(function () {});
     _gastos = (await traerCacheado('gastos')).slice().reverse();
 
+    /* Si el período por defecto no tiene gastos pero sí los hay en
+       el último año (típico al importar historial viejo), se abre
+       mostrando el año así no queda la pantalla vacía. */
+    try {
+      var hayEn = function (modo) {
+        var r = rangoDe(modo);
+        return _gastos.some(function (g) {
+          if (esIngreso(g)) return false;
+          var k = claveFecha(g.fecha || g.created_at);
+          return k && k >= r.desde && k <= r.hasta;
+        });
+      };
+      if (!hayEn(G.periodo) && hayEn('anio')) G.periodo = 'anio';
+    } catch (e) {}
+
     cont.innerHTML =
       /* De arriba abajo, por lo que se mira más seguido:
          cómo venimos, en qué se fue, con qué cargar, y recién
          después el detalle. */
       '<div id="g-avisos"></div>' +
       '<div id="g-cierre"></div>' +
+
+      /* Selector de período SIEMPRE visible: antes vivía dentro de
+         "Todos los gastos", que no se dibuja cuando el período está
+         vacío, y entonces no había forma de cambiar el rango. */
+      '<div class="tarjeta" style="margin:12px 0"><div class="tarjeta-cuerpo" style="padding:12px 14px">' +
+        '<div class="campo-etiq" style="margin:0 0 8px">Período</div>' +
+        '<div style="display:flex;gap:6px;flex-wrap:wrap" id="g-chips-top"></div>' +
+        '<div id="g-rango-top"></div>' +
+      '</div></div>' +
+
       '<div id="g-resumen"></div>' +
       '<div class="atajos" style="margin:14px 0">' + botonesRapidos() + '</div>' +
 
@@ -39,29 +64,32 @@ registrarPagina({
   }
 });
 
-/* El selector de período, adentro de la lista completa */
+/* El selector de período. Se dibuja en el de arriba (siempre visible)
+   y también en el de abajo, dentro de "Todos los gastos", si existe. */
 function pintarPeriodo() {
-  var chips = porId('g-chips');
-  if (!chips) return;
-
-  chips.innerHTML = [['hoy', 'Hoy'], ['semana', '7 días'], ['mes', '30 días'],
-                     ['trimestre', '3 meses'], ['anio', 'Año'], ['rango', 'Elegir']]
+  var chipsHTML = [['hoy', 'Hoy'], ['semana', '7 días'], ['mes', '30 días'],
+                   ['trimestre', '3 meses'], ['anio', 'Año'], ['rango', 'Elegir']]
     .map(function (o) {
       return '<button class="btn ' + (G.periodo === o[0] ? 'btn-primario' : 'btn-secundario') + '" ' +
         'style="padding:6px 13px;font-size:12.5px" onclick="setPeriodoGasto(\'' + o[0] + '\')">' +
         o[1] + '</button>';
     }).join('');
 
-  var rango = porId('g-rango');
-  if (!rango) return;
-  rango.innerHTML = G.periodo === 'rango'
-    ? '<div class="grilla-fechas" style="margin-bottom:8px">' +
+  var rangoHTML = G.periodo === 'rango'
+    ? '<div class="grilla-fechas" style="margin-top:8px">' +
         '<div class="campo" style="margin:0"><div class="campo-etiq">Desde</div>' +
           '<input class="campo-input" type="date" value="' + esc(G.desde) + '" onchange="setFechaGasto(\'desde\',this.value)"/></div>' +
         '<div class="campo" style="margin:0"><div class="campo-etiq">Hasta</div>' +
           '<input class="campo-input" type="date" value="' + esc(G.hasta) + '" onchange="setFechaGasto(\'hasta\',this.value)"/></div>' +
       '</div>'
     : '';
+
+  ['g-chips-top', 'g-chips'].forEach(function (id) {
+    var el = porId(id); if (el) el.innerHTML = chipsHTML;
+  });
+  ['g-rango-top', 'g-rango'].forEach(function (id) {
+    var el = porId(id); if (el) el.innerHTML = rangoHTML;
+  });
 }
 
 /* ── Botones rápidos ─────────────────────────────────────────
@@ -284,7 +312,11 @@ function pintarGastos() {
     '</div>' +
     (lista.length ? '' :
       '<div class="tarjeta" style="margin-top:12px"><div class="tarjeta-cuerpo">' +
-      vacio('wallet', 'Sin gastos en este período', 'Cambiá el período o cargá el primero.') +
+      vacio('wallet', 'Sin gastos en este período', 'Cambiá el período arriba o cargá el primero.') +
+      (_gastos.some(function (g) { return !esIngreso(g); }) && G.periodo !== 'anio'
+        ? '<div style="text-align:center;margin-top:4px">' +
+          '<button class="btn btn-secundario" onclick="setPeriodoGasto(\'anio\')">Ver el último año</button></div>'
+        : '') +
       '</div></div>');
 
   /* La lista ya no va suelta: cada tarjeta de arriba la abre */
